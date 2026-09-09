@@ -13,10 +13,10 @@
 
 [![Bilibili](https://img.shields.io/badge/🎬_B站_Space-481791559-fb7299?style=for-the-badge&logo=bilibili&logoColor=white)](https://space.bilibili.com/481791559)
 
-| 微信公众号 / 交流群 | 小红书 |
-|:---:|:---:|
-| <img src="docs/images/vx.png" width="200" alt="微信二维码"/> | <img src="docs/images/redbook.png" width="200" alt="小红书二维码"/> |
-| 扫码加微信 | 扫码关注小红书 |
+| 微信公众号 / 交流群 |
+|:---:|
+| <img src="docs/images/vx.png" width="200" alt="微信二维码"/> |
+| 扫码加微信 |
 
 </div>
 
@@ -163,6 +163,6 @@ agent-golang/
 
 [![Bilibili](https://img.shields.io/badge/🎬_B站_Space-481791559-fb7299?style=for-the-badge&logo=bilibili&logoColor=white)](https://space.bilibili.com/481791559)
 
-<img src="docs/images/vx.png" width="160" alt="微信"/> &nbsp;&nbsp; <img src="docs/images/redbook.png" width="160" alt="小红书"/>
+<img src="docs/images/vx.png" width="160" alt="微信"/>
 
 </div>
