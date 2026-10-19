@@ -20,8 +20,10 @@ export const options = {
 };
 
 export default function () {
+  const password = __ENV.NX_SEED_ADMIN_PASSWORD;
+  if (!password) throw new Error('set NX_SEED_ADMIN_PASSWORD to the seeded admin password');
   const res = http.post(`${__ENV.BASE || 'http://localhost:8080'}/api/v1/auth/login`,
-    JSON.stringify({ username: 'admin', password: 'admin123' }),
+    JSON.stringify({ username: __ENV.NX_ADMIN_USERNAME || 'admin', password }),
     { headers: { 'Content-Type': 'application/json' } });
   check(res, { 'status 200': (r) => r.status === 200 });
 }

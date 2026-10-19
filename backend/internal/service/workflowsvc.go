@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"gorm.io/datatypes"
@@ -12,6 +13,7 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/pagination"
+	"github.com/chengpeng-cp/nexus-agent/internal/security"
 	"github.com/chengpeng-cp/nexus-agent/internal/workflow"
 )
 
@@ -32,13 +34,13 @@ func (s *WorkflowService) SetEngine(e *workflow.Engine) { s.engine = e }
 // ---- CRUD ----
 
 // List 列表。
-func (s *WorkflowService) List(ctx context.Context, q pagination.Query) ([]model.Workflow, int64, error) {
-	return s.svcs.Deps.Repos.Workflow.ListWorkflows(ctx, q.Offset(), q.Limit())
+func (s *WorkflowService) List(ctx context.Context, userID int64, q pagination.Query) ([]model.Workflow, int64, error) {
+	return s.svcs.Deps.Repos.Workflow.ListWorkflowsForCreator(ctx, userID, q.Offset(), q.Limit())
 }
 
 // Get 详情。
-func (s *WorkflowService) Get(ctx context.Context, id int64) (*model.Workflow, error) {
-	w, err := s.svcs.Deps.Repos.Workflow.GetWorkflow(ctx, id)
+func (s *WorkflowService) Get(ctx context.Context, userID, id int64) (*model.Workflow, error) {
+	w, err := s.svcs.Deps.Repos.Workflow.GetWorkflowForCreator(ctx, id, userID)
 	if err != nil {
 		return nil, errcode.ErrRunNotFound.WithMsg("工作流不存在").WithCause(err)
 	}
@@ -51,27 +53,69 @@ func (s *WorkflowService) Create(ctx context.Context, w *model.Workflow) error {
 	if err != nil {
 		return err
 	}
-	w.Name = d.Name
-	w.Description = d.Desc
+	if w.Name == "" {
+		w.Name = d.Name
+	}
+	if w.Description == "" {
+		w.Description = d.Desc
+	}
 	return s.svcs.Deps.Repos.Workflow.CreateWorkflow(ctx, w)
 }
 
+// WorkflowUpdateInput keeps omitted boolean/status values distinguishable from
+// explicit false/zero values in PATCH-like update requests.
+type WorkflowUpdateInput struct {
+	Name        *string
+	Description *string
+	DSL         *string
+	IsActive    *bool
+	Status      *int16
+}
+
 // Update 更新。
-func (s *WorkflowService) Update(ctx context.Context, w *model.Workflow) error {
-	if _, err := s.Get(ctx, w.ID); err != nil {
+func (s *WorkflowService) Update(ctx context.Context, userID, id int64, in *WorkflowUpdateInput) error {
+	cur, err := s.Get(ctx, userID, id)
+	if err != nil {
 		return err
 	}
-	if w.DSL != "" {
-		if _, err := workflow.ParseDSL(w.DSL); err != nil {
+	if in.DSL != nil {
+		d, err := workflow.ParseDSL(*in.DSL)
+		if err != nil {
 			return err
 		}
+		cur.DSL = *in.DSL
+		if in.Name == nil {
+			cur.Name = d.Name
+		}
+		if in.Description == nil {
+			cur.Description = d.Desc
+		}
 	}
-	return s.svcs.Deps.Repos.Workflow.UpdateWorkflow(ctx, w)
+	if in.Name != nil {
+		cur.Name = *in.Name
+	}
+	if in.Description != nil {
+		cur.Description = *in.Description
+	}
+	if in.IsActive != nil {
+		cur.IsActive = *in.IsActive
+	}
+	if in.Status != nil {
+		cur.Status = *in.Status
+	}
+	return s.svcs.Deps.Repos.Workflow.UpdateWorkflowForCreator(ctx, cur, userID)
 }
 
 // Delete 删除。
-func (s *WorkflowService) Delete(ctx context.Context, id int64) error {
-	return s.svcs.Deps.Repos.Workflow.DeleteWorkflow(ctx, id)
+func (s *WorkflowService) Delete(ctx context.Context, userID, id int64) error {
+	err := s.svcs.Deps.Repos.Workflow.DeleteWorkflowForCreator(ctx, id, userID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return errcode.ErrRunNotFound.WithMsg("工作流不存在")
+	}
+	if err != nil {
+		return errcode.ErrInternal.WithCause(err)
+	}
+	return nil
 }
 
 // Validate 仅校验 DSL（前端编辑器实时校验接口）。
@@ -93,7 +137,8 @@ func (s *WorkflowService) Run(ctx context.Context, userID int64, in *RunInput) (
 	if s.engine == nil {
 		return nil, errcode.ErrNotImplement.WithMsg("workflow engine 未装配")
 	}
-	w, err := s.Get(ctx, in.WorkflowID)
+	ctx = security.WithUserID(ctx, userID)
+	w, err := s.Get(ctx, userID, in.WorkflowID)
 	if err != nil {
 		return nil, err
 	}
@@ -103,10 +148,10 @@ func (s *WorkflowService) Run(ctx context.Context, userID int64, in *RunInput) (
 	}
 
 	run := &model.WorkflowRun{
-			WorkflowID: w.ID, TriggerType: "manual",
-			Status: model.RunStatusRunning, Input: datatypes.JSON(mustJSON(in.Input)),
-			StartedAt: nowPtr(),
-		}
+		WorkflowID: w.ID, TriggerType: "manual",
+		Status: model.RunStatusRunning, Input: datatypes.JSON(mustJSON(in.Input)),
+		StartedAt: nowPtr(),
+	}
 	if err := s.svcs.Deps.Repos.Workflow.CreateRun(ctx, run); err != nil {
 		return nil, errcode.ErrInternal.WithCause(err)
 	}
@@ -144,18 +189,19 @@ func (s *WorkflowService) Run(ctx context.Context, userID int64, in *RunInput) (
 }
 
 // Approve HITL 审批：human 节点通过/驳回后恢复执行。
-func (s *WorkflowService) Approve(ctx context.Context, runID int64, approved bool) (*model.WorkflowRun, error) {
+func (s *WorkflowService) Approve(ctx context.Context, userID, runID int64, approved bool) (*model.WorkflowRun, error) {
 	if s.engine == nil {
 		return nil, errcode.ErrNotImplement.WithMsg("workflow engine 未装配")
 	}
-	run, err := s.svcs.Deps.Repos.Workflow.GetRun(ctx, runID)
+	ctx = security.WithUserID(ctx, userID)
+	run, err := s.svcs.Deps.Repos.Workflow.GetRunForCreator(ctx, runID, userID)
 	if err != nil {
 		return nil, errcode.ErrRunNotFound.WithCause(err)
 	}
 	if run.Status != model.RunStatusWaiting {
 		return nil, errcode.ErrInvalidParam.WithMsg("执行不在等待审批状态")
 	}
-	w, err := s.Get(ctx, run.WorkflowID)
+	w, err := s.Get(ctx, userID, run.WorkflowID)
 	if err != nil {
 		return nil, err
 	}
@@ -215,8 +261,8 @@ func (s *WorkflowService) Approve(ctx context.Context, runID int64, approved boo
 }
 
 // ListRuns 执行历史。
-func (s *WorkflowService) ListRuns(ctx context.Context, workflowID int64, q pagination.Query) ([]model.WorkflowRun, int64, error) {
-	return s.svcs.Deps.Repos.Workflow.ListRuns(ctx, workflowID, q.Offset(), q.Limit())
+func (s *WorkflowService) ListRuns(ctx context.Context, userID, workflowID int64, q pagination.Query) ([]model.WorkflowRun, int64, error) {
+	return s.svcs.Deps.Repos.Workflow.ListRunsForCreator(ctx, userID, workflowID, q.Offset(), q.Limit())
 }
 
 // ---- 子工作流 runner（注入 workflow.Engine）----
@@ -224,7 +270,11 @@ func (s *WorkflowService) ListRuns(ctx context.Context, workflowID int64, q pagi
 // SubflowRunner 实现 workflow 的递归执行（防 import 环：service 居中协调）。
 func (s *WorkflowService) SubflowRunner() workflow.SubRunner {
 	return func(ctx context.Context, workflowID int64, input map[string]any) (map[string]any, error) {
-		w, err := s.svcs.Deps.Repos.Workflow.GetWorkflow(ctx, workflowID)
+		userID, ok := security.UserIDFromContext(ctx)
+		if !ok {
+			return nil, errcode.ErrForbidden
+		}
+		w, err := s.svcs.Deps.Repos.Workflow.GetWorkflowForCreator(ctx, workflowID, userID)
 		if err != nil {
 			return nil, errcode.ErrRunNotFound.WithMsg("子工作流 %d 不存在", workflowID).WithCause(err)
 		}
@@ -246,13 +296,17 @@ func (s *WorkflowService) SubflowRunner() workflow.SubRunner {
 // GetWorkflowLookup 注入引擎的 KB 查询回调。
 func (s *WorkflowService) GetWorkflowLookup() func(ctx context.Context, kbID int64) (*model.KnowledgeBase, error) {
 	return func(ctx context.Context, kbID int64) (*model.KnowledgeBase, error) {
-		return s.svcs.Deps.Repos.KB.GetKB(ctx, kbID)
+		userID, ok := security.UserIDFromContext(ctx)
+		if !ok {
+			return nil, errcode.ErrForbidden
+		}
+		return s.svcs.Deps.Repos.KB.GetKBForUser(ctx, kbID, userID)
 	}
 }
 
 // GetWorkflowRun 查询执行详情。
-func (s *WorkflowService) GetWorkflowRun(ctx context.Context, runID int64) (*model.WorkflowRun, error) {
-	run, err := s.svcs.Deps.Repos.Workflow.GetRun(ctx, runID)
+func (s *WorkflowService) GetWorkflowRun(ctx context.Context, userID, runID int64) (*model.WorkflowRun, error) {
+	run, err := s.svcs.Deps.Repos.Workflow.GetRunForCreator(ctx, runID, userID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errcode.ErrRunNotFound

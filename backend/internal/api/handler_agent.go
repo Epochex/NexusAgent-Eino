@@ -11,7 +11,7 @@ import (
 
 // ListAgents GET /api/v1/agents
 func (h *Handler) ListAgents(ctx context.Context, c *app.RequestContext) {
-	list, total, err := h.svcs.Agent.List(ctx, parsePagination(c))
+	list, total, err := h.svcs.Agent.List(ctx, userID(c), parsePagination(c))
 	if err != nil {
 		Fail(c, err)
 		return
@@ -26,7 +26,7 @@ func (h *Handler) GetAgent(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	ag, err := h.svcs.Agent.Get(ctx, id)
+	ag, err := h.svcs.Agent.Get(ctx, userID(c), id)
 	if err != nil {
 		Fail(c, err)
 		return
@@ -41,7 +41,7 @@ func (h *Handler) CreateAgent(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	if err := h.svcs.Agent.Create(ctx, ag); err != nil {
+	if err := h.svcs.Agent.Create(ctx, userID(c), ag); err != nil {
 		Fail(c, err)
 		return
 	}
@@ -61,7 +61,7 @@ func (h *Handler) UpdateAgent(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	ag.ID = id
-	if err := h.svcs.Agent.Update(ctx, ag); err != nil {
+	if err := h.svcs.Agent.Update(ctx, userID(c), ag); err != nil {
 		Fail(c, err)
 		return
 	}
@@ -75,7 +75,7 @@ func (h *Handler) DeleteAgent(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	if err := h.svcs.Agent.Delete(ctx, id); err != nil {
+	if err := h.svcs.Agent.Delete(ctx, userID(c), id); err != nil {
 		Fail(c, err)
 		return
 	}

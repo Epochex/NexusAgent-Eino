@@ -116,6 +116,52 @@ func (r *WorkflowRepo) ListWorkflows(ctx context.Context, offset, limit int) ([]
 	return list, total, err
 }
 
+func (r *WorkflowRepo) GetWorkflowForCreator(ctx context.Context, id, creatorID int64) (*model.Workflow, error) {
+	var w model.Workflow
+	if err := r.db.WithContext(ctx).Where("id = ? AND creator_id = ?", id, creatorID).First(&w).Error; err != nil {
+		return nil, err
+	}
+	return &w, nil
+}
+
+func (r *WorkflowRepo) ListWorkflowsForCreator(ctx context.Context, creatorID int64, offset, limit int) ([]model.Workflow, int64, error) {
+	var list []model.Workflow
+	var total int64
+	q := r.db.WithContext(ctx).Model(&model.Workflow{}).Where("creator_id = ?", creatorID)
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := q.Order("id DESC").Offset(offset).Limit(limit).Find(&list).Error
+	return list, total, err
+}
+
+func (r *WorkflowRepo) UpdateWorkflowForCreator(ctx context.Context, w *model.Workflow, creatorID int64) error {
+	result := r.db.WithContext(ctx).Model(&model.Workflow{}).
+		Where("id = ? AND creator_id = ?", w.ID, creatorID).
+		Updates(map[string]any{
+			"name": w.Name, "description": w.Description, "dsl": w.DSL,
+			"is_active": w.IsActive, "status": w.Status,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *WorkflowRepo) DeleteWorkflowForCreator(ctx context.Context, id, creatorID int64) error {
+	result := r.db.WithContext(ctx).Where("creator_id = ?", creatorID).Delete(&model.Workflow{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 // CreateRun 创建执行记录。
 func (r *WorkflowRepo) CreateRun(ctx context.Context, run *model.WorkflowRun) error {
 	return r.db.WithContext(ctx).Create(run).Error
@@ -149,6 +195,34 @@ func (r *WorkflowRepo) ListRuns(ctx context.Context, workflowID int64, offset, l
 		return nil, 0, err
 	}
 	err := q.Order("id DESC").Offset(offset).Limit(limit).Find(&list).Error
+	return list, total, err
+}
+
+func (r *WorkflowRepo) GetRunForCreator(ctx context.Context, id, creatorID int64) (*model.WorkflowRun, error) {
+	var run model.WorkflowRun
+	err := r.db.WithContext(ctx).
+		Joins("JOIN workflows ON workflows.id = workflow_runs.workflow_id").
+		Where("workflow_runs.id = ? AND workflows.creator_id = ?", id, creatorID).
+		Preload("Steps").First(&run).Error
+	if err != nil {
+		return nil, err
+	}
+	return &run, nil
+}
+
+func (r *WorkflowRepo) ListRunsForCreator(ctx context.Context, creatorID, workflowID int64, offset, limit int) ([]model.WorkflowRun, int64, error) {
+	var list []model.WorkflowRun
+	var total int64
+	q := r.db.WithContext(ctx).Model(&model.WorkflowRun{}).
+		Joins("JOIN workflows ON workflows.id = workflow_runs.workflow_id").
+		Where("workflows.creator_id = ?", creatorID)
+	if workflowID > 0 {
+		q = q.Where("workflow_runs.workflow_id = ?", workflowID)
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := q.Order("workflow_runs.id DESC").Offset(offset).Limit(limit).Find(&list).Error
 	return list, total, err
 }
 

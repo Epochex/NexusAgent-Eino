@@ -1,9 +1,9 @@
 # NexusAgent 基础设施编排（td.md §11）
-# 分组点亮：core = 最小可运行（Ep 02） / full = 含检索与消息 / obs = 观测栈
+# 分组点亮：core = 服务必需依赖（PG/Redis/MinIO/Milvus） / full = 加 Ollama 与搜索 / obs = 观测栈
 #
 # 用法：
-#   docker compose --profile core up -d          # PG/Redis/MinIO
-#   docker compose --profile full up -d          # + Milvus/Ollama/SearXNG
+#   docker compose --profile core up -d          # PG/Redis/MinIO/Milvus
+#   docker compose --profile full up -d          # + Ollama/SearXNG
 #   docker compose --profile obs up -d           # + Jaeger/Prometheus/Grafana
 
 name: nexus-agent
@@ -43,7 +43,7 @@ services:
   # ---- 检索与模型（RAG/MCP 相关集） ----
   etcd: # Milvus 依赖
     image: quay.io/coreos/etcd:v3.5.14
-    profiles: [full, obs]
+    profiles: [core, full, obs]
     environment:
       ETCD_AUTO_COMPACTION_MODE: revision
       ETCD_AUTO_COMPACTION_RETENTION: "1000"
@@ -51,18 +51,18 @@ services:
 
   milvus:
     image: milvusdb/milvus:v2.5.6
-    profiles: [full, obs]
+    profiles: [core, full, obs]
     command: ["milvus", "run", "standalone"]
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: milvus-minio:9000
-    depends_on: [etcd]
+    depends_on: [etcd, milvus-minio]
     ports: ["19530:19530"]
     volumes: [milvusdata:/var/lib/milvus]
 
   milvus-minio: # Milvus 专用 MinIO（与业务 MinIO 隔离）
     image: minio/minio:latest
-    profiles: [full, obs]
+    profiles: [core, full, obs]
     command: minio server /data
     environment:
       MINIO_ROOT_USER: minioadmin

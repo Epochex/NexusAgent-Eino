@@ -14,24 +14,24 @@ import (
 
 // Config 全局配置结构（字段与 configs/config.yaml 一一对应）。
 type Config struct {
-	Env            string        `mapstructure:"env"`
-	HTTP           HTTP          `mapstructure:"http"`
-	Log            Log           `mapstructure:"log"`
-	PG             PG            `mapstructure:"pg"`
-	Redis          Redis         `mapstructure:"redis"`
-	Milvus         Milvus        `mapstructure:"milvus"`
-	MinIO          MinIO         `mapstructure:"minio"`
-	JWT            JWT           `mapstructure:"jwt"`
-	SecretKey      string        `mapstructure:"secret_key"`
-	LLM            LLM           `mapstructure:"llm"`
-	RAG            RAG           `mapstructure:"rag"`
-	Agent          Agent         `mapstructure:"agent"`
-	Worker         Worker        `mapstructure:"worker"`
-	Sandbox        Sandbox       `mapstructure:"sandbox"`
-	Observability  Observability `mapstructure:"observability"`
-	MCP            MCP           `mapstructure:"mcp"`
-	A2A            A2A           `mapstructure:"a2a"`
-	Search         Search        `mapstructure:"search"`
+	Env           string        `mapstructure:"env"`
+	HTTP          HTTP          `mapstructure:"http"`
+	Log           Log           `mapstructure:"log"`
+	PG            PG            `mapstructure:"pg"`
+	Redis         Redis         `mapstructure:"redis"`
+	Milvus        Milvus        `mapstructure:"milvus"`
+	MinIO         MinIO         `mapstructure:"minio"`
+	JWT           JWT           `mapstructure:"jwt"`
+	SecretKey     string        `mapstructure:"secret_key"`
+	LLM           LLM           `mapstructure:"llm"`
+	RAG           RAG           `mapstructure:"rag"`
+	Agent         Agent         `mapstructure:"agent"`
+	Worker        Worker        `mapstructure:"worker"`
+	Sandbox       Sandbox       `mapstructure:"sandbox"`
+	Observability Observability `mapstructure:"observability"`
+	MCP           MCP           `mapstructure:"mcp"`
+	A2A           A2A           `mapstructure:"a2a"`
+	Search        Search        `mapstructure:"search"`
 }
 
 type HTTP struct {
@@ -45,10 +45,10 @@ type Log struct {
 }
 
 type PG struct {
-	DSN              string        `mapstructure:"dsn"`
-	MaxOpenConns     int           `mapstructure:"max_open_conns"`
-	MaxIdleConns     int           `mapstructure:"max_idle_conns"`
-	ConnMaxLifetime  time.Duration `mapstructure:"conn_max_lifetime"`
+	DSN             string        `mapstructure:"dsn"`
+	MaxOpenConns    int           `mapstructure:"max_open_conns"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
 }
 
 type Redis struct {
@@ -79,14 +79,14 @@ type JWT struct {
 }
 
 type LLM struct {
-	MaxConnsPerProvider      int           `mapstructure:"max_conns_per_provider"`
-	CircuitErrorRate         float64       `mapstructure:"circuit_error_rate"`
-	CircuitOpen              time.Duration `mapstructure:"circuit_open"`
-	RetryMax                 int           `mapstructure:"retry_max"`
-	StreamFirstTokenTimeout  time.Duration `mapstructure:"stream_first_token_timeout"`
-	Local                    bool          `mapstructure:"local"` // 教学模式：全走 Ollama
-	DefaultChat              string        `mapstructure:"default_chat"`
-	DefaultEmbedding         string        `mapstructure:"default_embedding"`
+	MaxConnsPerProvider     int           `mapstructure:"max_conns_per_provider"`
+	CircuitErrorRate        float64       `mapstructure:"circuit_error_rate"`
+	CircuitOpen             time.Duration `mapstructure:"circuit_open"`
+	RetryMax                int           `mapstructure:"retry_max"`
+	StreamFirstTokenTimeout time.Duration `mapstructure:"stream_first_token_timeout"`
+	Local                   bool          `mapstructure:"local"` // 教学模式：全走 Ollama
+	DefaultChat             string        `mapstructure:"default_chat"`
+	DefaultEmbedding        string        `mapstructure:"default_embedding"`
 }
 
 type RAG struct {
@@ -102,10 +102,10 @@ type RAG struct {
 }
 
 type Agent struct {
-	MaxIterations        int           `mapstructure:"max_iterations"`
-	StepTimeout          time.Duration `mapstructure:"step_timeout"`
-	RunTimeout           time.Duration `mapstructure:"run_timeout"`
-	MemoryExtractEvery   int           `mapstructure:"memory_extract_every"`
+	MaxIterations      int           `mapstructure:"max_iterations"`
+	StepTimeout        time.Duration `mapstructure:"step_timeout"`
+	RunTimeout         time.Duration `mapstructure:"run_timeout"`
+	MemoryExtractEvery int           `mapstructure:"memory_extract_every"`
 }
 
 type Worker struct {
@@ -124,13 +124,13 @@ type Sandbox struct {
 }
 
 type Observability struct {
-	OtelEndpoint    string `mapstructure:"otel_endpoint"`
-	OtelEnabled     bool   `mapstructure:"otel_enabled"`
-	MetricsEnabled  bool   `mapstructure:"metrics_enabled"`
+	OtelEndpoint   string `mapstructure:"otel_endpoint"`
+	OtelEnabled    bool   `mapstructure:"otel_enabled"`
+	MetricsEnabled bool   `mapstructure:"metrics_enabled"`
 }
 
 type MCP struct {
-	Enabled       bool          `mapstructure:"enabled"`
+	Enabled        bool          `mapstructure:"enabled"`
 	HealthInterval time.Duration `mapstructure:"health_interval"`
 }
 
@@ -197,7 +197,26 @@ func Load(configDir string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 	cfg.Env = env
+	if err := validate(&cfg); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
+}
+
+func validate(cfg *Config) error {
+	if cfg.Env != "prod" && cfg.Env != "production" {
+		return nil
+	}
+	if len(cfg.JWT.Secret) < 32 || cfg.JWT.Secret == "change-me-in-prod" {
+		return fmt.Errorf("production requires NX_JWT__SECRET to be a unique secret of at least 32 characters")
+	}
+	if len(cfg.SecretKey) < 32 || cfg.SecretKey == "change-me-32-bytes!!" {
+		return fmt.Errorf("production requires NX_SECRET_KEY to be a unique secret of at least 32 characters")
+	}
+	if cfg.JWT.Secret == cfg.SecretKey {
+		return fmt.Errorf("production requires NX_JWT__SECRET and NX_SECRET_KEY to be different secrets")
+	}
+	return nil
 }
 
 func isDir(p string) bool {

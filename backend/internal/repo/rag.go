@@ -44,6 +44,15 @@ func (r *KBRepo) GetKB(ctx context.Context, id int64) (*model.KnowledgeBase, err
 	return &kb, nil
 }
 
+// GetKBForUser returns a KB only when it belongs to the authenticated user.
+func (r *KBRepo) GetKBForUser(ctx context.Context, id, userID int64) (*model.KnowledgeBase, error) {
+	var kb model.KnowledgeBase
+	if err := r.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&kb).Error; err != nil {
+		return nil, err
+	}
+	return &kb, nil
+}
+
 // ListKBs 知识库列表。
 func (r *KBRepo) ListKBs(ctx context.Context, userID int64, offset, limit int) ([]model.KnowledgeBase, int64, error) {
 	var (
@@ -68,6 +77,16 @@ func (r *KBRepo) ListKBsByIDs(ctx context.Context, ids []int64) ([]model.Knowled
 	}
 	var list []model.KnowledgeBase
 	err := r.db.WithContext(ctx).Where("id IN ? AND status = 'active'", ids).Find(&list).Error
+	return list, err
+}
+
+// ListKBsByIDsForUser applies KB ownership to agent-configured retrieval.
+func (r *KBRepo) ListKBsByIDsForUser(ctx context.Context, ids []int64, userID int64) ([]model.KnowledgeBase, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var list []model.KnowledgeBase
+	err := r.db.WithContext(ctx).Where("id IN ? AND user_id = ? AND status = 'active'", ids, userID).Find(&list).Error
 	return list, err
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
+	"github.com/chengpeng-cp/nexus-agent/internal/service"
 )
 
 // ListKBs GET /api/v1/kbs
@@ -27,7 +28,7 @@ func (h *Handler) GetKB(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	kb, err := h.svcs.KB.GetKB(ctx, id)
+	kb, err := h.svcs.KB.GetKB(ctx, userID(c), id)
 	if err != nil {
 		Fail(c, err)
 		return
@@ -56,7 +57,7 @@ func (h *Handler) DeleteKB(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	if err := h.svcs.KB.DeleteKB(ctx, id); err != nil {
+	if err := h.svcs.KB.DeleteKB(ctx, userID(c), id); err != nil {
 		Fail(c, err)
 		return
 	}
@@ -81,12 +82,12 @@ func (h *Handler) UploadDoc(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	defer f.Close()
-	data, err := io.ReadAll(f)
+	data, err := io.ReadAll(io.LimitReader(f, service.MaxDocSize+1))
 	if err != nil {
 		Fail(c, err)
 		return
 	}
-	doc, err := h.svcs.KB.UploadDoc(ctx, id, fh.Filename, data)
+	doc, err := h.svcs.KB.UploadDoc(ctx, userID(c), id, fh.Filename, data)
 	if err != nil {
 		Fail(c, err)
 		return
@@ -101,7 +102,7 @@ func (h *Handler) ListDocs(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	list, total, err := h.svcs.KB.ListDocs(ctx, id, parsePagination(c))
+	list, total, err := h.svcs.KB.ListDocs(ctx, userID(c), id, parsePagination(c))
 	if err != nil {
 		Fail(c, err)
 		return
@@ -121,7 +122,7 @@ func (h *Handler) DeleteDoc(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	if err := h.svcs.KB.DeleteDoc(ctx, id, docID); err != nil {
+	if err := h.svcs.KB.DeleteDoc(ctx, userID(c), id, docID); err != nil {
 		Fail(c, err)
 		return
 	}
@@ -135,7 +136,7 @@ func (h *Handler) ListChunks(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	list, total, err := h.svcs.KB.ListChunks(ctx, docID, parsePagination(c))
+	list, total, err := h.svcs.KB.ListChunks(ctx, userID(c), docID, parsePagination(c))
 	if err != nil {
 		Fail(c, err)
 		return
@@ -157,7 +158,7 @@ func (h *Handler) TestRetrieve(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	refs, err := h.svcs.KB.TestRetrieve(ctx, id, req.Query)
+	refs, err := h.svcs.KB.TestRetrieve(ctx, userID(c), id, req.Query)
 	if err != nil {
 		Fail(c, err)
 		return

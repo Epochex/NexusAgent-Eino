@@ -4,6 +4,8 @@
 package security
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -42,12 +44,21 @@ func NewJWTManager(secret string, accessTTL, refreshTTL time.Duration) *JWTManag
 // Generate 签发双 Token。
 func (m *JWTManager) Generate(userID int64, role, username string) (*TokenPair, error) {
 	now := time.Now()
+	accessID, err := newTokenID()
+	if err != nil {
+		return nil, fmt.Errorf("generate access token id: %w", err)
+	}
+	refreshID, err := newTokenID()
+	if err != nil {
+		return nil, fmt.Errorf("generate refresh token id: %w", err)
+	}
 	access := jwt.NewWithClaims(jwt.SigningMethodHS256, &Claims{
 		UserID: userID, Role: role, Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(m.accessTTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			Issuer:    "nexus-agent",
+			ID:        accessID,
 		},
 	})
 	accessStr, err := access.SignedString(m.secret)
@@ -61,6 +72,7 @@ func (m *JWTManager) Generate(userID int64, role, username string) (*TokenPair, 
 			ExpiresAt: jwt.NewNumericDate(now.Add(m.refreshTTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			Issuer:    "nexus-agent:refresh",
+			ID:        refreshID,
 		},
 	})
 	refreshStr, err := refresh.SignedString(m.secret)
@@ -69,6 +81,14 @@ func (m *JWTManager) Generate(userID int64, role, username string) (*TokenPair, 
 	}
 
 	return &TokenPair{AccessToken: accessStr, RefreshToken: refreshStr, ExpiresIn: int64(m.accessTTL.Seconds()), UserID: userID}, nil
+}
+
+func newTokenID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // Parse 解析并校验 Token。isRefresh 区分两类 token 的 issuer。

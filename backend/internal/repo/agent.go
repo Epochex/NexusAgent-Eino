@@ -38,6 +38,16 @@ func (r *AgentRepo) GetByID(ctx context.Context, id int64) (*model.Agent, error)
 	return &a, nil
 }
 
+func (r *AgentRepo) GetByIDForUser(ctx context.Context, id, userID int64) (*model.Agent, error) {
+	var a model.Agent
+	if err := r.db.WithContext(ctx).
+		Where("id = ? AND (owner_id IS NULL OR owner_id = ?)", id, userID).
+		First(&a).Error; err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
 // List 列表（keyword 匹配名称/描述）。
 func (r *AgentRepo) List(ctx context.Context, keyword string, offset, limit int) ([]model.Agent, int64, error) {
 	var (
@@ -55,6 +65,52 @@ func (r *AgentRepo) List(ctx context.Context, keyword string, offset, limit int)
 	return list, total, err
 }
 
+func (r *AgentRepo) ListForUser(ctx context.Context, userID int64, keyword string, offset, limit int) ([]model.Agent, int64, error) {
+	var list []model.Agent
+	var total int64
+	q := r.db.WithContext(ctx).Model(&model.Agent{}).
+		Where("(owner_id IS NULL OR owner_id = ?)", userID)
+	if keyword != "" {
+		q = q.Where("name ILIKE ? OR description ILIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := q.Order("id ASC").Offset(offset).Limit(limit).Find(&list).Error
+	return list, total, err
+}
+
+func (r *AgentRepo) UpdateForUser(ctx context.Context, a *model.Agent, userID int64) error {
+	result := r.db.WithContext(ctx).Model(&model.Agent{}).
+		Where("id = ? AND owner_id = ?", a.ID, userID).
+		Updates(map[string]any{
+			"name": a.Name, "description": a.Description, "type": a.Type,
+			"system_prompt": a.SystemPrompt, "model_config_id": a.ModelConfigID,
+			"temperature": a.Temperature, "max_tokens": a.MaxTokens,
+			"max_iterations": a.MaxIterations, "memory_enabled": a.MemoryEnabled,
+			"memory_long_enabled": a.MemoryLongEnabled, "kb_ids": a.KBIDs,
+			"tools": a.Tools,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *AgentRepo) DeleteForUser(ctx context.Context, id, userID int64) error {
+	result := r.db.WithContext(ctx).Where("owner_id = ?", userID).Delete(&model.Agent{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 // ListHosts 列出全部 host 类型 Agent。
 func (r *AgentRepo) ListHosts(ctx context.Context) ([]model.Agent, error) {
 	var list []model.Agent
@@ -67,6 +123,14 @@ func (r *AgentRepo) ListHosts(ctx context.Context) ([]model.Agent, error) {
 func (r *AgentRepo) ListExperts(ctx context.Context) ([]model.Agent, error) {
 	var list []model.Agent
 	err := r.db.WithContext(ctx).Where("type = ? AND status = 1", model.AgentTypeExpert).Find(&list).Error
+	return list, err
+}
+
+func (r *AgentRepo) ListExpertsForUser(ctx context.Context, userID int64) ([]model.Agent, error) {
+	var list []model.Agent
+	err := r.db.WithContext(ctx).
+		Where("type = ? AND status = 1 AND (owner_id IS NULL OR owner_id = ?)", model.AgentTypeExpert, userID).
+		Find(&list).Error
 	return list, err
 }
 

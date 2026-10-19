@@ -6,30 +6,33 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
+	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/rag/engine"
 	"github.com/chengpeng-cp/nexus-agent/internal/repo"
 	"github.com/chengpeng-cp/nexus-agent/internal/security"
 	"github.com/chengpeng-cp/nexus-agent/internal/tool"
 	"github.com/chengpeng-cp/nexus-agent/internal/vector"
+	"gorm.io/gorm"
 )
 
 // Deps service 层依赖全集（main 装配）。
 type Deps struct {
-	Cfg      *config.Config
-	Repos    *repo.Repos
-	Gateway  *llm.Gateway
+	Cfg       *config.Config
+	Repos     *repo.Repos
+	Gateway   *llm.Gateway
 	Encryptor *security.Encryptor
-	JWT      *security.JWTManager
-	RDB      *redis.Client
-	Vector   vector.Store
-	Executor tool.Executor
-	Registry tool.Registry // 内置工具注册表（MCP 同步工具时注册执行 handler）
-	Streams  StreamPublisher // 异步任务投递（worker 实现，可 nil）
+	JWT       *security.JWTManager
+	RDB       *redis.Client
+	Vector    vector.Store
+	Executor  tool.Executor
+	Registry  tool.Registry   // 内置工具注册表（MCP 同步工具时注册执行 handler）
+	Streams   StreamPublisher // 异步任务投递（worker 实现，可 nil）
 }
 
 // StreamPublisher 异步任务投递接口（internal/worker 实现，接口在此隔离依赖方向）。
@@ -106,7 +109,10 @@ func (s *Services) DefaultRerank() *llm.ModelDescriptor { return s.defaultRerank
 // alias 为空返回平台默认 chat 模型（实时解析，改配置即时生效）。
 func (s *Services) ResolveModelByAlias(ctx context.Context, alias string) (*llm.ModelDescriptor, *llm.ModelDescriptor, error) {
 	if alias == "" {
-		return s.DefaultChat(), nil, nil
+		if d := s.DefaultChat(); d != nil {
+			return d, nil, nil
+		}
+		return nil, nil, errcode.ErrProviderNotFound.WithMsg("默认对话模型尚未配置")
 	}
 	m, err := s.resolveByName(alias, modelTypeChat)
 	if err != nil {
@@ -122,10 +128,14 @@ func (s *Services) SetRAGEngine(e *engine.Engine) { s.ragEngine = e }
 func (s *Services) reloadDefaultModels() error {
 	var err error
 	if s.defaultChat, err = s.resolveByName(s.Deps.Cfg.LLM.DefaultChat, modelTypeChat); err != nil {
-		return err
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
 	}
 	if s.defaultEmbedding, err = s.resolveByName(s.Deps.Cfg.LLM.DefaultEmbedding, modelTypeEmbed); err != nil {
-		return err
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
 	}
 	// rerank 可选：解析失败静默跳过（检索管线自动降级为融合排序）
 	s.defaultRerank, _ = s.resolveByName("bge-reranker", modelTypeRerank)

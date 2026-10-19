@@ -11,6 +11,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"os"
@@ -69,7 +71,8 @@ func run(down int) error {
 	return nil
 }
 
-// seedAdmin 插入默认管理员 admin / admin123（仅当 users 表为空）。
+// seedAdmin inserts the initial admin only when users is empty. It also rotates
+// the legacy admin/admin123 credential on upgraded installations.
 func seedAdmin(dsn string) error {
 	db, err := infra.NewPG(disabledCtx(), &config.PG{DSN: dsn, MaxOpenConns: 2, MaxIdleConns: 1})
 	if err != nil {
@@ -81,11 +84,51 @@ func seedAdmin(dsn string) error {
 	}
 	defer sqlDB.Close()
 
-	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	var userCount int64
+	if err := db.WithContext(disabledCtx()).Table("users").Count(&userCount).Error; err != nil {
+		return err
+	}
+	if userCount > 0 {
+		var legacyAdmin struct {
+			ID           int64
+			PasswordHash string `gorm:"column:password_hash"`
+		}
+		if err := db.WithContext(disabledCtx()).Table("users").Select("id, password_hash").Where("username = ?", "admin").Take(&legacyAdmin).Error; err != nil {
+			fmt.Println("users table not empty, skip seed")
+			return nil
+		}
+		if bcrypt.CompareHashAndPassword([]byte(legacyAdmin.PasswordHash), []byte("admin123")) != nil {
+			fmt.Println("users table not empty, skip seed")
+			return nil
+		}
+
+		password, generated, err := bootstrapPassword()
+		if err != nil {
+			return err
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		res := db.WithContext(disabledCtx()).Exec("UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?", string(hash), legacyAdmin.ID)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return fmt.Errorf("legacy admin password changed concurrently; rerun migration")
+		}
+		printBootstrapCredential(password, generated, "rotated legacy admin password")
+		return nil
+	}
+
+	password, generatedPassword, err := bootstrapPassword()
 	if err != nil {
 		return err
 	}
-
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
 	// 唯一条记录插入：存在任何用户则跳过（与种子 SQL 的幂等约定一致）
 	res := db.WithContext(disabledCtx()).Exec(`
 		INSERT INTO users (username, email, password_hash, role, status)
@@ -95,11 +138,35 @@ func seedAdmin(dsn string) error {
 		return res.Error
 	}
 	if res.RowsAffected > 0 {
-		fmt.Println("seeded admin user: admin / admin123 (请在管理页修改密码)")
+		printBootstrapCredential(password, generatedPassword, "seeded admin user")
 	} else {
 		fmt.Println("users table not empty, skip seed")
 	}
 	return nil
+}
+
+func bootstrapPassword() (password string, generated bool, err error) {
+	password = os.Getenv("NX_SEED_ADMIN_PASSWORD")
+	generated = password == ""
+	if generated {
+		raw := make([]byte, 24)
+		if _, err = rand.Read(raw); err != nil {
+			return "", false, fmt.Errorf("generate bootstrap password: %w", err)
+		}
+		password = base64.RawURLEncoding.EncodeToString(raw)
+	}
+	if len(password) < 16 {
+		return "", false, fmt.Errorf("NX_SEED_ADMIN_PASSWORD must contain at least 16 characters")
+	}
+	return password, generated, nil
+}
+
+func printBootstrapCredential(password string, generated bool, action string) {
+	if generated {
+		fmt.Printf("%s: admin / %s (请立即保存并在首次登录后修改密码)\n", action, password)
+	} else {
+		fmt.Printf("%s: admin (使用 NX_SEED_ADMIN_PASSWORD 设置的密码登录)\n", action)
+	}
 }
 
 // disabledCtx 迁移场景不需要可取消上下文，给一个空实现保持 infra.NewPG 签名。

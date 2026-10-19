@@ -4,7 +4,9 @@ package service
 import (
 	"context"
 	"errors"
+	"net/mail"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -16,6 +18,15 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/repo"
 	"github.com/chengpeng-cp/nexus-agent/internal/security"
 )
+
+var rotateRefreshTokenScript = redis.NewScript(`
+if redis.call('SREM', KEYS[1], ARGV[1]) == 0 then
+	return 0
+end
+redis.call('SADD', KEYS[1], ARGV[2])
+redis.call('PEXPIRE', KEYS[1], ARGV[3])
+return 1
+`)
 
 // AuthService 认证业务。
 type AuthService struct {
@@ -39,6 +50,17 @@ type RegisterInput struct {
 
 // Register 注册（首个用户自动成为 admin，方便开箱即用）。
 func (s *AuthService) Register(ctx context.Context, in *RegisterInput) (*model.User, error) {
+	in.Username = strings.TrimSpace(in.Username)
+	in.Email = strings.TrimSpace(in.Email)
+	if len(in.Username) < 3 || len(in.Username) > 64 {
+		return nil, errcode.ErrInvalidParam.WithMsg("用户名长度必须为 3 至 64 个字符")
+	}
+	if addr, err := mail.ParseAddress(in.Email); err != nil || addr.Address != in.Email || len(in.Email) > 128 {
+		return nil, errcode.ErrInvalidParam.WithMsg("请提供有效邮箱地址")
+	}
+	if len(in.Password) < 12 || len(in.Password) > 72 {
+		return nil, errcode.ErrInvalidParam.WithMsg("密码长度必须为 12 至 72 个字节")
+	}
 	if exists, err := s.users.ExistsBy(ctx, in.Username, in.Email); err != nil {
 		return nil, errcode.ErrInternal.WithCause(err)
 	} else if exists {
@@ -50,13 +72,11 @@ func (s *AuthService) Register(ctx context.Context, in *RegisterInput) (*model.U
 		return nil, errcode.ErrInternal.WithCause(err)
 	}
 
-	role := "user"
-	if n, e := s.users.Count(ctx); e == nil && n == 0 {
-		role = "admin" // 首个注册用户 = 管理员
-	}
-
-	u := &model.User{Username: in.Username, Email: in.Email, PasswordHash: string(hash), Role: role}
-	if err := s.users.Create(ctx, u); err != nil {
+	u := &model.User{Username: in.Username, Email: in.Email, PasswordHash: string(hash)}
+	if err := s.users.CreateFirstOrUser(ctx, u); err != nil {
+		if errors.Is(err, repo.ErrUserAlreadyExists) {
+			return nil, errcode.ErrUserExists
+		}
 		return nil, errcode.ErrInternal.WithCause(err)
 	}
 	return u, nil
@@ -77,7 +97,14 @@ func (s *AuthService) Login(ctx context.Context, username, password string) (*se
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
 		return nil, errcode.ErrLoginFailed
 	}
-	return s.jwt.Generate(u.ID, u.Role, u.Username)
+	pair, err := s.jwt.Generate(u.ID, u.Role, u.Username)
+	if err != nil {
+		return nil, errcode.ErrInternal.WithCause(err)
+	}
+	if err := s.StoreRefreshToken(ctx, pair.UserID, pair.RefreshToken, s.jwt.RefreshTTL()); err != nil {
+		return nil, errcode.ErrInternal.WithCause(err)
+	}
+	return pair, nil
 }
 
 // Refresh 刷新 Access Token（Refresh Token 白名单校验）。
@@ -87,15 +114,20 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*securi
 		// 过期与无效统一按"凭证失效"处理（前端引导重新登录）
 		return nil, errcode.ErrTokenInvalid
 	}
-	// 白名单校验：登出过的 refresh token 立即失效
-	ok, err := s.rdb.SIsMember(ctx, refreshKey(claims.UserID), refreshToken).Result()
+	pair, err := s.jwt.Generate(claims.UserID, claims.Role, claims.Username)
 	if err != nil {
 		return nil, errcode.ErrInternal.WithCause(err)
 	}
-	if !ok {
+	rotated, err := rotateRefreshTokenScript.Run(ctx, s.rdb,
+		[]string{refreshKey(claims.UserID)}, refreshToken, pair.RefreshToken,
+		s.jwt.RefreshTTL().Milliseconds()).Int()
+	if err != nil {
+		return nil, errcode.ErrInternal.WithCause(err)
+	}
+	if rotated != 1 {
 		return nil, errcode.ErrTokenInvalid.WithMsg("refresh token 已失效")
 	}
-	return s.jwt.Generate(claims.UserID, claims.Role, claims.Username)
+	return pair, nil
 }
 
 // Logout 登出：吊销该用户全部 refresh token。

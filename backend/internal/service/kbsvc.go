@@ -16,8 +16,8 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/pagination"
 )
 
-// maxDocSize 文档上传大小上限（教学版 20MB）。
-const maxDocSize = 20 << 20
+// MaxDocSize 文档上传大小上限（教学版 20MB）。
+const MaxDocSize = 20 << 20
 
 // allowedDocTypes 允许的文档类型。
 var allowedDocTypes = map[string]bool{
@@ -86,8 +86,8 @@ func (s *KBService) ListKBs(ctx context.Context, userID int64, q pagination.Quer
 }
 
 // GetKB 详情。
-func (s *KBService) GetKB(ctx context.Context, id int64) (*model.KnowledgeBase, error) {
-	kb, err := s.svcs.Deps.Repos.KB.GetKB(ctx, id)
+func (s *KBService) GetKB(ctx context.Context, userID, id int64) (*model.KnowledgeBase, error) {
+	kb, err := s.svcs.Deps.Repos.KB.GetKBForUser(ctx, id, userID)
 	if err != nil {
 		return nil, errcode.ErrKBNotFound.WithCause(err)
 	}
@@ -95,8 +95,8 @@ func (s *KBService) GetKB(ctx context.Context, id int64) (*model.KnowledgeBase, 
 }
 
 // DeleteKB 删除知识库（级联删文档/分块/向量集合）。
-func (s *KBService) DeleteKB(ctx context.Context, id int64) error {
-	kb, err := s.GetKB(ctx, id)
+func (s *KBService) DeleteKB(ctx context.Context, userID, id int64) error {
+	kb, err := s.GetKB(ctx, userID, id)
 	if err != nil {
 		return err
 	}
@@ -117,14 +117,14 @@ func (s *KBService) DeleteKB(ctx context.Context, id int64) error {
 }
 
 // UploadDoc 上传文档：对象存储 + 建档 + 投递 ETL 任务。
-func (s *KBService) UploadDoc(ctx context.Context, kbID int64, filename string, data []byte) (*model.Document, error) {
-	if len(data) > maxDocSize {
+func (s *KBService) UploadDoc(ctx context.Context, userID, kbID int64, filename string, data []byte) (*model.Document, error) {
+	if len(data) > MaxDocSize {
 		return nil, errcode.ErrFileTooLarge
 	}
 	if !allowedDocTypes[extOf(filename)] {
 		return nil, errcode.ErrFileType
 	}
-	kb, err := s.GetKB(ctx, kbID)
+	kb, err := s.GetKB(ctx, userID, kbID)
 	if err != nil {
 		return nil, err
 	}
@@ -164,17 +164,21 @@ func (s *KBService) UploadDoc(ctx context.Context, kbID int64, filename string, 
 }
 
 // ListDocs 文档列表。
-func (s *KBService) ListDocs(ctx context.Context, kbID int64, q pagination.Query) ([]model.Document, int64, error) {
+func (s *KBService) ListDocs(ctx context.Context, userID, kbID int64, q pagination.Query) ([]model.Document, int64, error) {
+	if _, err := s.GetKB(ctx, userID, kbID); err != nil {
+		return nil, 0, err
+	}
 	return s.svcs.Deps.Repos.KB.ListDocs(ctx, kbID, q.Offset(), q.Limit())
 }
 
 // DeleteDoc 删除文档（分块 + 向量一并清理）。
-func (s *KBService) DeleteDoc(ctx context.Context, kbID, docID int64) error {
-	kb, err := s.GetKB(ctx, kbID)
+func (s *KBService) DeleteDoc(ctx context.Context, userID, kbID, docID int64) error {
+	kb, err := s.GetKB(ctx, userID, kbID)
 	if err != nil {
 		return err
 	}
-	if _, err := s.svcs.Deps.Repos.KB.GetDoc(ctx, docID); err != nil {
+	doc, err := s.svcs.Deps.Repos.KB.GetDoc(ctx, docID)
+	if err != nil || doc.KBID != kb.ID {
 		return errcode.ErrDocNotFound
 	}
 	if s.svcs.ragEngine != nil {
@@ -186,13 +190,20 @@ func (s *KBService) DeleteDoc(ctx context.Context, kbID, docID int64) error {
 }
 
 // ListChunks 分块列表。
-func (s *KBService) ListChunks(ctx context.Context, docID int64, q pagination.Query) ([]model.DocumentChunk, int64, error) {
+func (s *KBService) ListChunks(ctx context.Context, userID, docID int64, q pagination.Query) ([]model.DocumentChunk, int64, error) {
+	doc, err := s.svcs.Deps.Repos.KB.GetDoc(ctx, docID)
+	if err != nil {
+		return nil, 0, errcode.ErrDocNotFound
+	}
+	if _, err := s.GetKB(ctx, userID, doc.KBID); err != nil {
+		return nil, 0, err
+	}
 	return s.svcs.Deps.Repos.KB.ListChunks(ctx, docID, q.Offset(), q.Limit())
 }
 
 // TestRetrieve 检索测试台：只检索不回答（调参用，Ep 08 演示核心）。
-func (s *KBService) TestRetrieve(ctx context.Context, kbID int64, query string) ([]RetrievalRef, error) {
-	kb, err := s.GetKB(ctx, kbID)
+func (s *KBService) TestRetrieve(ctx context.Context, userID, kbID int64, query string) ([]RetrievalRef, error) {
+	kb, err := s.GetKB(ctx, userID, kbID)
 	if err != nil {
 		return nil, err
 	}

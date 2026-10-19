@@ -56,9 +56,6 @@ func (h *Handler) Login(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	// refresh token 进白名单（登出可吊销）；注意登录请求未经 Auth 中间件，
-	// userID(c) 恒为 0，必须取 pair 内签发对象的 ID
-	_ = h.svcs.Auth.StoreRefreshToken(ctx, pair.UserID, pair.RefreshToken, h.svcs.JWT.RefreshTTL())
 	OK(c, pair)
 }
 
@@ -79,8 +76,6 @@ func (h *Handler) Refresh(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	// 轮换后的新 refresh token 同样入白名单（同上：此路由不经 Auth 中间件）
-	_ = h.svcs.Auth.StoreRefreshToken(ctx, pair.UserID, pair.RefreshToken, h.svcs.JWT.RefreshTTL())
 	OK(c, pair)
 }
 

@@ -18,7 +18,7 @@ CREATE TABLE users (
 CREATE TABLE sessions (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id       BIGINT      NOT NULL REFERENCES users(id),
-    agent_id      BIGINT      REFERENCES agents(id),
+    agent_id      BIGINT,
     title         VARCHAR(256) NOT NULL DEFAULT '新对话',
     status        VARCHAR(20) NOT NULL DEFAULT 'active',
     pinned        BOOLEAN     NOT NULL DEFAULT FALSE,
@@ -109,6 +109,8 @@ CREATE TABLE agents (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE sessions ADD CONSTRAINT fk_sessions_agent
+    FOREIGN KEY (agent_id) REFERENCES agents(id);
 
 -- ===== 工具 =====
 CREATE TABLE tools (
@@ -119,7 +121,7 @@ CREATE TABLE tools (
     description   TEXT         NOT NULL,
     parameters    JSONB        NOT NULL,
     handler       VARCHAR(64),
-    mcp_server_id BIGINT REFERENCES mcp_servers(id),
+    mcp_server_id BIGINT,
     endpoint      VARCHAR(512),
     auth_config   JSONB,
     default_config JSONB      NOT NULL DEFAULT '{}',
@@ -146,6 +148,8 @@ CREATE TABLE mcp_servers (
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+ALTER TABLE tools ADD CONSTRAINT fk_tools_mcp_server
+    FOREIGN KEY (mcp_server_id) REFERENCES mcp_servers(id);
 
 -- ===== A2A 远程 Agent 注册 =====
 CREATE TABLE a2a_agents (

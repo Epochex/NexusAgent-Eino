@@ -16,9 +16,9 @@ import (
 
 // 模型类型（与 model 包常量对齐的内部简写）。
 const (
-	modelTypeChat    = "chat"
-	modelTypeEmbed   = "embedding"
-	modelTypeRerank  = "rerank"
+	modelTypeChat   = "chat"
+	modelTypeEmbed  = "embedding"
+	modelTypeRerank = "rerank"
 )
 
 // ModelService 模型管理。
@@ -274,7 +274,10 @@ func derefCaps(p *[]string) []string {
 // fallbackID 为 Agent 配置的备用模型（0 表示无备用）。
 func (s *Services) ResolveModel(ctx context.Context, modelConfigID, fallbackID int64) (*llm.ModelDescriptor, *llm.ModelDescriptor, error) {
 	if modelConfigID == 0 {
-		return s.DefaultChat(), nil, nil
+		if d := s.DefaultChat(); d != nil {
+			return d, nil, nil
+		}
+		return nil, nil, errcode.ErrProviderNotFound.WithMsg("默认对话模型尚未配置")
 	}
 	m, err := s.Deps.Repos.LLM.GetModel(ctx, modelConfigID)
 	if err != nil {

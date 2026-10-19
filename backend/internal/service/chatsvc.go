@@ -61,6 +61,7 @@ func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (
 		return nil, errcode.ErrInvalidParam.WithMsg("消息不能为空")
 	}
 	in.Content = security.SanitizeUserInput(in.Content)
+	ctx = security.WithUserID(ctx, userID)
 
 	// ① 会话保障与归属校验
 	session, err := s.ensureSession(ctx, userID, in)
@@ -69,7 +70,7 @@ func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (
 	}
 
 	// ② Agent 配置
-	ag, err := s.loadAgent(ctx, in.AgentID)
+	ag, err := s.loadAgent(ctx, userID, in.AgentID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (
 	runInput.Trace = observability.NewAgentTrace()
 
 	// ⑤ 选择 Runner 并启动
-	runner, err := s.pickRunner(ctx, ag)
+	runner, err := s.pickRunner(ctx, userID, ag)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +134,7 @@ func (s *ChatService) ensureSession(ctx context.Context, userID int64, in *ChatI
 }
 
 // loadAgent 加载 Agent 配置；agentID=0 返回默认助手（直答、无工具）。
-func (s *ChatService) loadAgent(ctx context.Context, id int64) (*model.Agent, error) {
+func (s *ChatService) loadAgent(ctx context.Context, userID, id int64) (*model.Agent, error) {
 	if id == 0 {
 		return &model.Agent{
 			Name: "默认助手", Type: model.AgentTypeExpert,
@@ -141,7 +142,7 @@ func (s *ChatService) loadAgent(ctx context.Context, id int64) (*model.Agent, er
 			MaxIterations: 10, MemoryEnabled: true, MemoryWindow: 20,
 		}, nil
 	}
-	ag, err := s.svcs.Deps.Repos.Agent.GetByID(ctx, id)
+	ag, err := s.svcs.Deps.Repos.Agent.GetByIDForUser(ctx, id, userID)
 	if err != nil {
 		return nil, errcode.ErrAgentNotFound.WithCause(err)
 	}
@@ -187,7 +188,7 @@ func (s *ChatService) buildRunInput(ctx context.Context, session *model.Session,
 	// 4.4 RAG 检索（Agent 绑定的知识库，多库并行检索合并）
 	var refs []engine.Ref
 	if kbIDs := parseIDs(ag.KBIDs); len(kbIDs) > 0 && s.svcs.ragEngine != nil {
-		refs = s.retrieveKBs(ctx, kbIDs, question)
+		refs = s.retrieveKBs(ctx, session.UserID, kbIDs, question)
 	}
 
 	// 4.5 system prompt 组装：人设 + 注入防护 + 记忆 + RAG
@@ -221,8 +222,8 @@ func (s *ChatService) buildRunInput(ctx context.Context, session *model.Session,
 }
 
 // retrieveKBs 多知识库检索合并（去重）。
-func (s *ChatService) retrieveKBs(ctx context.Context, kbIDs []int64, query string) []engine.Ref {
-	kbs, err := s.svcs.Deps.Repos.KB.ListKBsByIDs(ctx, kbIDs)
+func (s *ChatService) retrieveKBs(ctx context.Context, userID int64, kbIDs []int64, query string) []engine.Ref {
+	kbs, err := s.svcs.Deps.Repos.KB.ListKBsByIDsForUser(ctx, kbIDs, userID)
 	if err != nil {
 		return nil
 	}
@@ -244,7 +245,7 @@ func (s *ChatService) retrieveKBs(ctx context.Context, kbIDs []int64, query stri
 }
 
 // pickRunner 按类型选择 Runner（host 多智能体 / 单 ReAct）。
-func (s *ChatService) pickRunner(ctx context.Context, ag *model.Agent) (runtime.Runner, error) {
+func (s *ChatService) pickRunner(ctx context.Context, userID int64, ag *model.Agent) (runtime.Runner, error) {
 	if ag.Type != model.AgentTypeHost {
 		return runtime.NewReactRunner(
 			s.svcs.Deps.Gateway, s.svcs.Deps.Executor,
@@ -254,7 +255,7 @@ func (s *ChatService) pickRunner(ctx context.Context, ag *model.Agent) (runtime.
 	}
 
 	// Host：装载专家清单
-	expertRows, err := s.svcs.Deps.Repos.Agent.ListExperts(ctx)
+	expertRows, err := s.svcs.Deps.Repos.Agent.ListExpertsForUser(ctx, userID)
 	if err != nil {
 		return nil, errcode.ErrInternal.WithCause(err)
 	}

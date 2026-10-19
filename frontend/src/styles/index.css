@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.js";
 
 /* ============================================================
    NexusAgent 全局样式 —— 暗色设计系统 + 通用组件层

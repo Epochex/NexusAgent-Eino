@@ -40,7 +40,7 @@ NexusAgent 是一个**通用智能体（Agent）平台**，覆盖了 Agent 开�
 |---|---|
 | 后端 | Go 1.26+ · Hertz（HTTP）· GORM · PostgreSQL 16 · Redis 7（Streams）· Milvus 2.5（向量）· MinIO（对象存储）· golang-migrate |
 | AI/Agent | DeepSeek / Ollama（OpenAI 兼容协议）· eino 框架 · mcp-go · Docker 沙箱（代码执行）· SearXNG（联网搜索） |
-| 前端 | React 18.3 · TypeScript（strict）· TailwindCSS 3.4 · GSAP 3.13 · Zustand 5 · React Router 6 · Vite 5 |
+| 前端 | React 18.3 · TypeScript（strict）· TailwindCSS 4 · GSAP 3.13 · Zustand 5 · React Router 7 · Vite 7 |
 | 可观测 | OpenTelemetry（Jaeger）· Prometheus · Grafana · zap 结构化日志 |
 
 ## 快速开始
@@ -48,21 +48,26 @@ NexusAgent 是一个**通用智能体（Agent）平台**，覆盖了 Agent 开�
 ### 环境要求
 
 - **Go ≥ 1.26**（`go version` 检查）
-- **Node.js ≥ 18**（前端）
+- **Node.js 20.19+ 或 22.12+**（前端开发与构建）
 - **Docker & Docker Compose**（基础设施一键起）
+
+Tailwind CSS 4 的样式最低支持 Safari 16.4、Chrome 111、Firefox 128；需要兼容更旧浏览器时应保留 Tailwind CSS 3.4。详见 [Tailwind CSS 浏览器兼容说明](https://tailwindcss.com/docs/compatibility)。
 
 ### ① 启动基础设施（PostgreSQL / Redis / MinIO）
 
 ```bash
 cd backend
-make compose-core          # 只起核心三件套；RAG/联网搜索需 make compose-up（含 Milvus/SearXNG/Ollama）
+make compose-core          # 起 PostgreSQL/Redis/MinIO/Milvus；make compose-up 额外启动 Ollama/SearXNG/观测栈
 ```
 
 ### ② 数据库迁移 + 初始化管理员
 
 ```bash
-make migrate               # 执行 migrations/*.sql，并种子默认管理员 admin / admin123
+NX_SEED_ADMIN_PASSWORD='设置一个至少 16 位的管理员密码' make migrate
 ```
+
+首次迁移会用该密码创建 `admin`。未设置此变量时会生成随机的一次性密码并显示在迁移命令输出中，请安全保存。
+升级旧版本时，如果管理员仍使用默认密码 `admin123`，迁移会将其轮换为这里配置的密码；未设置变量时则生成随机密码并显示一次。
 
 ### ③ 启动后端 API 服务
 
@@ -82,11 +87,11 @@ npm run dev                # http://localhost:5173，/api 已代理到 localhost
 
 ### ⑤ 配置模型，开始对话
 
-1. 打开 http://localhost:5173，用 `admin / admin123` 登录
+1. 打开 http://localhost:5173，用迁移时配置或生成的管理员凭据登录
 2. 进入 **管理后台 → 模型配置**，给预置的 DeepSeek 供应商填入你的 `API Key`（或切换到 Ollama 本地模型，`config.yaml` 中 `llm.local: true`）
 3. 回到 **对话页**，发送消息，即可看到流式输出、思考过程、工具调用决策链
 
-> 完整体验 RAG / 联网搜索：`make compose-up` 启动全部基础设施（Milvus / SearXNG / Ollama），重启后端即可。
+> 完整体验联网搜索和本地模型：`make compose-up` 启动全部基础设施（包括 SearXNG / Ollama / 观测栈）；RAG 所需的 Milvus 已包含在 `compose-core` 中。
 
 ## 项目结构
 
@@ -133,7 +138,7 @@ agent-golang/
 
 | 服务 | 地址 | 说明 |
 |---|---|---|
-| 前端控制台 | http://localhost:5173 | 登录账号 `admin / admin123` |
+| 前端控制台 | http://localhost:5173 | 用户名 `admin`；密码由迁移时设置或生成 |
 | 后端 API | http://localhost:8080 | REST + SSE |
 | A2A 端点 | http://localhost:8082 | `/.well-known/agent.json` |
 | MinIO 控制台 | http://localhost:9001 | `minioadmin / minioadmin` |
@@ -143,6 +148,7 @@ agent-golang/
 ## 常见问题
 
 - **`make migrate` 连接数据库失败**：先确认 `make compose-core` 已启动且 PG 健康检查通过，再重试。
+- **生产部署**：设置 `NX_ENV=prod`，并提供不同且足够随机的 `NX_JWT__SECRET` 和 `NX_SECRET_KEY`（均至少 32 个字符）；服务会拒绝使用默认密钥或相同密钥启动。
 - **对话报模型错误**：未配置 API Key。到「管理后台 → 模型配置」填写，或使用 Ollama 本地模型。
 - **端口冲突**：Redis 使用 **6380**（避开本机 6379），Grafana 使用 3004，均可在 `config.yaml` / compose 中调整。
 - **想体验 RAG 但不想起 Milvus**：`config.yaml` 中 `milvus.mode: lite` 可用本地嵌入式模式（仅开发用）。

@@ -1,13 +1,14 @@
 // Vite 配置：开发代理 / 路径别名 / 构建产物切分。
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 
 // 后端 Hertz 默认监听 8080（configs/config.yaml: http.port）。
 const BACKEND = process.env.NX_BACKEND_URL ?? 'http://localhost:8080';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [tailwindcss(), react()],
   resolve: {
     alias: {
       // 统一以 @ 指向 src，避免 ../../../ 地狱

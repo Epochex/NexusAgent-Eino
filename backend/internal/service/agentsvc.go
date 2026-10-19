@@ -2,37 +2,38 @@
 package service
 
 import (
-        "context"
-        "encoding/json"
+	"context"
+	"encoding/json"
+	"errors"
 
-        "gorm.io/gorm"
+	"gorm.io/gorm"
 
-        "github.com/chengpeng-cp/nexus-agent/internal/config"
-        "github.com/chengpeng-cp/nexus-agent/internal/model"
-        "github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
-        "github.com/chengpeng-cp/nexus-agent/internal/pkg/pagination"
-        "github.com/chengpeng-cp/nexus-agent/internal/repo"
+	"github.com/chengpeng-cp/nexus-agent/internal/config"
+	"github.com/chengpeng-cp/nexus-agent/internal/model"
+	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
+	"github.com/chengpeng-cp/nexus-agent/internal/pkg/pagination"
+	"github.com/chengpeng-cp/nexus-agent/internal/repo"
 )
 
 // AgentService Agent CRUD。
 type AgentService struct {
-    repos *repo.Repos
-    cfg   *config.Config
+	repos *repo.Repos
+	cfg   *config.Config
 }
 
 // NewAgentService 构造。
 func NewAgentService(repos *repo.Repos, cfg *config.Config) *AgentService {
-    return &AgentService{repos: repos, cfg: cfg}
+	return &AgentService{repos: repos, cfg: cfg}
 }
 
 // List 列表。
-func (s *AgentService) List(ctx context.Context, q pagination.Query) ([]model.Agent, int64, error) {
-	return s.repos.Agent.List(ctx, q.Keyword, q.Offset(), q.Limit())
+func (s *AgentService) List(ctx context.Context, userID int64, q pagination.Query) ([]model.Agent, int64, error) {
+	return s.repos.Agent.ListForUser(ctx, userID, q.Keyword, q.Offset(), q.Limit())
 }
 
 // Get 详情。
-func (s *AgentService) Get(ctx context.Context, id int64) (*model.Agent, error) {
-	ag, err := s.repos.Agent.GetByID(ctx, id)
+func (s *AgentService) Get(ctx context.Context, userID, id int64) (*model.Agent, error) {
+	ag, err := s.repos.Agent.GetByIDForUser(ctx, id, userID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errcode.ErrAgentNotFound
@@ -43,7 +44,7 @@ func (s *AgentService) Get(ctx context.Context, id int64) (*model.Agent, error) 
 }
 
 // Create 创建（工具绑定做一次合法校验）。
-func (s *AgentService) Create(ctx context.Context, ag *model.Agent) error {
+func (s *AgentService) Create(ctx context.Context, userID int64, ag *model.Agent) error {
 	if ag.Name == "" {
 		return errcode.ErrInvalidParam.WithMsg("name 不能为空")
 	}
@@ -61,6 +62,7 @@ func (s *AgentService) Create(ctx context.Context, ag *model.Agent) error {
 	if err := s.validateToolBindings(ctx, ag.Tools); err != nil {
 		return err
 	}
+	ag.OwnerID = &userID
 	return s.repos.Agent.Create(ctx, ag)
 }
 
@@ -69,8 +71,8 @@ func (s *AgentService) Create(ctx context.Context, ag *model.Agent) error {
 // repo 层 Save 是全量覆写，而前端编辑表单只提交部分字段；
 // 若直接把请求绑定的结构体落库，未提交字段会被零值覆盖
 // （config=NULL 违反非空约束直接 500，top_p/memory_window/status 静默清零）。
-func (s *AgentService) Update(ctx context.Context, ag *model.Agent) error {
-	cur, err := s.Get(ctx, ag.ID)
+func (s *AgentService) Update(ctx context.Context, userID int64, ag *model.Agent) error {
+	cur, err := s.Get(ctx, userID, ag.ID)
 	if err != nil {
 		return err
 	}
@@ -91,12 +93,19 @@ func (s *AgentService) Update(ctx context.Context, ag *model.Agent) error {
 	cur.KBIDs = ag.KBIDs
 	cur.Tools = ag.Tools
 	// 非表单字段（fallback/top_p/memory_window/config/status/is_preset 等）保留库中原值
-	return s.repos.Agent.Update(ctx, cur)
+	return s.repos.Agent.UpdateForUser(ctx, cur, userID)
 }
 
 // Delete 删除。
-func (s *AgentService) Delete(ctx context.Context, id int64) error {
-	return s.repos.Agent.Delete(ctx, id)
+func (s *AgentService) Delete(ctx context.Context, userID, id int64) error {
+	err := s.repos.Agent.DeleteForUser(ctx, id, userID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return errcode.ErrAgentNotFound
+	}
+	if err != nil {
+		return errcode.ErrInternal.WithCause(err)
+	}
+	return nil
 }
 
 // validateToolBindings 校验工具绑定中的 tool_code 均存在。

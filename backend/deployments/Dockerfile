@@ -1,5 +1,5 @@
 # NexusAgent 多阶段构建（教学版单镜像：server/worker/cli 按参数切换）
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download

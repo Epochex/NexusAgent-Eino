@@ -230,7 +230,11 @@ func startA2AServer(cfg *config.Config, svcs *service.Services) {
 // kbSearchFunc 组装 kb_search 工具的检索回调。
 func kbSearchFunc(svcs *service.Services, eng *engine.Engine) tool.KBSearchFunc {
 	return func(ctx context.Context, kbID int64, query string, topK int) (string, error) {
-		kb, err := svcs.Repos.KB.GetKB(ctx, kbID)
+		userID, ok := security.UserIDFromContext(ctx)
+		if !ok {
+			return "", fmt.Errorf("authenticated user context is required")
+		}
+		kb, err := svcs.Repos.KB.GetKBForUser(ctx, kbID, userID)
 		if err != nil {
 			return "", err
 		}

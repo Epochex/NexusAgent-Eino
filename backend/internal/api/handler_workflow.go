@@ -12,7 +12,7 @@ import (
 
 // ListWorkflows GET /api/v1/workflows
 func (h *Handler) ListWorkflows(ctx context.Context, c *app.RequestContext) {
-	list, total, err := h.svcs.Workflow.List(ctx, parsePagination(c))
+	list, total, err := h.svcs.Workflow.List(ctx, userID(c), parsePagination(c))
 	if err != nil {
 		Fail(c, err)
 		return
@@ -27,7 +27,7 @@ func (h *Handler) GetWorkflow(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	w, err := h.svcs.Workflow.Get(ctx, id)
+	w, err := h.svcs.Workflow.Get(ctx, userID(c), id)
 	if err != nil {
 		Fail(c, err)
 		return
@@ -57,13 +57,26 @@ func (h *Handler) UpdateWorkflow(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	w := &model.Workflow{}
-	if err := c.BindAndValidate(w); err != nil {
+	var req struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+		DSL         *string `json:"dsl"`
+		IsActive    *bool   `json:"is_active"`
+		Status      *int16  `json:"status"`
+	}
+	if err := c.BindAndValidate(&req); err != nil {
 		Fail(c, err)
 		return
 	}
-	w.ID = id
-	if err := h.svcs.Workflow.Update(ctx, w); err != nil {
+	if err := h.svcs.Workflow.Update(ctx, userID(c), id, &service.WorkflowUpdateInput{
+		Name: req.Name, Description: req.Description, DSL: req.DSL,
+		IsActive: req.IsActive, Status: req.Status,
+	}); err != nil {
+		Fail(c, err)
+		return
+	}
+	w, err := h.svcs.Workflow.Get(ctx, userID(c), id)
+	if err != nil {
 		Fail(c, err)
 		return
 	}
@@ -77,7 +90,7 @@ func (h *Handler) DeleteWorkflow(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	if err := h.svcs.Workflow.Delete(ctx, id); err != nil {
+	if err := h.svcs.Workflow.Delete(ctx, userID(c), id); err != nil {
 		Fail(c, err)
 		return
 	}
@@ -141,7 +154,7 @@ func (h *Handler) ApproveRun(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	run, err := h.svcs.Workflow.Approve(ctx, runID, req.Approved)
+	run, err := h.svcs.Workflow.Approve(ctx, userID(c), runID, req.Approved)
 	if err != nil {
 		Fail(c, err)
 		return
@@ -152,7 +165,7 @@ func (h *Handler) ApproveRun(ctx context.Context, c *app.RequestContext) {
 // ListRuns GET /api/v1/workflows/runs?workflow_id=
 func (h *Handler) ListRuns(ctx context.Context, c *app.RequestContext) {
 	wfID, _ := parseID(string(c.Query("workflow_id")))
-	list, total, err := h.svcs.Workflow.ListRuns(ctx, wfID, parsePagination(c))
+	list, total, err := h.svcs.Workflow.ListRuns(ctx, userID(c), wfID, parsePagination(c))
 	if err != nil {
 		Fail(c, err)
 		return
@@ -167,7 +180,7 @@ func (h *Handler) GetRun(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	run, err := h.svcs.Workflow.GetWorkflowRun(ctx, runID)
+	run, err := h.svcs.Workflow.GetWorkflowRun(ctx, userID(c), runID)
 	if err != nil {
 		Fail(c, err)
 		return

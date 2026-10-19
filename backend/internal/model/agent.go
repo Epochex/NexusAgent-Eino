@@ -10,6 +10,7 @@ import (
 // Agent Agent 配置（host 负责路由聚合，expert 负责专项执行）。
 type Agent struct {
 	ID                int64          `gorm:"primaryKey" json:"id"`
+	OwnerID           *int64         `json:"owner_id,omitempty"`
 	Name              string         `gorm:"size:128" json:"name"`
 	Description       string         `gorm:"type:text" json:"description"`
 	Type              string         `gorm:"size:20;default:expert" json:"type"` // host/expert
@@ -23,8 +24,8 @@ type Agent struct {
 	MemoryEnabled     bool           `gorm:"default:true" json:"memory_enabled"`
 	MemoryWindow      int            `gorm:"default:20" json:"memory_window"`
 	MemoryLongEnabled bool           `gorm:"default:false" json:"memory_long_enabled"`
-	KBIDs             datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"kb_ids"`    // 绑定知识库
-	Tools             datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"tools"`     // [{tool_id, config}]
+	KBIDs             datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"kb_ids"` // 绑定知识库
+	Tools             datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"tools"`  // [{tool_id, config}]
 	IsPreset          bool           `json:"is_preset"`
 	Config            datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"config"`
 	Status            int16          `gorm:"default:1" json:"status"` // default:1 启用——零值 0 会被误当成"停用"，未显式传 status 时落库取 DB 默认 1
@@ -73,19 +74,19 @@ const (
 
 // MCPServer MCP 服务端配置。
 type MCPServer struct {
-	ID            int64          `gorm:"primaryKey" json:"id"`
-	Name          string         `gorm:"size:64" json:"name"`
-	Transport     string         `gorm:"size:20" json:"transport"` // streamable_http/stdio/sse
-	URL           string         `gorm:"size:512" json:"url"`
-	Command       string         `gorm:"size:512" json:"command"`
-	Args          datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"args"`
-	Env           datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"env"`
-	Headers       datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"headers"`
-	Status        string         `gorm:"size:20;default:disconnected" json:"status"`
-	LastHealthAt  *time.Time     `json:"last_health_at"`
-	ToolsCache    datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"tools_cache"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID           int64          `gorm:"primaryKey" json:"id"`
+	Name         string         `gorm:"size:64" json:"name"`
+	Transport    string         `gorm:"size:20" json:"transport"` // streamable_http/stdio/sse
+	URL          string         `gorm:"size:512" json:"url"`
+	Command      string         `gorm:"size:512" json:"command"`
+	Args         datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"args"`
+	Env          datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"env"`
+	Headers      datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"headers"`
+	Status       string         `gorm:"size:20;default:disconnected" json:"status"`
+	LastHealthAt *time.Time     `json:"last_health_at"`
+	ToolsCache   datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"tools_cache"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
 // A2AAgent A2A 远程 Agent 注册表。
@@ -96,8 +97,8 @@ type A2AAgent struct {
 	Card         datatypes.JSON `gorm:"type:jsonb" json:"card"` // Agent Card 快照
 	Status       string         `gorm:"size:20;default:unknown" json:"status"`
 	LastHealthAt *time.Time     `json:"last_health_at"`
-        CreatedAt    time.Time      `json:"created_at"`
-        UpdatedAt    time.Time      `json:"updated_at"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
 // TableName 显式指定表名：GORM 默认命名会把 A2AAgent 复数化为 a2_a_agents（数字后强制分段），

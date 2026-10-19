@@ -1,7 +1,6 @@
--- 预置数据：管理员账号、模型供应商、预置 Expert Agent、内置工具、系统 Prompt
--- 说明：种子只在 users 表为空时插入（幂等），由 server 启动时执行
+-- 预置数据：模型供应商、预置工具等。管理员账号由 cmd/migrate 初始化。
+-- 供应商和工具种子幂等执行。
 
--- 管理员（密码 admin123，bcrypt 哈希在代码层生成，此处占位由 seed 逻辑填充）
 -- 模型供应商（api_key 留空，由管理员在控制台配置）
 INSERT INTO model_providers (code, name, base_url) VALUES
   ('deepseek', 'DeepSeek', 'https://api.deepseek.com/v1'),

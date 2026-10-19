@@ -33,11 +33,11 @@ build:
 	go build -o $(BIN_DIR)/$(APP_NAME)-worker $(WORKER_PKG)
 	go build -o $(BIN_DIR)/$(APP_NAME)-cli $(CLI_PKG)
 
-## compose-up: 启动全部基础设施（含观测栈）
+## compose-up: 启动全部基础设施（含模型/搜索与观测栈）
 compose-up:
-	docker compose --profile obs -f deployments/docker-compose.yaml up -d
+	docker compose --profile full --profile obs -f deployments/docker-compose.yaml up -d
 
-## compose-core: 只启动核心基础设施（PG/Redis/MinIO，第一集用）
+## compose-core: 启动服务必需基础设施（PG/Redis/MinIO/Milvus）
 compose-core:
 	docker compose -f deployments/docker-compose.yaml --profile core up -d
 
@@ -45,7 +45,7 @@ compose-core:
 compose-down:
 	docker compose -f deployments/docker-compose.yaml down -v
 
-## migrate: 执行数据库迁移并种子管理员账号（DSN 从 configs/config.yaml 或 NX_ 环境变量读取）
+## migrate: 执行数据库迁移并种子管理员账号（NX_SEED_ADMIN_PASSWORD 可设置初始密码）
 migrate:
 	go run ./cmd/migrate
 

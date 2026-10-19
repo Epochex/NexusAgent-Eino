@@ -127,12 +127,12 @@ func TakeRootSpan(c *app.RequestContext) trace.Span {
 // Auth JWT 认证：校验 Bearer Token 并把身份注入请求上下文。
 func Auth(jwt *security.JWTManager) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
-		// SSE 场景 EventSource 不便带 header，允许 ?token= 降级（教学便利）
+		// Chat SSE 使用 fetch + Authorization header；认证信息不从 URL 查询参数读取，
+		// 避免令牌进入浏览器历史、代理访问日志或 Referer。
+		auth := string(c.GetHeader("Authorization"))
 		token := ""
-		if auth := string(c.GetHeader("Authorization")); strings.HasPrefix(auth, "Bearer ") {
+		if strings.HasPrefix(auth, "Bearer ") {
 			token = strings.TrimPrefix(auth, "Bearer ")
-		} else {
-			token = string(c.Query("token"))
 		}
 		if token == "" {
 			abort(c, 401, errUnauthorized)

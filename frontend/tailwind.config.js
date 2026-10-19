@@ -4,8 +4,6 @@
  * 与讲解页（docs/teach-pdf）同一设计语言：
  * 底色四级黑 + 酸性荧光绿主色，低饱和灰阶做层级。
  */
-import type { Config } from 'tailwindcss';
-
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
@@ -57,4 +55,4 @@ export default {
     },
   },
   plugins: [],
-} satisfies Config;
+};

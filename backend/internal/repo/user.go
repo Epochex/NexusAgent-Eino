@@ -3,11 +3,14 @@ package repo
 
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 )
+
+var ErrUserAlreadyExists = errors.New("user already exists")
 
 // UserRepo 用户表。
 type UserRepo struct {
@@ -17,6 +20,35 @@ type UserRepo struct {
 // Create 创建用户。
 func (r *UserRepo) Create(ctx context.Context, u *model.User) error {
 	return r.db.WithContext(ctx).Create(u).Error
+}
+
+// CreateFirstOrUser serializes account creation so only one concurrent first
+// registration can receive the admin role.
+func (r *UserRepo) CreateFirstOrUser(ctx context.Context, u *model.User) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("LOCK TABLE users IN EXCLUSIVE MODE").Error; err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&model.User{}).Count(&count).Error; err != nil {
+			return err
+		}
+		var exists int64
+		if err := tx.Model(&model.User{}).
+			Where("username = ? OR email = ?", u.Username, u.Email).
+			Count(&exists).Error; err != nil {
+			return err
+		}
+		if exists > 0 {
+			return ErrUserAlreadyExists
+		}
+		if count == 0 {
+			u.Role = "admin"
+		} else {
+			u.Role = "user"
+		}
+		return tx.Create(u).Error
+	})
 }
 
 // GetByID 按 ID 查询。
