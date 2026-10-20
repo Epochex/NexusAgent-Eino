@@ -92,7 +92,7 @@ func (h *Handler) UploadDoc(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	OK(c, doc)
+	c.JSON(202, envelope{Code: 0, Message: "accepted", Data: doc})
 }
 
 // ListDocs GET /api/v1/kbs/:id/documents
@@ -167,6 +167,55 @@ func (h *Handler) TestRetrieve(ctx context.Context, c *app.RequestContext) {
 }
 
 // pathIDNamed 按名字解析路径参数。
+func (h *Handler) InitializeKB(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	kb, err := h.svcs.KB.InitializeKB(ctx, userID(c), id)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, kb)
+}
+func (h *Handler) RetryDoc(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	docID, err := pathIDNamed(c, "docID")
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	if err = h.svcs.KB.RetryDoc(ctx, userID(c), id, docID); err != nil {
+		Fail(c, err)
+		return
+	}
+	c.JSON(202, envelope{Code: 0, Message: "accepted"})
+}
+func (h *Handler) ReindexDoc(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	docID, err := pathIDNamed(c, "docID")
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	doc, err := h.svcs.KB.ReindexDoc(ctx, userID(c), id, docID)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	c.JSON(202, envelope{Code: 0, Message: "accepted", Data: doc})
+}
+
 func pathIDNamed(c *app.RequestContext, name string) (int64, error) {
 	return parseID(c.Param(name))
 }

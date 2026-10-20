@@ -4,6 +4,9 @@
 
 /** 文档 ETL 状态机 */
 export type DocStatus =
+  | 'uploading'
+  | 'retry_wait'
+  | 'needs_reindex'
   | 'pending'
   | 'parsing'
   | 'chunking'
@@ -18,6 +21,8 @@ export interface KnowledgeBase {
   description: string;
   user_id: number;
   embedding_config_id: number;
+  embedding_dimension?: number;
+  embedding_version?: string;
   chunk_size: number;
   chunk_overlap: number;
   parser_config: Record<string, unknown>;
@@ -46,6 +51,10 @@ export interface Document {
   error: string;
   chunk_count: number;
   token_count: number;
+  index_version?: number;
+  ready_version?: number;
+  embedding_version?: string;
+  warnings?: string[];
   enable_graph: boolean;
   metadata: Record<string, unknown>;
   created_at: string;

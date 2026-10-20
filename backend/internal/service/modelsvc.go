@@ -180,6 +180,12 @@ func (s *ModelService) CreateModel(ctx context.Context, req *model.ModelUpsert) 
 	if req.ContextWindow != nil {
 		m.ContextWindow = *req.ContextWindow
 	}
+	if req.EmbeddingDimension != nil {
+		if *req.EmbeddingDimension < 0 || *req.EmbeddingDimension > 16384 {
+			return errcode.ErrInvalidParam
+		}
+		m.EmbeddingDimension = *req.EmbeddingDimension
+	}
 	if req.MaxOutput != nil {
 		m.MaxOutput = *req.MaxOutput
 	}
@@ -221,6 +227,12 @@ func (s *ModelService) UpdateModel(ctx context.Context, id int64, req *model.Mod
 	}
 	if req.ContextWindow != nil {
 		m.ContextWindow = *req.ContextWindow
+	}
+	if req.EmbeddingDimension != nil {
+		if *req.EmbeddingDimension < 0 || *req.EmbeddingDimension > 16384 {
+			return errcode.ErrInvalidParam
+		}
+		m.EmbeddingDimension = *req.EmbeddingDimension
 	}
 	if req.MaxOutput != nil {
 		m.MaxOutput = *req.MaxOutput
@@ -324,12 +336,13 @@ func (s *Services) descriptorOf(m *model.ModelConfig, temp, topP float32) (*llm.
 		topP = 0.9
 	}
 	return &llm.ModelDescriptor{
-		ProviderCode: m.Provider.Code,
-		BaseURL:      m.Provider.BaseURL,
-		APIKey:       apiKey,
-		ModelName:    m.ModelName,
-		Temperature:  temp,
-		TopP:         topP,
-		MaxTokens:    m.MaxOutput,
+		ContextWindow: m.ContextWindow,
+		ProviderCode:  m.Provider.Code,
+		BaseURL:       m.Provider.BaseURL,
+		APIKey:        apiKey,
+		ModelName:     m.ModelName,
+		Temperature:   temp,
+		TopP:          topP,
+		MaxTokens:     m.MaxOutput,
 	}, nil
 }

@@ -90,6 +90,7 @@ const EMPTY_PROVIDER: ProviderDraft = {
 
 /** 模型表单草稿；provider_id 用字符串承载 Select 值，提交时转数字 */
 interface ModelDraft {
+  embedding_dimension: number;
   provider_id: string;
   model_name: string;
   alias: string;
@@ -105,6 +106,7 @@ interface ModelDraft {
 }
 
 const EMPTY_MODEL: ModelDraft = {
+  embedding_dimension: 0,
   provider_id: '',
   model_name: '',
   alias: '',
@@ -264,6 +266,7 @@ export function ModelsAdminPage() {
       alias: m.alias,
       type: m.type,
       context_window: m.context_window,
+      embedding_dimension: m.embedding_dimension ?? 0,
       max_output: m.max_output,
       input_price: m.input_price,
       output_price: m.output_price,
@@ -292,6 +295,7 @@ export function ModelsAdminPage() {
         alias: modelDraft.alias.trim(),
         type: modelDraft.type,
         context_window: modelDraft.context_window,
+        embedding_dimension: modelDraft.type === 'embedding' ? modelDraft.embedding_dimension : 0,
         max_output: modelDraft.max_output,
         input_price: modelDraft.input_price,
         output_price: modelDraft.output_price,
@@ -660,6 +664,12 @@ export function ModelsAdminPage() {
               onChange={(e) => patchModel({ max_output: toNum(e.target.value) })}
             />
           </div>
+          {modelDraft.type === 'embedding' && <div>
+            <label className="field-label">向量维度</label>
+            <Input type="number" min={0} max={16384} value={modelDraft.embedding_dimension}
+              onChange={(e) => patchModel({ embedding_dimension: toNum(e.target.value) })} />
+            <p className="mt-1 text-xs text-ash">0 使用默认值；已建知识库保留创建时的维度。</p>
+          </div>}
           <div>
             <label className="field-label">输入价（元/1M tokens）</label>
             <Input

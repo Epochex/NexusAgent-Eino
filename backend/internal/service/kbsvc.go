@@ -2,15 +2,16 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/minio/minio-go/v7"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/infra"
+	"github.com/chengpeng-cp/nexus-agent/internal/ingestion"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/pagination"
@@ -46,10 +47,17 @@ func (s *KBService) SetMinIO(cli *minio.Client, bucket string) {
 
 // CreateKB 创建知识库（同步创建 Milvus 集合）。
 func (s *KBService) CreateKB(ctx context.Context, userID int64, kb *model.KnowledgeBase) error {
-	if kb.Name == "" {
+	if s.svcs.ragEngine == nil {
+		return errcode.ErrStorageUnavailable.WithMsg("向量索引服务未装配")
+	}
+	kb.Name = strings.TrimSpace(kb.Name)
+	if kb.Name == "" || len(kb.Name) > 128 || len(kb.Description) > 8192 {
 		return errcode.ErrInvalidParam.WithMsg("name 不能为空")
 	}
 	kb.UserID = userID
+	kb.ID = 0
+	kb.DocCount = 0
+	kb.Status = "initializing"
 	// embedding_config_id 有非空外键：未显式指定时自动绑定默认向量化模型
 	if kb.EmbeddingConfigID <= 0 {
 		m, err := s.svcs.Deps.Repos.LLM.DefaultModel(ctx, s.svcs.Deps.Cfg.LLM.DefaultEmbedding, modelTypeEmbed)
@@ -58,25 +66,31 @@ func (s *KBService) CreateKB(ctx context.Context, userID int64, kb *model.Knowle
 		}
 		kb.EmbeddingConfigID = m.ID
 	}
+	if err := s.svcs.freezeKBEmbedding(ctx, kb); err != nil {
+		return err
+	}
 	if kb.ChunkSize <= 0 {
 		kb.ChunkSize = s.cfg.ChunkSize
 	}
 	if kb.ChunkOverlap <= 0 {
 		kb.ChunkOverlap = s.cfg.ChunkOverlap
 	}
+	if kb.ChunkSize < 64 || kb.ChunkSize > 4096 || kb.ChunkOverlap < 0 || kb.ChunkOverlap > kb.ChunkSize/2 {
+		return errcode.ErrInvalidParam.WithMsg("分块大小须为 64..4096，重叠不能超过一半")
+	}
 	if err := s.svcs.Deps.Repos.KB.CreateKB(ctx, kb); err != nil {
 		return errcode.ErrInternal.WithCause(err)
 	}
 	// 集合名 = kb_{id}（依赖自增 ID，先落库再建集合）
-	kb.MilvusCollection = fmt.Sprintf("kb_%d", kb.ID)
+	kb.MilvusCollection = infra.KBCollection(kb.ID, kb.EmbeddingVersion)
 	if err := s.svcs.Deps.Repos.KB.UpdateKB(ctx, kb); err != nil {
 		return errcode.ErrInternal.WithCause(err)
 	}
-	if s.svcs.ragEngine != nil {
-		if err := s.svcs.ragEngine.EnsureKBVectorCollection(ctx, kb.MilvusCollection); err != nil {
-			return errcode.ErrInternal.WithCause(err)
-		}
+	initialized, err := s.InitializeKB(ctx, userID, kb.ID)
+	if err != nil {
+		return err
 	}
+	*kb = *initialized
 	return nil
 }
 
@@ -96,71 +110,15 @@ func (s *KBService) GetKB(ctx context.Context, userID, id int64) (*model.Knowled
 
 // DeleteKB 删除知识库（级联删文档/分块/向量集合）。
 func (s *KBService) DeleteKB(ctx context.Context, userID, id int64) error {
-	kb, err := s.GetKB(ctx, userID, id)
-	if err != nil {
+	if _, err := s.GetKB(ctx, userID, id); err != nil {
 		return err
 	}
-	// 删全部文档的分块与向量
-	docs, _, err := s.svcs.Deps.Repos.KB.ListDocs(ctx, id, 0, 10000)
-	if err != nil {
-		return errcode.ErrInternal.WithCause(err)
-	}
-	for _, d := range docs {
-		_ = s.svcs.ragEngine.DeleteDocument(ctx, kb.MilvusCollection, d.ID)
-		_ = s.svcs.Deps.Repos.KB.DeleteDoc(ctx, d.ID)
-	}
-	// 删向量集合
-	if s.svcs.Deps.Vector != nil {
-		_ = s.svcs.Deps.Vector.DropCollection(ctx, kb.MilvusCollection)
-	}
-	return s.svcs.Deps.Repos.KB.DeleteKB(ctx, id)
+	return ingestionError(ingestion.NewStore(s.svcs.Repos.DB).ArchiveKB(ctx, userID, id))
 }
 
 // UploadDoc 上传文档：对象存储 + 建档 + 投递 ETL 任务。
 func (s *KBService) UploadDoc(ctx context.Context, userID, kbID int64, filename string, data []byte) (*model.Document, error) {
-	if len(data) > MaxDocSize {
-		return nil, errcode.ErrFileTooLarge
-	}
-	if !allowedDocTypes[extOf(filename)] {
-		return nil, errcode.ErrFileType
-	}
-	kb, err := s.GetKB(ctx, userID, kbID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 建档（pending 状态，ID 生成后上传对象存储）
-	doc := &model.Document{
-		KBID:     kb.ID,
-		Filename: filename,
-		FileType: extOf(filename)[1:],
-		FileSize: int64(len(data)),
-		Status:   model.DocStatusPending,
-	}
-	if err := s.svcs.Deps.Repos.KB.CreateDoc(ctx, doc); err != nil {
-		return nil, errcode.ErrInternal.WithCause(err)
-	}
-	objectKey := infra.ObjectKey(kb.ID, doc.ID, filename)
-	doc.ObjectKey = objectKey
-	if err := s.svcs.Deps.Repos.KB.UpdateDoc(ctx, doc); err != nil {
-		return nil, errcode.ErrInternal.WithCause(err)
-	}
-
-	if s.minio != nil {
-		_, err := s.minio.PutObject(ctx, s.bucket, objectKey,
-			bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{ContentType: mimeOf(filename)})
-		if err != nil {
-			return nil, errcode.ErrInternal.WithCause(fmt.Errorf("put object: %w", err))
-		}
-	}
-
-	// 投递 ETL 任务（Redis Stream）
-	if s.svcs.Deps.Streams != nil {
-		if err := s.svcs.Deps.Streams.PublishDocETL(ctx, doc.ID); err != nil {
-			return nil, errcode.ErrInternal.WithCause(err)
-		}
-	}
-	return doc, nil
+	return s.uploadDurable(ctx, userID, kbID, filename, data)
 }
 
 // ListDocs 文档列表。
@@ -181,12 +139,10 @@ func (s *KBService) DeleteDoc(ctx context.Context, userID, kbID, docID int64) er
 	if err != nil || doc.KBID != kb.ID {
 		return errcode.ErrDocNotFound
 	}
-	if s.svcs.ragEngine != nil {
-		if err := s.svcs.ragEngine.DeleteDocument(ctx, kb.MilvusCollection, docID); err != nil {
-			return errcode.ErrInternal.WithCause(err)
-		}
+	if err = ingestion.NewStore(s.svcs.Repos.DB).Cancel(ctx, userID, docID); err != nil {
+		return errcode.ErrInternal.WithCause(err)
 	}
-	return s.svcs.Deps.Repos.KB.DeleteDoc(ctx, docID)
+	return nil
 }
 
 // ListChunks 分块列表。
@@ -243,7 +199,14 @@ func (s *KBService) GetObject(ctx context.Context, objectKey string) ([]byte, er
 		return nil, err
 	}
 	defer obj.Close()
-	return io.ReadAll(obj)
+	data, err := io.ReadAll(io.LimitReader(obj, MaxDocSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > MaxDocSize {
+		return nil, errcode.ErrFileTooLarge
+	}
+	return data, nil
 }
 
 // extOf 小写扩展名（含点）。

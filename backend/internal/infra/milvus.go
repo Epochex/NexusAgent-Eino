@@ -29,6 +29,19 @@ func NewMilvus(ctx context.Context, cfg *config.Milvus) (client.Client, error) {
 // KBVectorField 知识库集合的稠密向量字段名。
 const KBVectorField = "dense"
 
+const KBVectorSchemaVersion = "kb-v2"
+
+// KBCollection isolates immutable embedding spaces and schema generations.
+func KBCollection(kbID int64, version string) string {
+	if len(version) > 32 {
+		version = version[:32]
+	}
+	if version == "" {
+		return fmt.Sprintf("kb_%d", kbID)
+	}
+	return fmt.Sprintf("kb_%d_%s", kbID, version)
+}
+
 // NewKBSchema 构建知识库集合 Schema。
 //
 //	字段：id(主键=chunk_id) / doc_id / seq / content / page / dense(FLOAT_VECTOR)
@@ -40,7 +53,10 @@ func NewKBSchema(collection string, dim int) *entity.Schema {
 		WithField(entity.NewField().WithName("id").WithDataType(entity.FieldTypeInt64).WithIsPrimaryKey(true)).
 		WithField(entity.NewField().WithName("doc_id").WithDataType(entity.FieldTypeInt64)).
 		WithField(entity.NewField().WithName("seq").WithDataType(entity.FieldTypeInt32)).
-		WithField(entity.NewField().WithName("content").WithDataType(entity.FieldTypeVarChar).WithMaxLength(8192)).
+		WithField(entity.NewField().WithName("kb_id").WithDataType(entity.FieldTypeInt64)).
+		WithField(entity.NewField().WithName("user_id").WithDataType(entity.FieldTypeInt64)).
+		WithField(entity.NewField().WithName("index_version").WithDataType(entity.FieldTypeInt64)).
+		WithField(entity.NewField().WithName("embedding_version").WithDataType(entity.FieldTypeVarChar).WithMaxLength(64)).
 		WithField(entity.NewField().WithName("page").WithDataType(entity.FieldTypeInt32)).
 		WithField(entity.NewField().WithName(KBVectorField).
 			WithDataType(entity.FieldTypeFloatVector).WithDim(int64(dim)))

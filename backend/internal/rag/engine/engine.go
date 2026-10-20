@@ -18,6 +18,7 @@ import (
 	"gorm.io/datatypes"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
+	"github.com/chengpeng-cp/nexus-agent/internal/infra"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/observability"
@@ -55,8 +56,16 @@ type Engine struct {
 	cfg     *config.RAG
 	dim     int
 
-	embedMdl  func() *llm.ModelDescriptor // Embedding 模型取值函数（每次调用实时解析，配置变更即时生效）
-	rerankMdl func() *llm.ModelDescriptor // Rerank 模型取值函数（返回 nil 时跳过 rerank）
+	embedMdl         func() *llm.ModelDescriptor // Embedding 模型取值函数（每次调用实时解析，配置变更即时生效）
+	rerankMdl        func() *llm.ModelDescriptor // Rerank 模型取值函数（返回 nil 时跳过 rerank）
+	resolveEmbedding func(context.Context, *model.KnowledgeBase) (*llm.ModelDescriptor, int, error)
+	indexProgress    func(context.Context) error
+}
+
+func (e *Engine) WithIndexProgress(progress func(context.Context) error) *Engine {
+	copy := *e
+	copy.indexProgress = progress
+	return &copy
 }
 
 // New 构造引擎。
@@ -70,9 +79,45 @@ func (e *Engine) SetModels(embed, rerank func() *llm.ModelDescriptor) {
 	e.rerankMdl = rerank
 }
 
+func (e *Engine) SetEmbeddingResolver(resolve func(context.Context, *model.KnowledgeBase) (*llm.ModelDescriptor, int, error)) {
+	e.resolveEmbedding = resolve
+}
+func (e *Engine) WithEmbeddingResolver(resolve func(context.Context, *model.KnowledgeBase) (*llm.ModelDescriptor, int, error)) *Engine {
+	copy := *e
+	copy.resolveEmbedding = resolve
+	return &copy
+}
+func (e *Engine) embeddingFor(ctx context.Context, kb *model.KnowledgeBase) (*llm.ModelDescriptor, int, error) {
+	var descriptor *llm.ModelDescriptor
+	dimension := e.dim
+	if e.resolveEmbedding != nil {
+		var err error
+		descriptor, dimension, err = e.resolveEmbedding(ctx, kb)
+		if err != nil {
+			return nil, 0, err
+		}
+	} else if e.embedMdl != nil {
+		descriptor = e.embedMdl()
+		if kb.EmbeddingDimension > 0 {
+			dimension = kb.EmbeddingDimension
+		}
+	}
+	if descriptor == nil || dimension < 1 {
+		return nil, 0, fmt.Errorf("embedding model/space is not configured")
+	}
+	copy := *descriptor
+	return &copy, dimension, nil
+}
+
 // EnsureKBVectorCollection 确保知识库的 Milvus 集合存在。
 func (e *Engine) EnsureKBVectorCollection(ctx context.Context, collection string) error {
 	return e.store.EnsureCollection(ctx, collection, e.dim)
+}
+func (e *Engine) EnsureKnowledgeBaseVectorCollection(ctx context.Context, kb *model.KnowledgeBase) error {
+	if kb.EmbeddingDimension < 1 {
+		return fmt.Errorf("knowledge base dimension missing")
+	}
+	return e.store.EnsureCollection(ctx, kb.MilvusCollection, kb.EmbeddingDimension)
 }
 
 // IndexDocument 文档索引管线（worker 的 doc-etl 消费此方法）。
@@ -80,8 +125,18 @@ func (e *Engine) EnsureKBVectorCollection(ctx context.Context, collection string
 //	输入：已从对象存储下载并解析好的文档原文
 //	状态机：chunking → embedding → ready / failed（由调用方推进）
 func (e *Engine) IndexDocument(ctx context.Context, kb *model.KnowledgeBase, doc *model.Document, loaded *loader.LoadedDoc) error {
-	if kb == nil || doc == nil || loaded == nil || e.repo == nil || e.store == nil || e.gateway == nil || e.embedMdl == nil {
+	if kb == nil || doc == nil || loaded == nil || e.repo == nil || e.store == nil || e.gateway == nil {
 		return fmt.Errorf("index dependencies/document are incomplete")
+	}
+	if doc.KBID != kb.ID {
+		return fmt.Errorf("document does not belong to knowledge base")
+	}
+	embedding, dimension, err := e.embeddingFor(ctx, kb)
+	if err != nil {
+		return err
+	}
+	if err = e.store.EnsureCollection(ctx, kb.MilvusCollection, dimension); err != nil {
+		return err
 	}
 	// ① 分块：按知识库自定义参数（无则用全局配置）
 	chunkSize, chunkOverlap := kb.ChunkSize, kb.ChunkOverlap
@@ -106,6 +161,7 @@ func (e *Engine) IndexDocument(ctx context.Context, kb *model.KnowledgeBase, doc
 		}
 		for _, c := range pageChunks {
 			chunks = append(chunks, model.DocumentChunk{
+				IndexVersion: doc.IndexVersion, EmbeddingVersion: doc.EmbeddingVersion,
 				KBID:       kb.ID,
 				DocumentID: doc.ID,
 				Seq:        len(chunks),
@@ -126,7 +182,12 @@ func (e *Engine) IndexDocument(ctx context.Context, kb *model.KnowledgeBase, doc
 	}
 
 	// ③ 向量化（分批，避免单次请求过大）
-	if err := e.embedChunks(ctx, kb.MilvusCollection, chunks); err != nil {
+	if e.indexProgress != nil {
+		if err = e.indexProgress(ctx); err != nil {
+			return err
+		}
+	}
+	if err := e.embedChunks(ctx, kb, embedding, dimension, chunks); err != nil {
 		return fmt.Errorf("embed chunks: %w", err)
 	}
 
@@ -141,10 +202,13 @@ func (e *Engine) IndexDocument(ctx context.Context, kb *model.KnowledgeBase, doc
 }
 
 // embedChunks 批量向量化并写入 Milvus。
-func (e *Engine) embedChunks(ctx context.Context, collection string, chunks []model.DocumentChunk) error {
+func (e *Engine) embedChunks(ctx context.Context, kb *model.KnowledgeBase, embedding *llm.ModelDescriptor, dimension int, chunks []model.DocumentChunk) error {
 	batch := e.cfg.BatchEmbed
 	if batch <= 0 {
 		batch = 64
+	}
+	if batch > 256 {
+		batch = 256
 	}
 	for i := 0; i < len(chunks); i += batch {
 		end := i + batch
@@ -155,9 +219,12 @@ func (e *Engine) embedChunks(ctx context.Context, collection string, chunks []mo
 
 		texts := make([]string, 0, len(batchChunks))
 		for _, c := range batchChunks {
+			if embedding.ContextWindow > 0 && c.TokenCount > embedding.ContextWindow {
+				return fmt.Errorf("chunk exceeds configured embedding context window")
+			}
 			texts = append(texts, c.Content)
 		}
-		vecs, err := e.gateway.Embed(ctx, e.embedMdl(), texts)
+		vecs, err := e.gateway.Embed(ctx, embedding, texts)
 		if err != nil {
 			return err
 		}
@@ -165,8 +232,8 @@ func (e *Engine) embedChunks(ctx context.Context, collection string, chunks []mo
 			return fmt.Errorf("embedding count %d differs from input %d", len(vecs), len(batchChunks))
 		}
 		for _, values := range vecs {
-			if len(values) != e.dim {
-				return fmt.Errorf("embedding dimension %d differs from collection %d", len(values), e.dim)
+			if len(values) != dimension {
+				return fmt.Errorf("embedding dimension %d differs from collection %d", len(values), dimension)
 			}
 			for _, value := range values {
 				if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
@@ -181,6 +248,7 @@ func (e *Engine) embedChunks(ctx context.Context, collection string, chunks []mo
 				ID:     c.ID,
 				Vector: vecs[j],
 				Metadata: map[string]any{
+					"kb_id": kb.ID, "user_id": kb.UserID, "index_version": c.IndexVersion, "embedding_version": c.EmbeddingVersion,
 					"doc_id":  c.DocumentID,
 					"seq":     int32(c.Seq),
 					"page":    int32(chunkPage(c)),
@@ -188,7 +256,7 @@ func (e *Engine) embedChunks(ctx context.Context, collection string, chunks []mo
 				},
 			})
 		}
-		if err := e.store.Upsert(ctx, collection, records); err != nil {
+		if err := e.store.Upsert(ctx, kb.MilvusCollection, records); err != nil {
 			return err
 		}
 	}
@@ -196,6 +264,27 @@ func (e *Engine) embedChunks(ctx context.Context, collection string, chunks []mo
 }
 
 // DeleteDocument 删除文档的全部分块与向量（文档删除时调用）。
+// DeleteDocumentVectors removes all immutable spaces before authority is finalized.
+func (e *Engine) DeleteDocumentVectors(ctx context.Context, kb *model.KnowledgeBase, docID int64) error {
+	chunks, err := e.repo.ListByDoc(ctx, docID)
+	if err != nil {
+		return err
+	}
+	groups := map[string][]int64{}
+	for _, chunk := range chunks {
+		collection := infra.KBCollection(kb.ID, chunk.EmbeddingVersion)
+		groups[collection] = append(groups[collection], chunk.ID)
+	}
+	for collection, ids := range groups {
+		for i := 0; i < len(ids); i += 256 {
+			if err = e.store.Delete(ctx, collection, ids[i:min(i+256, len(ids))]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (e *Engine) DeleteDocument(ctx context.Context, collection string, docID int64) error {
 	chunks, err := e.repo.ListByDoc(ctx, docID)
 	if err != nil {
@@ -225,11 +314,21 @@ type Ref struct {
 
 // Retrieve 混合检索主流程：稠密 + 关键词 → RRF → (Rerank) → 截断。
 func (e *Engine) Retrieve(ctx context.Context, kb *model.KnowledgeBase, query string) ([]Ref, error) {
-	// ① 稠密检索
-	start := recordStart()
-	queryVecs, err := e.gateway.Embed(ctx, e.embedMdl(), []string{query})
+	if kb == nil || e.gateway == nil || e.repo == nil || e.store == nil {
+		return nil, fmt.Errorf("retrieval dependencies incomplete")
+	}
+	embedding, dimension, err := e.embeddingFor(ctx, kb)
 	if err != nil {
 		return nil, err
+	}
+	// ① 稠密检索
+	start := recordStart()
+	queryVecs, err := e.gateway.Embed(ctx, embedding, []string{query})
+	if err != nil {
+		return nil, err
+	}
+	if len(queryVecs) != 1 || len(queryVecs[0]) != dimension {
+		return nil, fmt.Errorf("query embedding has wrong dimension")
 	}
 	denseHits, err := e.store.Search(ctx, kb.MilvusCollection, queryVecs[0], int(e.cfg.DenseTopK))
 	observeStage("dense", start)
@@ -252,36 +351,42 @@ func (e *Engine) Retrieve(ctx context.Context, kb *model.KnowledgeBase, query st
 	fused := Fuse(denseHits, kwHits, e.cfg.RRFK, int(e.cfg.FusedTopN))
 	observeStage("fused", start)
 
-	// ④ 回表补正文（必须早于 rerank）
-	// 稠密路只从 Milvus 拿到 chunk id（向量库不存正文），命中项需回 PG 补 content；
-	// 关键词路的项本身来自 PG 已带正文，故只对 content 为空的项按 ID 批量回查，避免无谓 IO。
-	// 顺序约束：rerank 是把正文送进精排模型打分的，必须在回表之后执行 ——
-	// 若颠倒，稠密路命中的候选会以空文档参与打分而被误判为不相关。
+	// Every candidate is rechecked against published PostgreSQL authority,
+	// including vector hits carrying text and sparse hits selected earlier.
 	needLookup := make([]int64, 0, len(fused))
 	for _, f := range fused {
-		if f.Chunk.Content == "" {
-			needLookup = append(needLookup, f.Chunk.ID)
-		}
+		needLookup = append(needLookup, f.Chunk.ID)
 	}
 	if len(needLookup) > 0 {
-		if found, err := e.repo.ListByIDs(ctx, needLookup); err == nil {
-			byID := make(map[int64]model.DocumentChunk, len(found))
-			for _, ch := range found {
+		found, err := e.repo.ListByIDs(ctx, needLookup)
+		if err != nil {
+			return nil, fmt.Errorf("published chunk lookup: %w", err)
+		}
+		byID := make(map[int64]model.DocumentChunk, len(found))
+		for _, ch := range found {
+			if ch.KBID == kb.ID && ch.Content != "" && (kb.EmbeddingVersion == "" || ch.EmbeddingVersion == kb.EmbeddingVersion) {
 				byID[ch.ID] = ch
 			}
-			for i := range fused {
-				if ch, ok := byID[fused[i].Chunk.ID]; ok {
-					fused[i].Chunk = ch // 回填正文/文档归属
-				}
+		}
+		verified := fused[:0]
+		for _, candidate := range fused {
+			if ch, ok := byID[candidate.Chunk.ID]; ok {
+				candidate.Chunk = ch
+				candidate.Filename = ch.SourceFilename
+				verified = append(verified, candidate)
 			}
 		}
-		// 回查失败不阻塞检索：content 为空的引用前端按"仅命中"展示
+		fused = verified
 	}
 
 	// ⑤ Rerank（可选：取值函数返回 nil 描述符时跳过）
 	var final []FusedChunk
 	reranked := false
-	if rerankMdl := e.rerankMdl(); rerankMdl != nil && len(fused) > 0 {
+	var rerankMdl *llm.ModelDescriptor
+	if e.rerankMdl != nil {
+		rerankMdl = e.rerankMdl()
+	}
+	if rerankMdl != nil && len(fused) > 0 {
 		start = recordStart()
 		final, err = e.rerank(ctx, fused, query)
 		observeStage("rerank", start)

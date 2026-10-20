@@ -80,15 +80,15 @@ func (s *WorkflowService) freeze(ctx context.Context, ownerID int64, w *model.Wo
 					return err
 				}
 				definition.KBs[kb.ID] = raw
-				embedding, err := s.svcs.Repos.LLM.GetModel(ctx, kb.EmbeddingConfigID)
-				if err != nil {
-					return errcode.ErrProviderNotFound.WithCause(err)
-				}
-				snapshot, err := s.captureModel(embedding)
+				snapshot, err := s.svcs.captureKBModel(ctx, kb)
 				if err != nil {
 					return err
 				}
-				definition.Models["kb-embedding:"+strconv.FormatInt(kb.ID, 10)] = snapshot
+				snapshotRaw, err := json.Marshal(snapshot)
+				if err != nil {
+					return err
+				}
+				definition.Models["kb-embedding:"+strconv.FormatInt(kb.ID, 10)] = snapshotRaw
 			case "tool":
 				capabilities["tool:"+node.ToolCode] = true
 				if node.ToolCode == "kb_search" {
@@ -149,10 +149,13 @@ func (s *WorkflowService) freeze(ctx context.Context, ownerID int64, w *model.Wo
 	return definition, nil
 }
 func (s *WorkflowService) captureModel(configured *model.ModelConfig) (json.RawMessage, error) {
+	return s.svcs.captureModel(configured)
+}
+func (s *Services) captureModel(configured *model.ModelConfig) (json.RawMessage, error) {
 	if configured == nil || configured.Provider == nil || configured.Status != 1 || configured.Provider.Status != 1 {
 		return nil, errcode.ErrProviderNotFound.WithMsg("模型或供应商未启用")
 	}
-	descriptor, err := s.svcs.descriptorOf(configured, 0, 0)
+	descriptor, err := s.descriptorOf(configured, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -204,12 +207,23 @@ func (s *WorkflowService) frozenDeps(ctx context.Context, run *execution.Run, de
 		descriptor.APIKey = key
 		return &descriptor, nil, nil
 	}
+	if deps.RAG != nil {
+		resolve := deps.ResolveModel
+		deps.RAG = deps.RAG.WithEmbeddingResolver(func(ctx context.Context, kb *model.KnowledgeBase) (*llm.ModelDescriptor, int, error) {
+			descriptor, _, err := resolve(ctx, "kb-embedding:"+strconv.FormatInt(kb.ID, 10))
+			if err != nil {
+				return nil, 0, err
+			}
+			return descriptor, kb.EmbeddingDimension, nil
+		})
+	}
 	deps.GetKB = func(ctx context.Context, id int64) (*model.KnowledgeBase, error) {
 		owner, ok := security.UserIDFromContext(ctx)
 		if !ok || owner != run.OwnerID {
 			return nil, errcode.ErrForbidden
 		}
-		if _, err := s.svcs.Repos.KB.GetKBForUser(ctx, id, owner); err != nil {
+		current, err := s.svcs.Repos.KB.GetKBForUser(ctx, id, owner)
+		if err != nil {
 			return nil, errcode.ErrKBNotFound
 		}
 		var snapshot model.KnowledgeBase
@@ -217,6 +231,10 @@ func (s *WorkflowService) frozenDeps(ctx context.Context, run *execution.Run, de
 		if !ok || json.Unmarshal(raw, &snapshot) != nil || snapshot.UserID != owner {
 			return nil, errcode.ErrKBNotFound
 		}
+		if snapshot.EmbeddingVersion == "" || snapshot.EmbeddingDimension < 1 || current.EmbeddingVersion != snapshot.EmbeddingVersion || current.MilvusCollection != snapshot.MilvusCollection {
+			return nil, execution.ErrVersionMismatch
+		}
+		snapshot.EmbeddingSnapshot = append(snapshot.EmbeddingSnapshot[:0], definition.Models["kb-embedding:"+strconv.FormatInt(id, 10)]...)
 		return &snapshot, nil
 	}
 	return deps, nil

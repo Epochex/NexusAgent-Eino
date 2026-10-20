@@ -137,6 +137,7 @@ func run() error {
 	// ===== ⑧ RAG 引擎（注入实时解析函数，改配置无需重启） =====
 	ragEngine := engine.New(gateway, store, repos.KB, &cfg.RAG, cfg.Milvus.Dim)
 	ragEngine.SetModels(svcs.DefaultEmbedding, svcs.DefaultRerank)
+	ragEngine.SetEmbeddingResolver(svcs.ResolveKBEmbedding)
 	svcs.SetRAGEngine(ragEngine)
 
 	// Workflow handlers persist submissions; the separate worker owns Eino execution.
@@ -157,6 +158,7 @@ func run() error {
 		server.WithTransport(standard.NewTransporter),
 		server.WithHostPorts(":"+cfg.HTTP.Port),
 		server.WithReadTimeout(30*time.Second),
+		server.WithMaxRequestBodySize(service.MaxDocSize+(1<<20)),
 		server.WithWriteTimeout(0), // SSE body refreshes a 2s deadline per network chunk
 		server.WithIdleTimeout(120*time.Second),
 		server.WithSenseClientDisconnection(runtime.GOOS != "windows"),

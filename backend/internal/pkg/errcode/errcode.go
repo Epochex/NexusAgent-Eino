@@ -78,10 +78,11 @@ var (
 	ErrProviderNotFound = &Error{http.StatusNotFound, 50003, "模型配置不存在", nil}
 	ErrEmbedFailed      = &Error{http.StatusBadGateway, 50004, "向量化服务异常", nil}
 	// 6xxxx RAG
-	ErrParseFailed    = &Error{http.StatusInternalServerError, 60002, "文档解析失败", nil}
-	ErrKBNotFound     = &Error{http.StatusNotFound, 60003, "知识库不存在", nil}
-	ErrDocNotFound    = &Error{http.StatusNotFound, 60004, "文档不存在", nil}
-	ErrMemoryNotFound = &Error{http.StatusNotFound, 60005, "记忆不存在", nil}
+	ErrParseFailed        = &Error{http.StatusInternalServerError, 60002, "文档解析失败", nil}
+	ErrKBNotFound         = &Error{http.StatusNotFound, 60003, "知识库不存在", nil}
+	ErrDocNotFound        = &Error{http.StatusNotFound, 60004, "文档不存在", nil}
+	ErrMemoryNotFound     = &Error{http.StatusNotFound, 60005, "记忆不存在", nil}
+	ErrStorageUnavailable = &Error{http.StatusServiceUnavailable, 60006, "文档原文存储暂不可用，请稍后重试", nil}
 	// 7xxxx 工具/沙箱
 	ErrToolNotFound   = &Error{http.StatusNotFound, 70001, "工具不存在", nil}
 	ErrToolFailed     = &Error{http.StatusInternalServerError, 70002, "工具执行失败", nil}

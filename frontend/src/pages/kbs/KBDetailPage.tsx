@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/primitives';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { deleteDoc, getKB, listChunks, listDocs, testRetrieve, uploadDoc } from '@/api/kb';
+import { deleteDoc, getKB, initializeKB, retryDoc, reindexDoc, listChunks, listDocs, testRetrieve, uploadDoc } from '@/api/kb';
 import { fileSize, relativeTime, truncate } from '@/lib/format';
 import { gsap, pageEnter } from '@/lib/gsap';
 import { errMsg } from '@/lib/request';
@@ -39,6 +39,7 @@ export function KBDetailPage() {
   const [docs, setDocs] = useState<Document[]>([]);
   const [docsLoading, setDocsLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [actionBusy, setActionBusy] = useState<number | null>(null);
 
   /* ---- 删除文档确认 ---- */
   const [delDoc, setDelDoc] = useState<Document | null>(null);
@@ -69,6 +70,27 @@ export function KBDetailPage() {
       setDocsLoading(false);
     }
   }, [kbId]);
+
+  useEffect(() => {
+    if (!docs.some((d) => ['uploading', 'pending', 'parsing', 'chunking', 'embedding', 'retry_wait'].includes(d.status))) return;
+    let canceled = false;
+    const timer = window.setTimeout(() => {
+      void Promise.all([listDocs(kbId, { page: 1, page_size: 100 }), getKB(kbId)])
+        .then(([data, current]) => { if (!canceled) { setDocs(data.list); setKb(current); } })
+        .catch((e: unknown) => { if (!canceled) toast.err(errMsg(e)); });
+    }, 1500);
+    return () => { canceled = true; window.clearTimeout(timer); };
+  }, [docs, kbId]);
+
+  const retryDocument = async (doc: Document) => {
+    setActionBusy(doc.id);
+    try {
+      if (doc.status === 'needs_reindex') await reindexDoc(kbId, doc.id);
+      else await retryDoc(kbId, doc.id);
+      toast.ok('处理任务已提交');
+      await refreshDocs(); setKb(await getKB(kbId));
+    } catch (e) { toast.err(errMsg(e)); } finally { setActionBusy(null); }
+  };
 
   // 首次挂载：并行拉取知识库详情与文档列表
   useEffect(() => {
@@ -215,6 +237,15 @@ export function KBDetailPage() {
         </div>
       )}
 
+      {kb && (kb.status !== 'active' || !kb.embedding_version) && (
+        <div className="panel mb-4 flex items-center justify-between gap-4 p-4 text-sm">
+          <span>向量索引尚未准备好（{kb.status}），初始化成功后可处理文档。</span>
+          <Button disabled={actionBusy !== null} onClick={() => {
+            setActionBusy(0); void initializeKB(kbId).then(setKb).catch((e: unknown) => toast.err(errMsg(e))).finally(() => setActionBusy(null));
+          }}>初始化索引</Button>
+        </div>
+      )}
+
       {/* ==================== 文档区 ==================== */}
       <section className="panel p-5">
         <div className="mb-1 flex items-center justify-between gap-3">
@@ -278,11 +309,12 @@ export function KBDetailPage() {
                       </p>
                       <p className="text-[11px] text-ash">{doc.file_type}</p>
                       {/* ETL 失败时用珊瑚红展示错误原因 */}
-                      {doc.status === 'failed' && doc.error && (
+                      {doc.error && (
                         <p className="mt-0.5 truncate text-[11px] text-coral" title={doc.error}>
                           {doc.error}
                         </p>
                       )}
+                      {doc.warnings?.map((warning, i) => <p key={i} className="mt-1 text-xs text-ash">{warning}</p>)}
                     </td>
                     <td className="px-2 py-2.5 text-xs text-fog">{fileSize(doc.file_size)}</td>
                     <td className="px-2 py-2.5">
@@ -293,6 +325,11 @@ export function KBDetailPage() {
                     <td className="px-2 py-2.5 text-xs text-fog">{relativeTime(doc.updated_at)}</td>
                     <td className="px-2 py-2.5 text-right">
                       <div className="flex justify-end gap-3 text-xs">
+                        {(doc.status === 'failed' || doc.status === 'needs_reindex') && (
+                          <button className="text-lime" disabled={actionBusy !== null} onClick={() => void retryDocument(doc)}>
+                            {actionBusy === doc.id ? '提交中…' : doc.status === 'needs_reindex' ? '迁移并重建' : '重试'}
+                          </button>
+                        )}
                         <button
                           className="text-teal transition-opacity hover:opacity-80"
                           onClick={() => openChunks(doc)}

@@ -77,11 +77,12 @@ type StreamEvent struct {
 
 // ModelDescriptor 模型描述（网关按它实例化 Provider 请求）。
 type ModelDescriptor struct {
-	ProviderCode string // deepseek/qwen/doubao/ollama/...
-	BaseURL      string // 供应商 API 地址
-	APIKey       string // 解密后的密钥
-	ModelName    string // 上游模型名
-	Temperature  float32
-	TopP         float32
-	MaxTokens    int
+	ContextWindow int
+	ProviderCode  string // deepseek/qwen/doubao/ollama/...
+	BaseURL       string // 供应商 API 地址
+	APIKey        string // 解密后的密钥
+	ModelName     string // 上游模型名
+	Temperature   float32
+	TopP          float32
+	MaxTokens     int
 }

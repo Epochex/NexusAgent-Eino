@@ -21,30 +21,57 @@ func NewMilvusStore(cli client.Client) *MilvusStore { return &MilvusStore{cli: c
 
 // EnsureCollection 确保知识库/记忆集合存在。
 func (s *MilvusStore) EnsureCollection(ctx context.Context, collection string, dim int) error {
-	has, err := s.cli.HasCollection(ctx, collection)
-	if err != nil {
-		return fmt.Errorf("has collection: %w", err)
+	if dim < 1 || dim > 16384 {
+		return fmt.Errorf("invalid vector dimension %d", dim)
 	}
-	if has {
-		return nil
-	}
-
-	// 记忆集合与知识库集合字段不同：按命名约定区分
 	var schema *entity.Schema
 	if collection == "memories" {
 		schema = infra.NewMemorySchema(collection, dim)
 	} else {
 		schema = infra.NewKBSchema(collection, dim)
 	}
-	if err := s.cli.CreateCollection(ctx, schema, 2); err != nil { // 2 分片
-		return fmt.Errorf("create collection: %w", err)
+	has, err := s.cli.HasCollection(ctx, collection)
+	if err != nil {
+		return fmt.Errorf("has collection: %w", err)
+	}
+	if !has {
+		// A concurrent creator may win; always verify the resulting schema.
+		if err = s.cli.CreateCollection(ctx, schema, 2); err != nil {
+			exists, checkErr := s.cli.HasCollection(ctx, collection)
+			if checkErr != nil || !exists {
+				return fmt.Errorf("create collection: %w", err)
+			}
+		}
+	}
+	actual, err := s.cli.DescribeCollection(ctx, collection)
+	if err != nil {
+		return fmt.Errorf("describe collection: %w", err)
+	}
+	if actual.Schema == nil || len(actual.Schema.Fields) != len(schema.Fields) {
+		return fmt.Errorf("vector schema mismatch; explicit reindex required")
+	}
+	for _, expected := range schema.Fields {
+		var found *entity.Field
+		for _, field := range actual.Schema.Fields {
+			if field.Name == expected.Name {
+				found = field
+				break
+			}
+		}
+		if found == nil || found.DataType != expected.DataType || found.PrimaryKey != expected.PrimaryKey || found.AutoID != expected.AutoID {
+			return fmt.Errorf("vector schema mismatch for %s", expected.Name)
+		}
+		for key, value := range expected.TypeParams {
+			if found.TypeParams[key] != value {
+				return fmt.Errorf("vector field %s %s mismatch: got %s want %s", expected.Name, key, found.TypeParams[key], value)
+			}
+		}
 	}
 	idx, err := infra.NewHNSWIndex(dim)
 	if err != nil {
-		return fmt.Errorf("hnsw index: %w", err)
+		return err
 	}
-	// CreateIndex 需指定向量字段名（两套集合字段名不同）
-	if err := s.cli.CreateIndex(ctx, collection, vectorField(collection), idx, false); err != nil {
+	if err = s.cli.CreateIndex(ctx, collection, vectorField(collection), idx, false); err != nil {
 		return fmt.Errorf("create index: %w", err)
 	}
 	return s.cli.LoadCollection(ctx, collection, false)
@@ -58,7 +85,7 @@ func vectorField(collection string) string {
 	return KBDenseField
 }
 
-// Upsert 写入向量（Milvus 无原生 upsert 语义时用 insert 教学简化；幂等由主键保证）。
+// Upsert replaces stable chunk IDs; retry never inserts a second logical record.
 func (s *MilvusStore) Upsert(ctx context.Context, collection string, records []Record) error {
 	if len(records) == 0 {
 		return nil
@@ -87,15 +114,18 @@ func (s *MilvusStore) Upsert(ctx context.Context, collection string, records []R
 			entity.NewColumnInt64("doc_id", i64FromMeta(metas, "doc_id")),
 			entity.NewColumnInt32("seq", i32FromMeta(metas, "seq")),
 			entity.NewColumnInt32("page", i32FromMeta(metas, "page")),
-			entity.NewColumnVarChar("content", strFromMeta(metas, "content")),
+			entity.NewColumnInt64("kb_id", i64FromMeta(metas, "kb_id")),
+			entity.NewColumnInt64("user_id", i64FromMeta(metas, "user_id")),
+			entity.NewColumnInt64("index_version", i64FromMeta(metas, "index_version")),
+			entity.NewColumnVarChar("embedding_version", strFromMeta(metas, "embedding_version")),
 		)
 	}
 	cols = append(cols, entity.NewColumnFloatVector(vectorField(collection), len(records[0].Vector), vectors))
 
-	if _, err := s.cli.Insert(ctx, collection, "", cols...); err != nil {
-		return fmt.Errorf("insert vectors: %w", err)
+	if _, err := s.cli.Upsert(ctx, collection, "", cols...); err != nil {
+		return fmt.Errorf("upsert vectors: %w", err)
 	}
-	return s.cli.Flush(ctx, collection, false)
+	return nil
 }
 
 // KBDenseField 稠密向量列名。
@@ -112,7 +142,7 @@ func (s *MilvusStore) Search(ctx context.Context, collection string, vector []fl
 	results, err := s.cli.Search(ctx, collection, nil, "",
 		[]string{"id"}, []entity.Vector{entity.FloatVector(vector)},
 		vectorField(collection), entity.COSINE, topK, sp,
-		client.WithSearchQueryConsistencyLevel(entity.ClBounded),
+		client.WithSearchQueryConsistencyLevel(entity.ClStrong),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("milvus search: %w", err)
@@ -143,6 +173,10 @@ func (s *MilvusStore) Delete(ctx context.Context, collection string, ids []int64
 	if len(ids) == 0 {
 		return nil
 	}
+	has, err := s.cli.HasCollection(ctx, collection)
+	if err != nil || !has {
+		return err
+	}
 	expr := fmt.Sprintf("id in %s", fmtInt64Slice(ids))
 	return s.cli.Delete(ctx, collection, "", expr) // partitionName 空串 = 全部分区
 }
@@ -158,7 +192,7 @@ func (s *MilvusStore) DropCollection(ctx context.Context, collection string) err
 
 // Count 统计行数。
 func (s *MilvusStore) Count(ctx context.Context, collection string) (int64, error) {
-	rows, err := s.cli.Query(ctx, collection, nil, "", []string{"count(*)"})
+	rows, err := s.cli.Query(ctx, collection, nil, "", []string{"count(*)"}, client.WithSearchQueryConsistencyLevel(entity.ClStrong))
 	if err != nil {
 		return 0, err
 	}
@@ -166,7 +200,11 @@ func (s *MilvusStore) Count(ctx context.Context, collection string) (int64, erro
 		return 0, nil
 	}
 	// count(*) 结果列
-	return rows[0].(*entity.ColumnInt64).ValueByIdx(0)
+	column, ok := rows[0].(*entity.ColumnInt64)
+	if !ok || column.Len() != 1 {
+		return 0, fmt.Errorf("invalid count response")
+	}
+	return column.ValueByIdx(0)
 }
 
 // ---- metadata 提取辅助 ----
@@ -185,6 +223,8 @@ func i32FromMeta(metas []map[string]any, key string) []int32 {
 	out := make([]int32, len(metas))
 	for i, m := range metas {
 		switch v := m[key].(type) {
+		case int32:
+			out[i] = v
 		case int:
 			out[i] = int32(v)
 		case int64:

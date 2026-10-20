@@ -13,6 +13,10 @@ export const listKBs = (q?: PageQuery) => http.get<Paged<KnowledgeBase>>('/kbs',
 /** 知识库详情 */
 export const getKB = (id: number) => http.get<KnowledgeBase>(`/kbs/${id}`);
 
+export const initializeKB = (id: number) => http.post<KnowledgeBase>(`/kbs/${id}/initialize`, {});
+export const retryDoc = (kbId: number, docId: number) => http.post(`/kbs/${kbId}/documents/${docId}/retry`, {});
+export const reindexDoc = (kbId: number, docId: number) => http.post<Document>(`/kbs/${kbId}/documents/${docId}/reindex`, {});
+
 /** 创建知识库 */
 export const createKB = (req: KBReq) => http.post<KnowledgeBase>('/kbs', req);
 

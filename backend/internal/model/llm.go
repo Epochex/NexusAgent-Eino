@@ -10,40 +10,41 @@ import (
 
 // ModelProvider 模型供应商（OpenAI 兼容协议家族 / 豆包 / Ollama）。
 type ModelProvider struct {
-	ID        int64          `gorm:"primaryKey" json:"id"`
-	Code      string         `gorm:"size:32;uniqueIndex" json:"code"` // deepseek/qwen/zhipu/moonshot/doubao/ollama
-	Name      string         `gorm:"size:64" json:"name"`
-	BaseURL   string         `gorm:"column:base_url;size:512" json:"base_url"`
-	APIKey    string         `gorm:"column:api_key;type:text" json:"-"` // AES-GCM 加密存储，不序列化
-	Status    int16          `json:"status"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
+	ID        int64     `gorm:"primaryKey" json:"id"`
+	Code      string    `gorm:"size:32;uniqueIndex" json:"code"` // deepseek/qwen/zhipu/moonshot/doubao/ollama
+	Name      string    `gorm:"size:64" json:"name"`
+	BaseURL   string    `gorm:"column:base_url;size:512" json:"base_url"`
+	APIKey    string    `gorm:"column:api_key;type:text" json:"-"` // AES-GCM 加密存储，不序列化
+	Status    int16     `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // 模型类型。
 const (
-	ModelTypeChat     = "chat"
-	ModelTypeEmbed    = "embedding"
-	ModelTypeRerank   = "rerank"
+	ModelTypeChat   = "chat"
+	ModelTypeEmbed  = "embedding"
+	ModelTypeRerank = "rerank"
 )
 
 // ModelConfig 模型配置（供应商下的具体模型及其元数据）。
 type ModelConfig struct {
-	ID            int64          `gorm:"primaryKey" json:"id"`
-	ProviderID    int64          `gorm:"index" json:"provider_id"`
-	ModelName     string         `gorm:"size:64" json:"model_name"` // 上游模型名
-	Alias         string         `gorm:"size:64" json:"alias"`      // 平台展示名
-	Type          string         `gorm:"size:16;index:idx_model_configs_type,priority:1" json:"type"`
-	ContextWindow int            `gorm:"default:8192" json:"context_window"`
-	MaxOutput     int            `gorm:"default:4096" json:"max_output"`
-	InputPrice    float64        `gorm:"type:numeric(12,6);default:0" json:"input_price"`  // 元/1M tokens
-	OutputPrice   float64        `gorm:"type:numeric(12,6);default:0" json:"output_price"`
-	Priority      int            `gorm:"default:100;index:idx_model_configs_type,priority:2" json:"priority"` // 故障转移顺序，小者优先
-	Capabilities  datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"capabilities"` // ["vision","function_call","reasoning"]
-	IsDefault     bool           `json:"is_default"`
-	Status        int16          `json:"status"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	EmbeddingDimension int            `gorm:"default:0" json:"embedding_dimension"`
+	ID                 int64          `gorm:"primaryKey" json:"id"`
+	ProviderID         int64          `gorm:"index" json:"provider_id"`
+	ModelName          string         `gorm:"size:64" json:"model_name"` // 上游模型名
+	Alias              string         `gorm:"size:64" json:"alias"`      // 平台展示名
+	Type               string         `gorm:"size:16;index:idx_model_configs_type,priority:1" json:"type"`
+	ContextWindow      int            `gorm:"default:8192" json:"context_window"`
+	MaxOutput          int            `gorm:"default:4096" json:"max_output"`
+	InputPrice         float64        `gorm:"type:numeric(12,6);default:0" json:"input_price"` // 元/1M tokens
+	OutputPrice        float64        `gorm:"type:numeric(12,6);default:0" json:"output_price"`
+	Priority           int            `gorm:"default:100;index:idx_model_configs_type,priority:2" json:"priority"` // 故障转移顺序，小者优先
+	Capabilities       datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"capabilities"`                         // ["vision","function_call","reasoning"]
+	IsDefault          bool           `json:"is_default"`
+	Status             int16          `json:"status"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
 
 	// 非数据库字段：关联信息
 	Provider *ModelProvider `gorm:"foreignKey:ProviderID" json:"provider,omitempty"`
@@ -51,9 +52,9 @@ type ModelConfig struct {
 
 // Capability 模型能力标记。
 const (
-	CapVision        = "vision"
-	CapFunctionCall  = "function_call"
-	CapReasoning     = "reasoning"
+	CapVision       = "vision"
+	CapFunctionCall = "function_call"
+	CapReasoning    = "reasoning"
 )
 
 // ProviderView 供应商列表视图：API Key 不回显明文/密文，
@@ -95,18 +96,19 @@ type ProviderUpsert struct {
 
 // ModelUpsert 模型配置创建/更新请求体（指针字段 nil = 不修改，语义同上）。
 type ModelUpsert struct {
-	ProviderID    *int64    `json:"provider_id"`
-	ModelName     *string   `json:"model_name"`
-	Alias         *string   `json:"alias"`
-	Type          *string   `json:"type"`
-	ContextWindow *int      `json:"context_window"`
-	MaxOutput     *int      `json:"max_output"`
-	InputPrice    *float64  `json:"input_price"`
-	OutputPrice   *float64  `json:"output_price"`
-	Priority      *int      `json:"priority"`
-	Capabilities  *[]string `json:"capabilities"` // ["vision","function_call","reasoning"]
-	IsDefault     *bool     `json:"is_default"`
-	Status        *int16    `json:"status"`
+	EmbeddingDimension *int      `json:"embedding_dimension"`
+	ProviderID         *int64    `json:"provider_id"`
+	ModelName          *string   `json:"model_name"`
+	Alias              *string   `json:"alias"`
+	Type               *string   `json:"type"`
+	ContextWindow      *int      `json:"context_window"`
+	MaxOutput          *int      `json:"max_output"`
+	InputPrice         *float64  `json:"input_price"`
+	OutputPrice        *float64  `json:"output_price"`
+	Priority           *int      `json:"priority"`
+	Capabilities       *[]string `json:"capabilities"` // ["vision","function_call","reasoning"]
+	IsDefault          *bool     `json:"is_default"`
+	Status             *int16    `json:"status"`
 }
 
 // CapabilitiesJSON 能力数组 → JSONB（空数组序列化为 "[]"）。

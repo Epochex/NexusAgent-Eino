@@ -61,6 +61,8 @@ export const STATUS_LABEL: Record<string, { text: string; tone: 'ok' | 'warn' | 
   pending: { text: '排队中', tone: 'info' },
   queued: { text: '已排队', tone: 'info' },
   retry_wait: { text: '等待重试', tone: 'warn' },
+  uploading: { text: '保存原文中', tone: 'info' },
+  needs_reindex: { text: '需要重建索引', tone: 'warn' },
   needs_attention: { text: '需要人工核查', tone: 'warn' },
   parsing: { text: '解析中', tone: 'info' },
   chunking: { text: '分块中', tone: 'info' },

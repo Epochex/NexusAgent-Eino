@@ -48,11 +48,31 @@ jobs:
           cache-dependency-path: backend/go.sum
       - run: go vet ./...
       - run: go test -race ./... -timeout 180s
-      - run: go test -race -tags=integration ./internal/service ./internal/execution ./internal/api -count=1 -timeout 180s
+      - run: go test -race -tags=integration ./internal/service ./internal/execution ./internal/api ./internal/ingestion ./internal/repo -count=1 -timeout 180s
         env:
           NX_TEST_DATABASE_DSN: postgres://postgres@localhost:5432/nexus_eino_test?sslmode=disable
           NX_TEST_REDIS_ADDR: localhost:6379
       - run: go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate
+  data-infrastructure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NX_TEST_DATABASE_DSN: postgres://postgres@127.0.0.1:55449/nexus_acceptance_test?sslmode=disable
+      NX_TEST_MILVUS_ADDR: 127.0.0.1:59530
+      NX_TEST_MINIO_ADDR: 127.0.0.1:59000
+      GOMEMLIMIT: 1GiB
+      GOMAXPROCS: '2'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.0'
+          cache-dependency-path: backend/go.sum
+      - run: docker compose -f backend/deployments/docker-compose.acceptance.yaml up -d --wait --wait-timeout 180
+      - run: go test -p 1 -race -tags 'integration infrastructure' ./internal/vector ./internal/service -run 'TestMilvusUpsertAndDimensionContract|TestDocumentPipelineRealInfrastructure' -count=1 -timeout 180s
+        working-directory: backend
+      - if: failure()
+        run: docker compose -f backend/deployments/docker-compose.acceptance.yaml logs --tail 100
   frontend:
     runs-on: ubuntu-latest
     defaults:

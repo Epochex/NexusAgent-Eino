@@ -6,7 +6,7 @@ import "context"
 
 // Record 向量记录。
 type Record struct {
-	ID       int64          `json:"id"`                  // 主键（chunk_id / memory_id）
+	ID       int64          `json:"id"` // 主键（chunk_id / memory_id）
 	Vector   []float32      `json:"vector"`
 	Metadata map[string]any `json:"metadata,omitempty"` // doc_id/seq/page/user_id...
 }

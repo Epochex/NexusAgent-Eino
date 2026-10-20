@@ -30,6 +30,7 @@ export interface ModelConfig {
   alias: string;
   type: ModelType;
   context_window: number;
+  embedding_dimension?: number;
   max_output: number;
   /** 元 / 1M tokens */
   input_price: number;

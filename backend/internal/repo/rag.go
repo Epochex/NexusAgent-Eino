@@ -134,9 +134,7 @@ func (r *KBRepo) DeleteDoc(ctx context.Context, id int64) error {
 
 // BatchCreate 批量写入分块（单事务，id 回填后供向量化使用）。
 func (r *KBRepo) BatchCreate(ctx context.Context, chunks []model.DocumentChunk) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.CreateInBatches(chunks, 200).Error
-	})
+	return r.writeChunks(ctx, chunks)
 }
 
 // ListByDoc 文档全部分块。
@@ -160,7 +158,7 @@ func (r *KBRepo) ListByIDs(ctx context.Context, ids []int64) ([]model.DocumentCh
 		return nil, nil
 	}
 	var list []model.DocumentChunk
-	err := r.db.WithContext(ctx).Where("id IN ? AND status = 1", ids).Find(&list).Error
+	err := visibleChunks(r.db.WithContext(ctx)).Where("document_chunks.id IN ?", ids).Find(&list).Error
 	return list, err
 }
 
@@ -176,11 +174,11 @@ func (r *KBRepo) KeywordSearch(ctx context.Context, kbID int64, terms []string, 
 
 	// ① 粗召回：OR 条件任一命中
 	var candidates []model.DocumentChunk
-	q := r.db.WithContext(ctx).Where("kb_id = ? AND status = 1", kbID)
+	q := visibleChunks(r.db.WithContext(ctx)).Where("document_chunks.kb_id = ?", kbID)
 	conds := make([]string, 0, len(terms))
 	args := make([]any, 0, len(terms))
 	for _, t := range terms {
-		conds = append(conds, "content ILIKE ?")
+		conds = append(conds, "document_chunks.content ILIKE ?")
 		args = append(args, "%"+t+"%")
 	}
 	if err := q.Where(strings.Join(conds, " OR "), args...).

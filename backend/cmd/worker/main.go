@@ -83,10 +83,8 @@ func run() error {
 	var rdb *redis.Client
 	var store vector.Store
 	if selected["doc-etl"] {
-		rdb, err = infra.NewRedis(ctx, &cfg.Redis)
-		if err != nil {
-			return fmt.Errorf("doc-etl redis: %w", err)
-		}
+		// Notifications reconnect independently. PostgreSQL remains the work authority.
+		rdb = redis.NewClient(&redis.Options{Addr: cfg.Redis.Addr, Password: cfg.Redis.Password, DB: cfg.Redis.DB, DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second, MaxRetries: 0, ContextTimeoutEnabled: true})
 		defer rdb.Close()
 		mcli, e := infra.NewMilvus(ctx, &cfg.Milvus)
 		if e != nil {
@@ -103,6 +101,7 @@ func run() error {
 	if selected["doc-etl"] {
 		rag := engine.New(gateway, store, repos.KB, &cfg.RAG, cfg.Milvus.Dim)
 		rag.SetModels(svcs.DefaultEmbedding, svcs.DefaultRerank)
+		rag.SetEmbeddingResolver(svcs.ResolveKBEmbedding)
 		svcs.SetRAGEngine(rag)
 		tool.RegisterKBSearch(reg, func(callCtx context.Context, kbID int64, query string, topK int) (string, error) {
 			userID, ok := security.UserIDFromContext(callCtx)
@@ -152,10 +151,19 @@ func run() error {
 	if durable != nil {
 		count++
 		go func() { results <- durable.Run(ctx) }()
-		if rdb != nil {
-			count++
-			go func() { results <- execution.NewStore(db).RunNotifications(ctx, rdb, durable.Notify) }()
-		}
+	}
+	if rdb != nil {
+		count++
+		go func() {
+			results <- execution.NewStore(db).RunNotifications(ctx, rdb, func() {
+				if durable != nil {
+					durable.Notify()
+				}
+				if etl != nil {
+					etl.Notify()
+				}
+			})
+		}()
 	}
 	if etl != nil {
 		count++
