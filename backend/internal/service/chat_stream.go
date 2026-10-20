@@ -194,16 +194,9 @@ func (s *ChatService) extractMemoryAfterChat(ctx context.Context, run chatRun) {
 	if !run.Agent.MemoryLongEnabled || s.memory == nil || every <= 0 {
 		return
 	}
-	// Durable/coalesced extraction is P3; this retained enhancement has a bounded
-	// deadline and cannot block or change the already committed chat outcome.
-	go func() {
-		bg, done := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
-		defer done()
-		msgs, err := s.svcs.Repos.Session.ListMessages(bg, run.Session.ID, every)
-		if err == nil && len(msgs) > 0 {
-			if err = s.memory.ExtractAndStore(bg, run.Session.UserID, &run.Agent.ID, historyToLLM(msgs)); err != nil {
-				observability.LogWarn("memory extraction failed", "run_id", run.ID)
-			}
-		}
-	}()
+	bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	if _, _, err := s.memory.EnqueueSession(bg, run.Session.UserID, run.Session.ID, false, every, s.svcs.Cfg.Worker.MaxRetry); err != nil {
+		observability.LogWarn("memory extraction enqueue failed", "run_id", run.ID)
+	}
 }

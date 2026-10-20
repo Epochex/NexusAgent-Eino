@@ -24,7 +24,9 @@ func Open(t testing.TB) *gorm.DB {
 		t.Fatal("explicit NX_TEST_DATABASE_DSN URL ending in _test required")
 	}
 	connect := func(dsn string) *gorm.DB {
-		db, err := gorm.Open(postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true}), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		// Match production parameter encoding and statement caching. PostgreSQL
+		// accepts multi-statement migration setup without parameters via Exec.
+		db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 		if err != nil {
 			t.Fatal("cannot connect to test PostgreSQL")
 		}

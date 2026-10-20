@@ -6,15 +6,15 @@ package service
 
 import (
 	"context"
+	"errors"
+	"time"
 
-	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/memory/long_term"
+	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/pagination"
+	"gorm.io/datatypes"
 )
-
-// memoryCollection 长期记忆向量集合（与 long_term.Manager 保持一致）。
-const memoryCollection = "memories"
 
 // MemoryService 记忆管理业务。
 type MemoryService struct {
@@ -39,37 +39,12 @@ func (s *MemoryService) List(ctx context.Context, userID int64, q pagination.Que
 	return list, total, nil
 }
 
-// Delete 删除记忆：PG 行 + Milvus 向量级联清理。
+// Delete immediately revokes recall and durably schedules remote cleanup.
 func (s *MemoryService) Delete(ctx context.Context, userID, id int64) error {
-	m, err := s.svcs.Deps.Repos.Memory.Get(ctx, id)
-	if err != nil {
-		return errcode.ErrMemoryNotFound
-	}
-	if m.UserID != userID {
-		return errcode.ErrForbidden // 只能管理自己的记忆
-	}
-	if s.svcs.Deps.Vector != nil {
-		_ = s.svcs.Deps.Vector.Delete(ctx, memoryCollection, []int64{id})
-	}
-	if err := s.svcs.Deps.Repos.Memory.Delete(ctx, id); err != nil {
-		return errcode.ErrInternal.WithCause(err)
-	}
-	return nil
+	return memoryError(long_term.NewStore(s.svcs.Repos.DB).Archive(ctx, userID, id, true))
 }
-
-// Archive 归档记忆（软失效：保留数据但不再召回）。
 func (s *MemoryService) Archive(ctx context.Context, userID, id int64) error {
-	m, err := s.svcs.Deps.Repos.Memory.Get(ctx, id)
-	if err != nil {
-		return errcode.ErrMemoryNotFound
-	}
-	if m.UserID != userID {
-		return errcode.ErrForbidden
-	}
-	if err := s.svcs.Deps.Repos.Memory.Archive(ctx, id); err != nil {
-		return errcode.ErrInternal.WithCause(err)
-	}
-	return nil
+	return memoryError(long_term.NewStore(s.svcs.Repos.DB).Archive(ctx, userID, id, false))
 }
 
 // ExtractInput 手动抽取请求。
@@ -77,34 +52,102 @@ type ExtractInput struct {
 	SessionID string `json:"session_id"`
 }
 
-// ExtractNow 对指定会话手动执行长期记忆抽取（前端"记住这次对话"按钮）。
-// 自动抽取由 ChatService 在每 N 轮对话后异步触发，此处是管理面的补充入口。
-func (s *MemoryService) ExtractNow(ctx context.Context, userID int64, in *ExtractInput) error {
+// ExtractNow accepts a durable job. Fact and vector completion are separate states.
+func (s *MemoryService) ExtractNow(ctx context.Context, userID int64, in *ExtractInput) (*long_term.Job, error) {
 	if s.manager == nil {
-		return errcode.ErrNotImplement.WithMsg("长期记忆未启用（未配置抽取模型）")
+		return nil, errcode.ErrNotImplement.WithMsg("长期记忆执行器未配置")
 	}
-	if in.SessionID == "" {
-		return errcode.ErrInvalidParam.WithMsg("session_id 不能为空")
+	if in == nil || in.SessionID == "" {
+		return nil, errcode.ErrInvalidParam.WithMsg("session_id不能为空")
 	}
-	repo := s.svcs.Deps.Repos.Session
-	session, err := repo.GetSession(ctx, in.SessionID)
-	if err != nil {
-		return errcode.ErrSessionNotFnd.WithCause(err)
-	}
-	if session.UserID != userID {
-		return errcode.ErrForbidden
-	}
+	job, _, err := s.manager.EnqueueSession(ctx, userID, in.SessionID, true, 6, s.svcs.Cfg.Worker.MaxRetry)
+	return job, memoryError(err)
+}
 
-	// 取最近若干条消息作为抽取素材
-	msgs, err := repo.ListMessages(ctx, session.ID, 20)
+func (s *MemoryService) Jobs(ctx context.Context, owner int64, q pagination.Query) ([]long_term.Job, int64, error) {
+	rows, total, err := long_term.NewStore(s.svcs.Repos.DB).ListJobs(ctx, owner, q.Offset(), q.Limit())
+	return rows, total, memoryError(err)
+}
+func (s *MemoryService) Job(ctx context.Context, owner, id int64) (*long_term.JobProgress, error) {
+	result, err := long_term.NewStore(s.svcs.Repos.DB).JobStatus(ctx, owner, id)
+	return result, memoryError(err)
+}
+func (s *MemoryService) Retry(ctx context.Context, owner, id int64) error {
+	return memoryError(long_term.NewStore(s.svcs.Repos.DB).Retry(ctx, owner, id))
+}
+func (s *MemoryService) Profile(ctx context.Context, owner int64) (*long_term.Profile, error) {
+	profile, err := long_term.NewStore(s.svcs.Repos.DB).Profile(ctx, owner)
+	if errors.Is(err, long_term.ErrMemoryNotFound) {
+		return nil, nil
+	}
+	return profile, memoryError(err)
+}
+
+type MemoryRebuildInput struct {
+	EmbeddingConfigID int64  `json:"embedding_config_id"`
+	RequestKey        string `json:"request_key"`
+}
+type MemoryEmbeddingOption struct {
+	ID        int64  `json:"id"`
+	Alias     string `json:"alias"`
+	Dimension int    `json:"dimension"`
+}
+
+func (s *MemoryService) EmbeddingOptions(ctx context.Context) ([]MemoryEmbeddingOption, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	rows, err := s.svcs.Repos.LLM.ListModels(ctx, model.ModelTypeEmbed)
 	if err != nil {
-		return errcode.ErrInternal.WithCause(err)
+		return nil, err
 	}
-	if len(msgs) == 0 {
-		return errcode.ErrInvalidParam.WithMsg("会话暂无可抽取的消息")
+	options := make([]MemoryEmbeddingOption, 0, len(rows))
+	for _, row := range rows {
+		if row.Status != 1 || row.Provider == nil || row.Provider.Status != 1 {
+			continue
+		}
+		dim := row.EmbeddingDimension
+		if dim == 0 {
+			dim = s.svcs.Cfg.Milvus.Dim
+		}
+		if dim < 1 || dim > 16384 {
+			continue
+		}
+		options = append(options, MemoryEmbeddingOption{row.ID, row.Alias, dim})
 	}
-	if err := s.manager.ExtractAndStore(ctx, userID, session.AgentID, historyToLLM(msgs)); err != nil {
-		return errcode.ErrInternal.WithCause(err)
+	return options, nil
+}
+
+func (s *MemoryService) Rebuild(ctx context.Context, owner int64, in *MemoryRebuildInput) (*long_term.RebuildResult, error) {
+	if s.manager == nil {
+		return nil, errcode.ErrNotImplement.WithMsg("长期记忆执行器未配置")
 	}
-	return nil
+	if in == nil || in.EmbeddingConfigID < 1 {
+		return nil, errcode.ErrInvalidParam
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	raw, version, dimension, err := s.svcs.freezeEmbeddingSpace(ctx, in.EmbeddingConfigID, long_term.MemoryVectorSchemaVersion)
+	if err != nil {
+		return nil, err
+	}
+	result, err := long_term.NewStore(s.svcs.Repos.DB).RebuildProfile(ctx, &long_term.Profile{UserID: owner, EmbeddingConfigID: in.EmbeddingConfigID, EmbeddingVersion: version, EmbeddingDimension: dimension, EmbeddingSnapshot: datatypes.JSON(raw)}, in.RequestKey)
+	return result, memoryError(err)
+}
+func (s *MemoryService) RebuildStatus(ctx context.Context, owner, id int64) (*long_term.RebuildProgress, error) {
+	result, err := long_term.NewStore(s.svcs.Repos.DB).RebuildStatus(ctx, owner, id)
+	return result, memoryError(err)
+}
+func memoryError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, long_term.ErrMemoryNotFound):
+		return errcode.ErrMemoryNotFound
+	case errors.Is(err, long_term.ErrMemoryInvalid):
+		return errcode.ErrInvalidParam.WithMsg("记忆请求超出允许范围，请缩短内容或减少事实条数").WithCause(err)
+	case errors.Is(err, long_term.ErrMemoryConflict), errors.Is(err, long_term.ErrMemoryLeaseLost):
+		return errcode.ErrRunConflict.WithMsg("记忆或模型空间已变化，请重新提交").WithCause(err)
+	default:
+		return errcode.From(err)
+	}
 }

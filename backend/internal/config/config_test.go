@@ -2,6 +2,14 @@ package config
 
 import "testing"
 
+func TestMemoryExtractionThresholdIsValidated(t *testing.T) {
+	for _, every := range []int{-1, 21} {
+		if err := validate(&Config{Agent: Agent{MemoryExtractEvery: every}}); err == nil {
+			t.Fatalf("invalid extraction threshold accepted: %d", every)
+		}
+	}
+}
+
 func TestAgentRuntimeLimitsDefaultAndRejectInvalid(t *testing.T) {
 	cfg := &Config{Env: "dev"}
 	if err := validate(cfg); err != nil {

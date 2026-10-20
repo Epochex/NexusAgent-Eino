@@ -54,9 +54,86 @@ func (h *Handler) ExtractMemory(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	if err := h.svcs.Memory.ExtractNow(ctx, userID(c), &req); err != nil {
+	job, err := h.svcs.Memory.ExtractNow(ctx, userID(c), &req)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	c.JSON(202, envelope{Code: 0, Message: "accepted", Data: job})
+}
+
+func (h *Handler) MemoryJobs(ctx context.Context, c *app.RequestContext) {
+	rows, total, err := h.svcs.Memory.Jobs(ctx, userID(c), parsePagination(c))
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, map[string]any{"list": rows, "total": total})
+}
+func (h *Handler) MemoryJob(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	result, err := h.svcs.Memory.Job(ctx, userID(c), id)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, result)
+}
+func (h *Handler) RetryMemoryJob(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	if err = h.svcs.Memory.Retry(ctx, userID(c), id); err != nil {
 		Fail(c, err)
 		return
 	}
 	OK(c, nil)
+}
+func (h *Handler) MemoryProfile(ctx context.Context, c *app.RequestContext) {
+	profile, err := h.svcs.Memory.Profile(ctx, userID(c))
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, profile)
+}
+func (h *Handler) MemoryEmbeddingOptions(ctx context.Context, c *app.RequestContext) {
+	result, err := h.svcs.Memory.EmbeddingOptions(ctx)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, result)
+}
+func (h *Handler) RebuildMemories(ctx context.Context, c *app.RequestContext) {
+	var req service.MemoryRebuildInput
+	if err := c.BindAndValidate(&req); err != nil {
+		Fail(c, err)
+		return
+	}
+	result, err := h.svcs.Memory.Rebuild(ctx, userID(c), &req)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	c.JSON(202, envelope{Code: 0, Message: "accepted", Data: result})
+}
+func (h *Handler) MemoryRebuildStatus(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	result, err := h.svcs.Memory.RebuildStatus(ctx, userID(c), id)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, result)
 }

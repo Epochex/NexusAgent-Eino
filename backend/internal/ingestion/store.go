@@ -20,7 +20,7 @@ func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
 // LockKBMutation serializes uploads/archive/reindex without holding a KB row
 // while waiting on an executor's job lock (job -> document -> KB row order).
 func LockKBMutation(tx *gorm.DB, kbID int64) error {
-	return tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(current_schema()||':kb-mutation:'||?::text,0))", kbID).Error
+	return tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(current_schema()||':kb-mutation:'||?::bigint::text,0))", kbID).Error
 }
 func (s *Store) transaction(ctx context.Context, fn func(*gorm.DB) error) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)

@@ -68,6 +68,8 @@ func NewMemorySchema(collection string, dim int) *entity.Schema {
 		WithField(entity.NewField().WithName("id").WithDataType(entity.FieldTypeInt64).WithIsPrimaryKey(true)).
 		WithField(entity.NewField().WithName("user_id").WithDataType(entity.FieldTypeInt64)).
 		WithField(entity.NewField().WithName("agent_id").WithDataType(entity.FieldTypeInt64)).
+		WithField(entity.NewField().WithName("revision").WithDataType(entity.FieldTypeInt64)).
+		WithField(entity.NewField().WithName("embedding_version").WithDataType(entity.FieldTypeVarChar).WithMaxLength(64)).
 		WithField(entity.NewField().WithName("vector").
 			WithDataType(entity.FieldTypeFloatVector).WithDim(int64(dim)))
 }

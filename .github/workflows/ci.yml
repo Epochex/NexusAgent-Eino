@@ -48,7 +48,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - run: go vet ./...
       - run: go test -race ./... -timeout 180s
-      - run: go test -race -tags=integration ./internal/service ./internal/execution ./internal/api ./internal/ingestion ./internal/repo -count=1 -timeout 180s
+      - run: go test -race -tags=integration ./internal/service ./internal/execution ./internal/api ./internal/ingestion ./internal/repo ./internal/memory/long_term -count=1 -timeout 180s
         env:
           NX_TEST_DATABASE_DSN: postgres://postgres@localhost:5432/nexus_eino_test?sslmode=disable
           NX_TEST_REDIS_ADDR: localhost:6379
@@ -60,6 +60,7 @@ jobs:
       NX_TEST_DATABASE_DSN: postgres://postgres@127.0.0.1:55449/nexus_acceptance_test?sslmode=disable
       NX_TEST_MILVUS_ADDR: 127.0.0.1:59530
       NX_TEST_MINIO_ADDR: 127.0.0.1:59000
+      NX_TEST_REDIS_ADDR: 127.0.0.1:56399
       GOMEMLIMIT: 1GiB
       GOMAXPROCS: '2'
     steps:
@@ -69,7 +70,7 @@ jobs:
           go-version: '1.26.0'
           cache-dependency-path: backend/go.sum
       - run: docker compose -f backend/deployments/docker-compose.acceptance.yaml up -d --wait --wait-timeout 180
-      - run: go test -p 1 -race -tags 'integration infrastructure' ./internal/vector ./internal/service -run 'TestMilvusUpsertAndDimensionContract|TestMilvusScope|TestDocumentPipelineRealInfrastructure|TestFixed100QueryRetrievalEvaluation' -count=1 -timeout 300s -v
+      - run: go test -p 1 -race -tags 'integration infrastructure' ./internal/vector ./internal/service ./internal/memory/long_term ./internal/execution ./internal/api -run 'TestMilvusUpsertAndDimensionContract|TestMilvusScope|TestMemoryScope|TestDocumentPipelineRealInfrastructure|TestFixed100QueryRetrievalEvaluation|TestMemoryPipeline|TestMemorySupersededMigration|TestMemoryWorkerProcess|TestMemoryHTTP' -count=1 -timeout 300s -v
         working-directory: backend
       - if: failure()
         run: docker compose -f backend/deployments/docker-compose.acceptance.yaml logs --tail 100

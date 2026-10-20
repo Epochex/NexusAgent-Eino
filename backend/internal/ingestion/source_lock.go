@@ -14,6 +14,14 @@ var sourcePools sync.Map
 // Serialize remote writes and cleanup across processes, including canceled generations.
 // The connection-scoped lock is automatically released if its worker process dies.
 func LockSource(ctx context.Context, database *gorm.DB, docID int64) (func(), error) {
+	return LockResource(ctx, database, "doc", docID)
+}
+
+// LockResource shares bounded IO capacity while separating document/memory IDs.
+func LockResource(ctx context.Context, database *gorm.DB, namespace string, id int64) (func(), error) {
+	if (namespace != "doc" && namespace != "memory") || id < 1 {
+		return nil, fmt.Errorf("invalid remote resource lock")
+	}
 	db, err := database.DB()
 	if err != nil {
 		return nil, err
@@ -40,7 +48,7 @@ func LockSource(ctx context.Context, database *gorm.DB, docID int64) (func(), er
 	}
 	closeConn := func() { conn.Close(); <-slots }
 	var key int64
-	if err = conn.QueryRowContext(ctx, "SELECT hashtextextended(current_schema()||':doc:'||$1::text,0)", docID).Scan(&key); err != nil {
+	if err = conn.QueryRowContext(ctx, "SELECT hashtextextended(current_schema()||':'||$1::text||':'||$2::bigint::text,0)", namespace, id).Scan(&key); err != nil {
 		closeConn()
 		return nil, err
 	}

@@ -55,6 +55,13 @@ func Register(g *route.RouterGroup, h *Handler, jwt *security.JWTManager) {
 		user.DELETE("/memories/:id", h.DeleteMemory)
 		user.POST("/memories/:id/archive", h.ArchiveMemory)
 		user.POST("/memories/extract", h.ExtractMemory)
+		user.GET("/memories/jobs", h.MemoryJobs)
+		user.GET("/memories/jobs/:id", h.MemoryJob)
+		user.POST("/memories/jobs/:id/retry", h.RetryMemoryJob)
+		user.GET("/memories/profile", h.MemoryProfile)
+		user.GET("/memories/embedding-models", h.MemoryEmbeddingOptions)
+		user.POST("/memories/rebuild", h.RebuildMemories)
+		user.GET("/memories/rebuilds/:id", h.MemoryRebuildStatus)
 
 		// Agent 与工具
 		user.GET("/agents", h.ListAgents)

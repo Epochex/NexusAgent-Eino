@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
@@ -26,7 +27,7 @@ func (s *MilvusStore) EnsureCollection(ctx context.Context, collection string, d
 		return fmt.Errorf("invalid vector dimension %d", dim)
 	}
 	var schema *entity.Schema
-	if collection == "memories" {
+	if isMemoryCollection(collection) {
 		schema = infra.NewMemorySchema(collection, dim)
 	} else {
 		schema = infra.NewKBSchema(collection, dim)
@@ -80,16 +81,44 @@ func (s *MilvusStore) EnsureCollection(ctx context.Context, collection string, d
 
 // vectorField 集合的向量字段名（Schema 定义见 infra.NewKBSchema/NewMemorySchema）。
 func vectorField(collection string) string {
-	if collection == "memories" {
+	if isMemoryCollection(collection) {
 		return "vector"
 	}
 	return KBDenseField
+}
+
+func isMemoryCollection(collection string) bool {
+	return collection == "memories" || strings.HasPrefix(collection, "mem_")
 }
 
 // Upsert replaces stable chunk IDs; retry never inserts a second logical record.
 func (s *MilvusStore) Upsert(ctx context.Context, collection string, records []Record) error {
 	if len(records) == 0 {
 		return nil
+	}
+	if len(records) > 256 {
+		return fmt.Errorf("vector batch exceeds 256 records")
+	}
+	dimension := len(records[0].Vector)
+	if dimension < 1 || dimension > 16384 {
+		return fmt.Errorf("invalid vector dimension")
+	}
+	seen := map[int64]bool{}
+	for _, record := range records {
+		if record.ID < 1 || seen[record.ID] || len(record.Vector) != dimension {
+			return fmt.Errorf("invalid or duplicate vector record")
+		}
+		seen[record.ID] = true
+		norm := float64(0)
+		for _, value := range record.Vector {
+			if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+				return fmt.Errorf("non-finite vector")
+			}
+			norm += float64(value) * float64(value)
+		}
+		if norm == 0 {
+			return fmt.Errorf("zero cosine vector")
+		}
 	}
 
 	ids := make([]int64, 0, len(records))
@@ -105,11 +134,12 @@ func (s *MilvusStore) Upsert(ctx context.Context, collection string, records []R
 	cols := []entity.Column{entity.NewColumnInt64("id", ids)}
 
 	// 判断集合类型：记忆集合带 user_id 列
-	if collection == "memories" {
+	if isMemoryCollection(collection) {
 		uids := i64FromMeta(metas, "user_id")
 		aids := i64FromMeta(metas, "agent_id")
 		cols = append(cols, entity.NewColumnInt64("user_id", uids))
 		cols = append(cols, entity.NewColumnInt64("agent_id", aids))
+		cols = append(cols, entity.NewColumnInt64("revision", i64FromMeta(metas, "revision")), entity.NewColumnVarChar("embedding_version", strFromMeta(metas, "embedding_version")))
 	} else {
 		cols = append(cols,
 			entity.NewColumnInt64("doc_id", i64FromMeta(metas, "doc_id")),

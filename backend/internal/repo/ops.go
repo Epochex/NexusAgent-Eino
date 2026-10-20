@@ -50,7 +50,7 @@ func (r *MemoryRepo) ListByUser(ctx context.Context, userID int64, offset, limit
 		list  []model.Memory
 		total int64
 	)
-	q := r.db.WithContext(ctx).Model(&model.Memory{}).Where("user_id = ?", userID)
+	q := r.db.WithContext(ctx).Model(&model.Memory{}).Where("user_id = ? AND status <> 3", userID)
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

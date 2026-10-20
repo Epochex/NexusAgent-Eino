@@ -28,7 +28,6 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/infra"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
-	"github.com/chengpeng-cp/nexus-agent/internal/memory/long_term"
 	"github.com/chengpeng-cp/nexus-agent/internal/observability"
 	"github.com/chengpeng-cp/nexus-agent/internal/observability/logger"
 	"github.com/chengpeng-cp/nexus-agent/internal/rag/engine"
@@ -144,9 +143,7 @@ func run() error {
 	// Workflow handlers persist submissions; the separate worker owns Eino execution.
 
 	// ===== ⑩ 长期记忆（抽取用低成本 chat 模型，实时解析） =====
-	memoryMgr := long_term.NewManager(gateway, svcs.DefaultChat, svcs.DefaultEmbedding, repos.Memory, store)
-	svcs.Chat.SetLongTermMemory(memoryMgr)
-	svcs.Memory.SetManager(memoryMgr)
+	svcs.ConfigureMemory()
 
 	// ===== ⑪ 对象存储与 kb_search 工具（依赖 RAG 引擎，最后注册） =====
 	svcs.KB.SetMinIO(mio, cfg.MinIO.Bucket)

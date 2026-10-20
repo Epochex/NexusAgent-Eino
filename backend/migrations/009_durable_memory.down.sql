@@ -1,0 +1,10 @@
+DROP INDEX IF EXISTS idx_messages_memory_cursor;
+DROP TABLE IF EXISTS memory_operations;
+DROP TABLE IF EXISTS memory_jobs;
+DROP TABLE IF EXISTS memory_cursors;
+DROP TABLE IF EXISTS memory_profile_rebuilds;
+DROP TABLE IF EXISTS memory_profiles;
+DROP INDEX IF EXISTS idx_memories_published;
+DROP INDEX IF EXISTS idx_memories_active_content;
+DROP INDEX IF EXISTS idx_memories_source_operation;
+ALTER TABLE memories DROP COLUMN source_operation_key,DROP COLUMN content_hash,DROP COLUMN embedding_version,DROP COLUMN index_status,DROP COLUMN indexed_revision,DROP COLUMN revision;

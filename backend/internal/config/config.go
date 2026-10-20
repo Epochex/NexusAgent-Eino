@@ -213,6 +213,9 @@ func Load(configDir string) (*Config, error) {
 
 func validate(cfg *Config) error {
 	a := &cfg.Agent
+	if a.MemoryExtractEvery < 0 || a.MemoryExtractEvery > 20 {
+		return fmt.Errorf("agent.memory_extract_every must be 0 (disabled) or 1..20 new messages")
+	}
 	if a.InputTokenBudget < 0 || a.EventBuffer < 0 || a.SendTimeout < 0 || a.MaxToolOutputBytes < 0 || a.MaxModelOutputBytes < 0 || a.MaxConcurrentTools < 0 || a.StepTimeout < 0 || a.RunTimeout < 0 || a.MaxIterations < 0 {
 		return fmt.Errorf("agent execution limits must not be negative")
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/execution"
 	"github.com/chengpeng-cp/nexus-agent/internal/infra"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
+	"github.com/chengpeng-cp/nexus-agent/internal/memory/long_term"
 	"github.com/chengpeng-cp/nexus-agent/internal/observability"
 	"github.com/chengpeng-cp/nexus-agent/internal/observability/logger"
 	"github.com/chengpeng-cp/nexus-agent/internal/rag/engine"
@@ -34,13 +35,14 @@ func main() {
 	}
 }
 func run() error {
-	queues := flag.String("queues", "execution,doc-etl", "execution and/or doc-etl; execution alone requires PostgreSQL only and does not enable knowledge-base nodes")
+	queues := flag.String("queues", "execution,doc-etl,memory", "execution/doc-etl/memory; execution alone needs PostgreSQL only; memory needs PostgreSQL+Milvus")
 	concurrency := flag.Int("execution-concurrency", 4, "durable execution slots, 1..64")
+	memoryConcurrency := flag.Int("memory-concurrency", 2, "memory slots, 1..8")
 	flag.Parse()
 	selected := map[string]bool{}
 	for _, queue := range strings.Split(*queues, ",") {
 		queue = strings.TrimSpace(queue)
-		if queue != "execution" && queue != "doc-etl" {
+		if queue != "execution" && queue != "doc-etl" && queue != "memory" {
 			return fmt.Errorf("unsupported queue %q", queue)
 		}
 		selected[queue] = true
@@ -68,27 +70,30 @@ func run() error {
 	gateway := llm.NewGateway(&cfg.LLM)
 	repos := repo.New(db)
 	reg := tool.NewRegistry()
-	tool.RegisterSimple(reg)
-	tool.RegisterWeb(reg, tool.SearchConfig{SearxngURL: cfg.Search.SearxngURL})
-	tool.RegisterFiles(reg, tool.FileOpsConfig{BaseDir: "./data/files", MaxSize: 10 << 20})
-	tool.RegisterDBQuery(reg, db)
-	if cfg.Sandbox.Enabled {
-		sandbox, e := tool.NewSandbox(tool.SandboxConfig{Image: cfg.Sandbox.Image, Memory: cfg.Sandbox.Memory, CPUs: cfg.Sandbox.CPUs, Timeout: cfg.Sandbox.Timeout, PoolSize: cfg.Sandbox.PoolSize})
-		if e != nil {
-			return fmt.Errorf("configured sandbox unavailable: %w", e)
+	if selected["execution"] {
+		tool.RegisterSimple(reg)
+		tool.RegisterWeb(reg, tool.SearchConfig{SearxngURL: cfg.Search.SearxngURL})
+		tool.RegisterFiles(reg, tool.FileOpsConfig{BaseDir: "./data/files", MaxSize: 10 << 20})
+		tool.RegisterDBQuery(reg, db)
+		if cfg.Sandbox.Enabled {
+			sandbox, e := tool.NewSandbox(tool.SandboxConfig{Image: cfg.Sandbox.Image, Memory: cfg.Sandbox.Memory, CPUs: cfg.Sandbox.CPUs, Timeout: cfg.Sandbox.Timeout, PoolSize: cfg.Sandbox.PoolSize})
+			if e != nil {
+				return fmt.Errorf("configured sandbox unavailable: %w", e)
+			}
+			tool.RegisterCodeExec(reg, sandbox, db)
 		}
-		tool.RegisterCodeExec(reg, sandbox, db)
 	}
 	executor := tool.NewExecutor(repos.Tool, reg, tool.ExecutorConfig{DefaultTimeout: 30 * time.Second})
 	var rdb *redis.Client
 	var store vector.Store
-	if selected["doc-etl"] {
+	dataSelected := selected["doc-etl"] || selected["memory"]
+	if dataSelected {
 		// Notifications reconnect independently. PostgreSQL remains the work authority.
-		rdb = redis.NewClient(&redis.Options{Addr: cfg.Redis.Addr, Password: cfg.Redis.Password, DB: cfg.Redis.DB, DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second, MaxRetries: 0, ContextTimeoutEnabled: true})
+		rdb = redis.NewClient(&redis.Options{Addr: cfg.Redis.Addr, Password: cfg.Redis.Password, DB: cfg.Redis.DB, DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second, MaxRetries: -1, ContextTimeoutEnabled: true})
 		defer rdb.Close()
 		mcli, e := infra.NewMilvus(ctx, &cfg.Milvus)
 		if e != nil {
-			return fmt.Errorf("doc-etl milvus: %w", e)
+			return fmt.Errorf("data worker milvus: %w", e)
 		}
 		defer mcli.Close()
 		store = vector.NewMilvusStore(mcli)
@@ -98,8 +103,9 @@ func run() error {
 		return fmt.Errorf("services: %w", err)
 	}
 	var etl *worker.Worker
-	if selected["doc-etl"] {
-		rag := engine.New(gateway, store, repos.KB, &cfg.RAG, cfg.Milvus.Dim)
+	var rag *engine.Engine
+	if dataSelected {
+		rag = engine.New(gateway, store, repos.KB, &cfg.RAG, cfg.Milvus.Dim)
 		rag.SetModels(svcs.DefaultEmbedding, svcs.DefaultRerank)
 		rag.SetEmbeddingResolver(svcs.ResolveKBEmbedding)
 		rag.SetRerankResolver(svcs.ResolveRerank)
@@ -126,11 +132,20 @@ func run() error {
 			}
 			return result.String(), nil
 		})
+	}
+	if selected["doc-etl"] {
 		mc, e := infra.NewMinIO(ctx, &cfg.MinIO)
 		if e != nil {
 			return fmt.Errorf("doc-etl minio: %w", e)
 		}
 		etl = worker.New(rdb, repos, rag, mc, cfg.MinIO.Bucket, &cfg.Worker)
+	}
+	var memoryWorker *long_term.Worker
+	if selected["memory"] {
+		memoryWorker, err = long_term.NewWorker(svcs.ConfigureMemory(), long_term.WorkerConfig{Concurrency: *memoryConcurrency})
+		if err != nil {
+			return err
+		}
 	}
 	var durable *execution.Worker
 	if selected["execution"] {
@@ -138,7 +153,7 @@ func run() error {
 		for _, code := range reg.Codes() {
 			capabilities = append(capabilities, "tool:"+code)
 		}
-		if selected["doc-etl"] {
+		if dataSelected {
 			capabilities = append(capabilities, "rag")
 		}
 		durable, err = execution.NewWorker(execution.NewStore(db), svcs.Workflow.Driver(), execution.WorkerConfig{Concurrency: *concurrency, Capabilities: capabilities})
@@ -147,7 +162,7 @@ func run() error {
 		}
 	}
 	observability.LogInfo("nexus-agent worker started", "queues", *queues, "execution_slots", fmt.Sprint(*concurrency))
-	results := make(chan error, 3)
+	results := make(chan error, 4)
 	count := 0
 	if durable != nil {
 		count++
@@ -160,6 +175,9 @@ func run() error {
 				if durable != nil {
 					durable.Notify()
 				}
+				if memoryWorker != nil {
+					memoryWorker.Notify()
+				}
 				if etl != nil {
 					etl.Notify()
 				}
@@ -169,6 +187,10 @@ func run() error {
 	if etl != nil {
 		count++
 		go func() { results <- etl.Run(ctx) }()
+	}
+	if memoryWorker != nil {
+		count++
+		go func() { results <- memoryWorker.Run(ctx) }()
 	}
 	var first error
 	for range count {
