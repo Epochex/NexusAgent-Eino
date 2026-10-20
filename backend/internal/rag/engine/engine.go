@@ -3,7 +3,7 @@
 // 三段式管线，对应三个教学阶段：
 //
 //	Index（索引）：Load → Split → Chunk 落库(PG) → 批量 Embed → Milvus Upsert
-//	Retrieve（检索）：稠密(Milvus HNSW) + 关键词(PG BM25-lite) → RRF 融合 → Rerank
+//	Retrieve（检索）：稠密(Milvus HNSW) + 关键词(PG ILIKE/TF-IDF) → RRF 融合 → Rerank
 //	Enhance（增强）：top-k 分块拼装上下文 + 引用信息（refs）
 //
 // 设计要点：检索是"双路召回"，稠密向量擅长语义、关键词擅长专有名词/编号，
@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 
 	"gorm.io/datatypes"
 
@@ -35,17 +36,18 @@ type ChunkRepo interface {
 	ListByDoc(ctx context.Context, docID int64) ([]model.DocumentChunk, error)
 	// DeleteByDoc 删除文档全部分块。
 	DeleteByDoc(ctx context.Context, docID int64) error
-	// KeywordSearch 关键词检索（PG 侧，BM25-lite 打分）。
+	// KeywordSearch 关键词检索（PG 侧，ILIKE/TF-IDF 打分）。
 	KeywordSearch(ctx context.Context, kbID int64, terms []string, limit int) ([]ScoredChunk, error)
 	// ListByIDs 按 ID 批量回查（Milvus 只存向量+ID，稠密命中需回表取 content）。
 	ListByIDs(ctx context.Context, ids []int64) ([]model.DocumentChunk, error)
+	PublishedScope(context.Context, *model.KnowledgeBase) (vector.Scope, error)
 }
 
 // ScoredChunk 带分数的分块（关键词检索结果）。
 type ScoredChunk struct {
 	Chunk    model.DocumentChunk
 	Filename string  // 所属文档名
-	Score    float64 // BM25-lite 分数
+	Score    float64 // ILIKE/TF-IDF 分数
 }
 
 // Engine RAG 引擎。
@@ -60,6 +62,24 @@ type Engine struct {
 	rerankMdl        func() *llm.ModelDescriptor // Rerank 模型取值函数（返回 nil 时跳过 rerank）
 	resolveEmbedding func(context.Context, *model.KnowledgeBase) (*llm.ModelDescriptor, int, error)
 	indexProgress    func(context.Context) error
+	routes           *RetrievalRoutes
+	resolveRerank    func(context.Context) (*llm.ModelDescriptor, error)
+}
+
+type RetrievalRoutes struct{ Dense, Keyword, Rerank bool }
+
+func (e *Engine) WithRetrievalRoutes(routes RetrievalRoutes) *Engine {
+	copy := *e
+	copy.routes = &routes
+	return &copy
+}
+func (e *Engine) SetRerankResolver(resolve func(context.Context) (*llm.ModelDescriptor, error)) {
+	e.resolveRerank = resolve
+}
+func (e *Engine) WithRerankResolver(resolve func(context.Context) (*llm.ModelDescriptor, error)) *Engine {
+	copy := *e
+	copy.resolveRerank = resolve
+	return &copy
 }
 
 func (e *Engine) WithIndexProgress(progress func(context.Context) error) *Engine {
@@ -312,119 +332,6 @@ type Ref struct {
 	Score      float32 `json:"score"`
 }
 
-// Retrieve 混合检索主流程：稠密 + 关键词 → RRF → (Rerank) → 截断。
-func (e *Engine) Retrieve(ctx context.Context, kb *model.KnowledgeBase, query string) ([]Ref, error) {
-	if kb == nil || e.gateway == nil || e.repo == nil || e.store == nil {
-		return nil, fmt.Errorf("retrieval dependencies incomplete")
-	}
-	embedding, dimension, err := e.embeddingFor(ctx, kb)
-	if err != nil {
-		return nil, err
-	}
-	// ① 稠密检索
-	start := recordStart()
-	queryVecs, err := e.gateway.Embed(ctx, embedding, []string{query})
-	if err != nil {
-		return nil, err
-	}
-	if len(queryVecs) != 1 || len(queryVecs[0]) != dimension {
-		return nil, fmt.Errorf("query embedding has wrong dimension")
-	}
-	denseHits, err := e.store.Search(ctx, kb.MilvusCollection, queryVecs[0], int(e.cfg.DenseTopK))
-	observeStage("dense", start)
-	if err != nil {
-		return nil, fmt.Errorf("dense search: %w", err)
-	}
-
-	// ② 关键词检索（PG 侧自研 BM25-lite）
-	start = recordStart()
-	terms := extractTerms(query)
-	kwHits, err := e.repo.KeywordSearch(ctx, kb.ID, terms, int(e.cfg.SparseTopK))
-	observeStage("bm25", start)
-	if err != nil {
-		// 关键词路失败不阻塞整体（降级为纯稠密），教学点：多路召回要互相兜底
-		kwHits = nil
-	}
-
-	// ③ RRF 融合
-	start = recordStart()
-	fused := Fuse(denseHits, kwHits, e.cfg.RRFK, int(e.cfg.FusedTopN))
-	observeStage("fused", start)
-
-	// Every candidate is rechecked against published PostgreSQL authority,
-	// including vector hits carrying text and sparse hits selected earlier.
-	needLookup := make([]int64, 0, len(fused))
-	for _, f := range fused {
-		needLookup = append(needLookup, f.Chunk.ID)
-	}
-	if len(needLookup) > 0 {
-		found, err := e.repo.ListByIDs(ctx, needLookup)
-		if err != nil {
-			return nil, fmt.Errorf("published chunk lookup: %w", err)
-		}
-		byID := make(map[int64]model.DocumentChunk, len(found))
-		for _, ch := range found {
-			if ch.KBID == kb.ID && ch.Content != "" && (kb.EmbeddingVersion == "" || ch.EmbeddingVersion == kb.EmbeddingVersion) {
-				byID[ch.ID] = ch
-			}
-		}
-		verified := fused[:0]
-		for _, candidate := range fused {
-			if ch, ok := byID[candidate.Chunk.ID]; ok {
-				candidate.Chunk = ch
-				candidate.Filename = ch.SourceFilename
-				verified = append(verified, candidate)
-			}
-		}
-		fused = verified
-	}
-
-	// ⑤ Rerank（可选：取值函数返回 nil 描述符时跳过）
-	var final []FusedChunk
-	reranked := false
-	var rerankMdl *llm.ModelDescriptor
-	if e.rerankMdl != nil {
-		rerankMdl = e.rerankMdl()
-	}
-	if rerankMdl != nil && len(fused) > 0 {
-		start = recordStart()
-		final, err = e.rerank(ctx, fused, query)
-		observeStage("rerank", start)
-		if err != nil {
-			// rerank 失败降级用融合序
-			final = fused
-		} else {
-			reranked = true // 分数已替换为 rerank 相关性分（0~1 量纲）
-		}
-	} else {
-		final = fused
-	}
-
-	// ⑥ 分数阈值过滤 + 截断
-	// ScoreThreshold 按 rerank 相关性分量纲标定（0~1）；未 rerank 时 f.Score 是 RRF 融合分，
-	// 量级仅 1/(k+rank) ≈ 0.01~0.03，两者不可比 —— 故阈值只在 rerank 生效时应用，
-	// 否则一律按 FinalTopK 截断（否则高阈值会误杀全部结果，实际只返回前 3 条）。
-	refs := make([]Ref, 0, len(final))
-	for _, f := range final {
-		if reranked && e.cfg.ScoreThreshold > 0 && f.Score < e.cfg.ScoreThreshold && len(refs) >= 3 {
-			// 前三条即使低分也保留（避免空引用），之后按阈值过滤
-			break
-		}
-		if len(refs) >= int(e.cfg.FinalTopK) {
-			break
-		}
-		refs = append(refs, Ref{
-			ChunkID:    f.Chunk.ID,
-			DocumentID: f.Chunk.DocumentID,
-			Filename:   f.Filename,
-			Page:       chunkPage(f.Chunk),
-			Content:    f.Chunk.Content,
-			Score:      f.Score,
-		})
-	}
-	return refs, nil
-}
-
 // BuildContext 把检索引用拼装成注入 prompt 的上下文文本。
 func BuildContext(refs []Ref) string {
 	if len(refs) == 0 {
@@ -438,12 +345,12 @@ func BuildContext(refs []Ref) string {
 }
 
 // rerank 用 LLM 网关的重排序能力对融合结果重排。
-func (e *Engine) rerank(ctx context.Context, fused []FusedChunk, query string) ([]FusedChunk, error) {
+func (e *Engine) rerank(ctx context.Context, descriptor *llm.ModelDescriptor, fused []FusedChunk, query string) ([]FusedChunk, error) {
 	docs := make([]string, 0, len(fused))
 	for _, f := range fused {
 		docs = append(docs, f.Chunk.Content)
 	}
-	results, err := e.gateway.Rerank(ctx, e.rerankMdl(), query, docs, len(docs))
+	results, err := e.gateway.Rerank(ctx, descriptor, query, docs, len(docs))
 	if err != nil {
 		return nil, err
 	}
@@ -456,6 +363,12 @@ func (e *Engine) rerank(ctx context.Context, fused []FusedChunk, query string) (
 		f.Score = r.Score // rerank 分数替换融合分数
 		out = append(out, f)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Score == out[j].Score {
+			return out[i].Chunk.ID < out[j].Chunk.ID
+		}
+		return out[i].Score > out[j].Score
+	})
 	return out, nil
 }
 

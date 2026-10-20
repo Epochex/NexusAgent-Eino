@@ -90,15 +90,17 @@ type LLM struct {
 }
 
 type RAG struct {
-	ChunkSize      int     `mapstructure:"chunk_size"`
-	ChunkOverlap   int     `mapstructure:"chunk_overlap"`
-	DenseTopK      int32   `mapstructure:"dense_top_k"`
-	SparseTopK     int32   `mapstructure:"sparse_top_k"`
-	FusedTopN      int32   `mapstructure:"fused_top_n"`
-	FinalTopK      int32   `mapstructure:"final_top_k"`
-	RRFK           float64 `mapstructure:"rrf_k"`
-	ScoreThreshold float32 `mapstructure:"score_threshold"`
-	BatchEmbed     int     `mapstructure:"batch_embed"`
+	QueryTimeout        time.Duration `mapstructure:"query_timeout"`
+	DenseScoreThreshold float32       `mapstructure:"dense_score_threshold"`
+	ChunkSize           int           `mapstructure:"chunk_size"`
+	ChunkOverlap        int           `mapstructure:"chunk_overlap"`
+	DenseTopK           int32         `mapstructure:"dense_top_k"`
+	SparseTopK          int32         `mapstructure:"sparse_top_k"`
+	FusedTopN           int32         `mapstructure:"fused_top_n"`
+	FinalTopK           int32         `mapstructure:"final_top_k"`
+	RRFK                float64       `mapstructure:"rrf_k"`
+	ScoreThreshold      float32       `mapstructure:"score_threshold"`
+	BatchEmbed          int           `mapstructure:"batch_embed"`
 }
 
 type Agent struct {

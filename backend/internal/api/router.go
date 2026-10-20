@@ -77,6 +77,7 @@ func Register(g *route.RouterGroup, h *Handler, jwt *security.JWTManager) {
 		user.POST("/kbs/:id/documents/:docID/reindex", h.ReindexDoc)
 		user.GET("/kbs/:id/retrieve", h.TestRetrieve)
 		user.POST("/kbs/:id/retrieve", h.TestRetrieve)
+		user.POST("/kbs/:id/retrieve/details", h.RetrievalDetails)
 		user.GET("/documents/:docID/chunks", h.ListChunks)
 
 		// 工作流

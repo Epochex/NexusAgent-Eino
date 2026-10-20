@@ -9,6 +9,7 @@ import (
 
 	"github.com/chengpeng-cp/nexus-agent/internal/ingestion"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
+	"github.com/chengpeng-cp/nexus-agent/internal/security"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -80,8 +81,12 @@ func canonicalChunkMeta(raw []byte) (datatypes.JSON, error) {
 	return datatypes.JSON(normalized), err
 }
 func visibleChunks(query *gorm.DB) *gorm.DB {
-	return query.Model(&model.DocumentChunk{}).Select("document_chunks.*,ready_doc.filename AS source_filename").
-		Joins("JOIN documents ready_doc ON ready_doc.id=document_chunks.document_id").
+	result := query.Model(&model.DocumentChunk{}).Select("document_chunks.*,ready_doc.filename AS source_filename").
+		Joins("JOIN documents ready_doc ON ready_doc.id=document_chunks.document_id AND ready_doc.kb_id=document_chunks.kb_id").
 		Joins("JOIN knowledge_bases ready_kb ON ready_kb.id=document_chunks.kb_id").
-		Where("document_chunks.status=1 AND ready_doc.status='ready' AND ready_doc.archived_at IS NULL AND ready_kb.archived_at IS NULL AND ready_kb.status='active' AND ready_doc.ready_version=document_chunks.index_version AND ready_doc.embedding_version=document_chunks.embedding_version AND ready_kb.embedding_version=document_chunks.embedding_version AND document_chunks.embedding_version<>''")
+		Where("document_chunks.status=1 AND ready_doc.status='ready' AND ready_doc.archived_at IS NULL AND ready_kb.archived_at IS NULL AND ready_kb.status='active' AND ready_doc.ready_version=ready_doc.index_version AND ready_doc.ready_version=document_chunks.index_version AND ready_doc.embedding_version=document_chunks.embedding_version AND ready_kb.embedding_version=document_chunks.embedding_version AND document_chunks.embedding_version<>''")
+	if owner, ok := security.UserIDFromContext(query.Statement.Context); ok {
+		result = result.Where("ready_kb.user_id=?", owner)
+	}
+	return result
 }

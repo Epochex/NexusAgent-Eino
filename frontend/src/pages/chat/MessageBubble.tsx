@@ -108,6 +108,7 @@ function UsageFoot({
 /* ---- 气泡主体 ---- */
 
 interface BubbleProps {
+	preparationWarnings?: string[];
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
@@ -121,6 +122,7 @@ interface BubbleProps {
 }
 
 export const MessageBubble = memo(function MessageBubble({
+	preparationWarnings,
   role,
   content,
   reasoning,
@@ -159,6 +161,7 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {/* 正文 */}
+        {!isUser && preparationWarnings && preparationWarnings.length > 0 && <ul role="status" aria-label="回答参考信息状态" className="mb-2 space-y-1 text-xs text-coral">{preparationWarnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>}
         {content ? (
           isUser ? (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-bone">{content}</p>
@@ -221,6 +224,7 @@ export function HistoryBubble({ msg }: { msg: Message }) {
       reasoning={msg.reasoning_content || undefined}
       refs={msg.refs ?? undefined}
       traceSteps={msg.metadata?.agent_trace}
+	  preparationWarnings={msg.metadata?.preparation_warnings}
       usage={
         isUser
           ? undefined
@@ -244,6 +248,7 @@ export function StreamingBubble({ s }: { s: StreamingMsg }) {
       reasoning={s.reasoning || undefined}
       refs={s.refs.length ? s.refs : undefined}
       traceSteps={streamingToSteps(s.tools)}
+	  preparationWarnings={s.preparationWarnings}
       usage={
         s.usage
           ? {

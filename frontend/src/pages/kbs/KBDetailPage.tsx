@@ -55,6 +55,7 @@ export function KBDetailPage() {
   const [retrieving, setRetrieving] = useState(false);
   // null 表示尚未检索过，与"检索到 0 条"区分开
   const [refs, setRefs] = useState<RAGRef[] | null>(null);
+  const [retrievalStatus, setRetrievalStatus] = useState<{mode: string; degraded: string[]} | null>(null);
 
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -175,7 +176,7 @@ export function KBDetailPage() {
     }
     setRetrieving(true);
     try {
-      setRefs(await testRetrieve(kbId, q));
+      const result = await testRetrieve(kbId, q); setRefs(result.refs); setRetrievalStatus(result);
     } catch (e) {
       toast.err(errMsg(e));
     } finally {
@@ -355,6 +356,9 @@ export function KBDetailPage() {
       {/* ==================== 检索测试台 ==================== */}
       <section className="panel mt-6 p-5">
         <h2 className="section-title mb-4">检索测试台</h2>
+        {retrievalStatus && <p className="mb-3 text-xs text-ash">检索方式：{({hybrid: '混合检索', keyword_only: '仅关键词', dense_only: '仅向量', none: '暂无可检索文档'} as Record<string, string>)[retrievalStatus.mode] ?? retrievalStatus.mode}
+          {retrievalStatus.degraded.length > 0 && <span className="ml-2 text-coral">部分能力暂不可用：{retrievalStatus.degraded.map((code) => ({dense_unavailable:'向量召回', keyword_unavailable:'关键词召回', rerank_unavailable:'重排'} as Record<string, string>)[code] ?? code).join('、')}</span>}
+        </p>}
         <div className="flex gap-2">
           <Input
             value={query}

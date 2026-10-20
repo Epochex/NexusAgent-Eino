@@ -48,6 +48,10 @@ func TestKBFreezesSelectedEmbeddingAndRotatesCredentials(t *testing.T) {
 		t.Fatalf("embedding identity not pinned: %+v", kb)
 	}
 	originalVersion := kb.EmbeddingVersion
+	ranker := &model.ModelConfig{ProviderID: provider.ID, Alias: "bge-reranker", ModelName: "rank-v1", Type: model.ModelTypeRerank, Status: 1}
+	if err = services.Repos.DB.Create(ranker).Error; err != nil {
+		t.Fatal(err)
+	}
 	rotated, err := services.Encryptor.Encrypt("rotated-test-key")
 	if err != nil {
 		t.Fatal(err)
@@ -64,6 +68,10 @@ func TestKBFreezesSelectedEmbeddingAndRotatesCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	var frozen frozenModel
+	var frozenRanker frozenModel
+	if err = json.Unmarshal(definition.Models["\x00kb-rerank"], &frozenRanker); err != nil || frozenRanker.Descriptor.ModelName != "rank-v1" {
+		t.Fatal("KB reranker settings not frozen", err)
+	}
 	if err = json.Unmarshal(definition.Models[fmt.Sprintf("kb-embedding:%d", kb.ID)], &frozen); err != nil {
 		t.Fatal(err)
 	}

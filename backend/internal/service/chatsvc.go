@@ -16,7 +16,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/agent"
 	"github.com/chengpeng-cp/nexus-agent/internal/agent/host"
@@ -125,7 +128,7 @@ func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (
 	}
 	out := make(chan agent.Event, buffer)
 	started = true
-	go s.pump(ctx, cancel, chatRun{ID: runInput.RunID, Session: session, Agent: ag, UserMessage: userMsg, Refs: refs, Trace: runInput.Trace}, events, out)
+	go s.pump(ctx, cancel, chatRun{ID: runInput.RunID, Session: session, Agent: ag, UserMessage: userMsg, Refs: refs, Trace: runInput.Trace, Warnings: append([]string(nil), runInput.PreparationWarnings...)}, events, out)
 	return out, nil
 }
 
@@ -170,23 +173,15 @@ func (s *ChatService) loadAgent(ctx context.Context, userID, id int64) (*model.A
 
 // buildRunInput 上下文组装（本文件最核心的函数）。
 func (s *ChatService) buildRunInput(ctx context.Context, session *model.Session, ag *model.Agent, question string) (*runtime.RunInput, []engine.Ref, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	var warnings []string
 	// 4.1 模型解析（含备用）
 	primary, fallback, err := s.svcs.ResolveModel(ctx, ag.ModelConfigID, derefOrZero(ag.FallbackModelID))
 	if err != nil {
 		return nil, nil, err
 	}
-	// DefaultChat can return a shared cached descriptor when configuration reads
-	// fail. Apply per-agent sampling to a request copy, never to the cache.
-	primaryCopy := *primary
-	primary = &primaryCopy
-	if fallback != nil {
-		fallbackCopy := *fallback
-		fallback = &fallbackCopy
-	}
-	// Agent 级采样参数覆盖
-	primary.Temperature = ag.Temperature
-	primary.TopP = ag.TopP
-	primary.MaxTokens = ag.MaxTokens
+	primary, fallback = agentSampling(primary, fallback, ag)
 
 	// 4.2 历史窗口（短期记忆）
 	window := ag.MemoryWindow
@@ -195,7 +190,8 @@ func (s *ChatService) buildRunInput(ctx context.Context, session *model.Session,
 	}
 	history, err := s.svcs.Deps.Repos.Session.ListMessages(ctx, session.ID, window)
 	if err != nil {
-		history = nil // 降级：无历史也可对话
+		history = nil
+		warnings = append(warnings, "历史消息暂不可用，本次回答仅参考当前问题")
 	}
 	msgs := historyToLLM(history)
 
@@ -203,7 +199,13 @@ func (s *ChatService) buildRunInput(ctx context.Context, session *model.Session,
 	var memoryBlock string
 	if ag.MemoryLongEnabled && s.memory != nil {
 		agentID := ag.ID
-		if mems, e := s.memory.Recall(ctx, session.UserID, &agentID, question); e == nil && len(mems) > 0 {
+		memoryCtx, stopMemory := context.WithTimeout(ctx, 2*time.Second)
+		mems, memoryErr := s.memory.Recall(memoryCtx, session.UserID, &agentID, question)
+		stopMemory()
+		if memoryErr != nil {
+			warnings = append(warnings, "长期记忆暂不可用")
+		}
+		if memoryErr == nil && len(mems) > 0 {
 			var b strings.Builder
 			b.WriteString("【关于用户的长期记忆】\n")
 			for _, m := range mems {
@@ -214,8 +216,20 @@ func (s *ChatService) buildRunInput(ctx context.Context, session *model.Session,
 	}
 	// 4.4 RAG 检索（Agent 绑定的知识库，多库并行检索合并）
 	var refs []engine.Ref
-	if kbIDs := parseIDs(ag.KBIDs); len(kbIDs) > 0 && s.svcs.ragEngine != nil {
-		refs = s.retrieveKBs(ctx, session.UserID, kbIDs, question)
+	if kbIDs := parseIDs(ag.KBIDs); len(kbIDs) > 0 {
+		if len(kbIDs) > 8 {
+			return nil, nil, errcode.ErrInvalidParam.WithMsg("每个助手最多绑定8个知识库")
+		}
+		if s.svcs.ragEngine == nil {
+			warnings = append(warnings, "知识库检索暂不可用")
+		} else {
+			var notes []string
+			refs, notes = s.retrieveKBs(ctx, session.UserID, kbIDs, question)
+			warnings = append(warnings, notes...)
+		}
+	}
+	if ag.MemoryLongEnabled && s.memory == nil {
+		warnings = append(warnings, "长期记忆暂不可用")
 	}
 
 	// 4.5 system prompt 组装：人设 + 注入防护 + 记忆 + RAG
@@ -229,14 +243,15 @@ func (s *ChatService) buildRunInput(ctx context.Context, session *model.Session,
 	dangerous := s.dangerousTools(ctx, ag.Tools)
 
 	in := &runtime.RunInput{
-		SessionID:      session.ID,
-		AgentName:      ag.Name,
-		Messages:       append([]llm.Message{{Role: llm.RoleSystem, Content: system}}, msgs...),
-		ToolsJSON:      string(ag.Tools),
-		Primary:        primary,
-		Fallback:       fallback,
-		MaxIterations:  ag.MaxIterations,
-		DangerousTools: dangerous,
+		SessionID:           session.ID,
+		PreparationWarnings: warnings,
+		AgentName:           ag.Name,
+		Messages:            append([]llm.Message{{Role: llm.RoleSystem, Content: system}}, msgs...),
+		ToolsJSON:           string(ag.Tools),
+		Primary:             primary,
+		Fallback:            fallback,
+		MaxIterations:       ag.MaxIterations,
+		DangerousTools:      dangerous,
 	}
 	// 引用转事件负载格式
 	for _, r := range refs {
@@ -245,30 +260,68 @@ func (s *ChatService) buildRunInput(ctx context.Context, session *model.Session,
 			"filename": r.Filename, "page": r.Page, "score": r.Score,
 		})
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	return in, refs, nil
 }
 
 // retrieveKBs 多知识库检索合并（去重）。
-func (s *ChatService) retrieveKBs(ctx context.Context, userID int64, kbIDs []int64, query string) []engine.Ref {
-	kbs, err := s.svcs.Deps.Repos.KB.ListKBsByIDsForUser(ctx, kbIDs, userID)
+func (s *ChatService) retrieveKBs(ctx context.Context, userID int64, kbIDs []int64, query string) ([]engine.Ref, []string) {
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	kbs, err := s.svcs.Repos.KB.ListKBsByIDsForUser(ctx, kbIDs, userID)
 	if err != nil {
-		return nil
+		return nil, []string{"知识库暂不可用，本次回答可能缺少参考资料"}
 	}
+	var warnings []string
+	if len(kbs) != len(kbIDs) {
+		warnings = append(warnings, "部分知识库已不可访问，本次回答可能缺少参考资料")
+	}
+	type outcome struct {
+		refs    []engine.Ref
+		warning string
+	}
+	results := make([]outcome, len(kbs))
+	slots := make(chan struct{}, 4)
+	var work sync.WaitGroup
+	for i, kb := range kbs {
+		work.Add(1)
+		go func(index int, kb model.KnowledgeBase) {
+			defer work.Done()
+			select {
+			case slots <- struct{}{}:
+				defer func() { <-slots }()
+			case <-ctx.Done():
+				results[index].warning = fmt.Sprintf("知识库「%s」检索超时", kb.Name)
+				return
+			}
+			result, err := s.svcs.ragEngine.RetrieveDetailed(ctx, &kb, query)
+			if err != nil {
+				results[index].warning = fmt.Sprintf("知识库「%s」暂不可用", kb.Name)
+				return
+			}
+			results[index].refs = result.Refs
+			if len(result.Degraded) > 0 {
+				results[index].warning = fmt.Sprintf("知识库「%s」部分检索能力暂不可用", kb.Name)
+			}
+		}(i, kb)
+	}
+	work.Wait()
 	var merged []engine.Ref
 	seen := map[int64]bool{}
-	for _, kb := range kbs {
-		refs, err := s.svcs.ragEngine.Retrieve(ctx, &kb, query)
-		if err != nil {
-			continue // 单库失败不阻塞
+	for _, result := range results {
+		if result.warning != "" {
+			warnings = append(warnings, result.warning)
 		}
-		for _, r := range refs {
-			if !seen[r.ChunkID] {
-				seen[r.ChunkID] = true
-				merged = append(merged, r)
+		for _, ref := range result.refs {
+			if !seen[ref.ChunkID] {
+				seen[ref.ChunkID] = true
+				merged = append(merged, ref)
 			}
 		}
 	}
-	return merged
+	return merged, warnings
 }
 
 // pickRunner 按类型选择 Runner（host 多智能体 / 单 ReAct）。
@@ -448,4 +501,16 @@ func truncateTitle(s string) string {
 		return string(r[:20])
 	}
 	return string(r)
+}
+
+func agentSampling(primary, fallback *llm.ModelDescriptor, ag *model.Agent) (*llm.ModelDescriptor, *llm.ModelDescriptor) {
+	copy := *primary
+	copy.Temperature = ag.Temperature
+	copy.TopP = ag.TopP
+	copy.MaxTokens = ag.MaxTokens
+	if fallback != nil {
+		secondary := *fallback
+		fallback = &secondary
+	}
+	return &copy, fallback
 }

@@ -12,7 +12,6 @@ import (
 
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
-	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/rag/engine"
 	"github.com/chengpeng-cp/nexus-agent/internal/repo"
 	"github.com/chengpeng-cp/nexus-agent/internal/security"
@@ -47,9 +46,6 @@ type Services struct {
 
 	// 默认模型描述符（启动时解析一次，仅作实时解析失败时的降级兜底；
 	// 正常路径一律通过 Default*() 实时查库，保证改配置后无需重启）
-	defaultChat      *llm.ModelDescriptor
-	defaultEmbedding *llm.ModelDescriptor
-	defaultRerank    *llm.ModelDescriptor
 
 	ragEngine *engine.Engine // RAG 引擎（main 构造后注入）
 
@@ -68,11 +64,6 @@ type Services struct {
 func New(d Deps) (*Services, error) {
 	s := &Services{Deps: d}
 
-	// ① 默认模型解析（网关保持纯净：查库+解密在 service 完成）
-	if err := s.reloadDefaultModels(); err != nil {
-		return nil, err
-	}
-
 	// ② 各业务服务
 	s.Auth = NewAuthService(d.Repos, d.JWT, d.RDB)
 	s.Models = NewModelService(d.Repos, d.Encryptor)
@@ -86,12 +77,12 @@ func New(d Deps) (*Services, error) {
 	return s, nil
 }
 
-// DefaultChat 默认对话模型（实时查库解析；失败降级用启动缓存）。
+// DefaultChat 默认对话模型（实时查库解析；停用或查询失败时不可用）。
 func (s *Services) DefaultChat() *llm.ModelDescriptor {
 	if d, err := s.resolveByName(s.Deps.Cfg.LLM.DefaultChat, modelTypeChat); err == nil {
 		return d
 	}
-	return s.defaultChat
+	return nil
 }
 
 // DefaultEmbedding 默认向量化模型（实时解析，语义同 DefaultChat）。
@@ -99,45 +90,35 @@ func (s *Services) DefaultEmbedding() *llm.ModelDescriptor {
 	if d, err := s.resolveByName(s.Deps.Cfg.LLM.DefaultEmbedding, modelTypeEmbed); err == nil {
 		return d
 	}
-	return s.defaultEmbedding
+	return nil
 }
 
 // DefaultRerank 默认重排序模型（未配置为 nil）。
-func (s *Services) DefaultRerank() *llm.ModelDescriptor { return s.defaultRerank }
+func (s *Services) DefaultRerank() *llm.ModelDescriptor {
+	descriptor, _ := s.resolveByName("bge-reranker", modelTypeRerank)
+	return descriptor
+}
 
 // ResolveModelByAlias 按别名解析模型（工作流节点用）。
 // alias 为空返回平台默认 chat 模型（实时解析，改配置即时生效）。
 func (s *Services) ResolveModelByAlias(ctx context.Context, alias string) (*llm.ModelDescriptor, *llm.ModelDescriptor, error) {
 	if alias == "" {
-		if d := s.DefaultChat(); d != nil {
-			return d, nil, nil
-		}
-		return nil, nil, errcode.ErrProviderNotFound.WithMsg("默认对话模型尚未配置")
+		alias = s.Cfg.LLM.DefaultChat
 	}
-	m, err := s.resolveByName(alias, modelTypeChat)
+	m, err := s.resolveByNameContext(ctx, alias, modelTypeChat)
 	if err != nil {
 		return nil, nil, err
 	}
 	return m, nil, nil
 }
 
+func (s *Services) ResolveRerank(ctx context.Context) (*llm.ModelDescriptor, error) {
+	descriptor, err := s.resolveByNameContext(ctx, "bge-reranker", modelTypeRerank)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return descriptor, err
+}
+
 // SetRAGEngine 注入 RAG 引擎（engine 依赖 gateway+repo，构造顺序在 service 之后）。
 func (s *Services) SetRAGEngine(e *engine.Engine) { s.ragEngine = e }
-
-// reloadDefaultModels 解析平台默认模型。
-func (s *Services) reloadDefaultModels() error {
-	var err error
-	if s.defaultChat, err = s.resolveByName(s.Deps.Cfg.LLM.DefaultChat, modelTypeChat); err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-	}
-	if s.defaultEmbedding, err = s.resolveByName(s.Deps.Cfg.LLM.DefaultEmbedding, modelTypeEmbed); err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-	}
-	// rerank 可选：解析失败静默跳过（检索管线自动降级为融合排序）
-	s.defaultRerank, _ = s.resolveByName("bge-reranker", modelTypeRerank)
-	return nil
-}

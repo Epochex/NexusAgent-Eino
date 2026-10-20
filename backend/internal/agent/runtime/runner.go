@@ -23,15 +23,16 @@ type Runner interface {
 
 // RunInput 一次 Agent 运行的输入（service 层组装）。
 type RunInput struct {
-	RunID          string
-	SessionID      string                             // 会话（trace 用）
-	AgentName      string                             // agent 显示名
-	Messages       []llm.Message                      // 组装好的消息（含记忆/RAG 上下文）
-	ToolsJSON      string                             // agents.tools JSONB
-	Primary        *llm.ModelDescriptor               // 主模型
-	Fallback       *llm.ModelDescriptor               // 备用模型
-	MaxIterations  int                                // 迭代上限
-	Refs           []map[string]any                   // RAG 引用（随流推送）
-	Trace          *observability.AgentTraceCollector // 决策链收集器
-	DangerousTools map[string]bool                    // 危险工具集合（is_dangerous）
+	PreparationWarnings []string
+	RunID               string
+	SessionID           string                             // 会话（trace 用）
+	AgentName           string                             // agent 显示名
+	Messages            []llm.Message                      // 组装好的消息（含记忆/RAG 上下文）
+	ToolsJSON           string                             // agents.tools JSONB
+	Primary             *llm.ModelDescriptor               // 主模型
+	Fallback            *llm.ModelDescriptor               // 备用模型
+	MaxIterations       int                                // 迭代上限
+	Refs                []map[string]any                   // RAG 引用（随流推送）
+	Trace               *observability.AgentTraceCollector // 决策链收集器
+	DangerousTools      map[string]bool                    // 危险工具集合（is_dangerous）
 }

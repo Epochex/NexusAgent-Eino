@@ -213,11 +213,15 @@ func (e *Engine) runKB(ctx context.Context, n *Node, state map[string]any) (any,
 		return nil, false, false, errcode.ErrKBNotFound.WithCause(err)
 	}
 	query := RenderTemplate(n.Query, state)
-	refs, err := e.deps.RAG.Retrieve(ctx, kb, query)
+	result, err := e.deps.RAG.RetrieveDetailed(ctx, kb, query)
 	if err != nil {
 		return nil, false, false, err
 	}
-	return engine.BuildContext(refs), false, false, nil
+	text := engine.BuildContext(result.Refs)
+	if len(result.Degraded) > 0 {
+		text = "部分检索能力暂不可用，仅参考下列已确认来源。\n" + text
+	}
+	return text, false, false, nil
 }
 
 // runParallel 并行节点：branches 中各节点并发执行，结果合并为 {nodeKey: result}。

@@ -297,17 +297,11 @@ func TestChatRejectsForeignSession(t *testing.T) {
 	}
 }
 
-func TestChatOverridesDoNotMutateCachedDefault(t *testing.T) {
-	f := pumpFixture(t)
-	cached := &llm.ModelDescriptor{ModelName: "cached", Temperature: 0.7, TopP: 0.9, MaxTokens: 128}
-	f.chat.svcs.defaultChat = cached
-	f.chat.svcs.Cfg.LLM.DefaultChat = "missing"
-	ag := &model.Agent{Name: "test", Temperature: 0.2, TopP: 0.3, MaxTokens: 64}
-	input, _, err := f.chat.buildRunInput(context.Background(), f.session, ag, "question")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cached.Temperature != 0.7 || cached.TopP != 0.9 || cached.MaxTokens != 128 || input.Primary.Temperature != 0.2 {
-		t.Fatal("per-agent sampling changed the shared fallback model configuration")
+func TestChatOverridesDoNotMutateSharedDescriptor(t *testing.T) {
+	cached := &llm.ModelDescriptor{ModelName: "shared", Temperature: 0.7, TopP: 0.9, MaxTokens: 128}
+	ag := &model.Agent{Temperature: 0.2, TopP: 0.3, MaxTokens: 64}
+	primary, _ := agentSampling(cached, nil, ag)
+	if cached.Temperature != 0.7 || cached.TopP != 0.9 || cached.MaxTokens != 128 || primary.Temperature != 0.2 {
+		t.Fatal("per-agent sampling changed shared model settings")
 	}
 }

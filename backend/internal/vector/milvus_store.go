@@ -4,6 +4,7 @@ package vector
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
@@ -133,13 +134,39 @@ const KBDenseField = "dense"
 
 // Search 最近邻检索。
 func (s *MilvusStore) Search(ctx context.Context, collection string, vector []float32, topK int) ([]SearchHit, error) {
+	return s.search(ctx, collection, vector, topK, "")
+}
+func (s *MilvusStore) SearchScoped(ctx context.Context, collection string, vector []float32, topK int, scope Scope) ([]SearchHit, error) {
+	expression, empty, err := scope.expression()
+	if err != nil {
+		return nil, err
+	}
+	if empty {
+		return nil, nil
+	}
+	return s.search(ctx, collection, vector, topK, expression)
+}
+func (s *MilvusStore) search(ctx context.Context, collection string, vector []float32, topK int, expression string) ([]SearchHit, error) {
+	if topK < 1 || topK > 256 || len(vector) < 1 || len(vector) > 16384 {
+		return nil, fmt.Errorf("invalid vector/search budget")
+	}
+	norm := float64(0)
+	for _, value := range vector {
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			return nil, fmt.Errorf("non-finite query vector")
+		}
+		norm += float64(value) * float64(value)
+	}
+	if norm == 0 {
+		return nil, fmt.Errorf("zero cosine query vector")
+	}
 	// HNSW 搜索参数：ef 决定候选队列长度（越大越准越慢）
-	sp, err := entity.NewIndexHNSWSearchParam(64)
+	sp, err := entity.NewIndexHNSWSearchParam(max(64, topK))
 	if err != nil {
 		return nil, fmt.Errorf("search param: %w", err)
 	}
 	// v2.4.2 Search 全签名：expr / outputFields / vectors / 向量字段 / 度量类型 / topK / 参数
-	results, err := s.cli.Search(ctx, collection, nil, "",
+	results, err := s.cli.Search(ctx, collection, nil, expression,
 		[]string{"id"}, []entity.Vector{entity.FloatVector(vector)},
 		vectorField(collection), entity.COSINE, topK, sp,
 		client.WithSearchQueryConsistencyLevel(entity.ClStrong),

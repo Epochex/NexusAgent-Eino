@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
@@ -17,6 +18,14 @@ import (
 type indexRepo struct {
 	chunks []model.DocumentChunk
 	lookup []model.DocumentChunk
+}
+
+func (r *indexRepo) PublishedScope(_ context.Context, kb *model.KnowledgeBase) (vector.Scope, error) {
+	scope := vector.Scope{UserID: kb.UserID, KBID: kb.ID, EmbeddingVersion: kb.EmbeddingVersion, DocumentVersions: map[int64]int64{}}
+	for _, chunk := range r.lookup {
+		scope.DocumentVersions[chunk.DocumentID] = max(chunk.IndexVersion, 1)
+	}
+	return scope, nil
 }
 
 func (r *indexRepo) BatchCreate(_ context.Context, chunks []model.DocumentChunk) error {
@@ -51,6 +60,9 @@ func (s *indexVectors) Upsert(_ context.Context, _ string, records []vector.Reco
 }
 func (s *indexVectors) Search(context.Context, string, []float32, int) ([]vector.SearchHit, error) {
 	return s.hits, nil
+}
+func (s *indexVectors) SearchScoped(ctx context.Context, collection string, query []float32, k int, _ vector.Scope) ([]vector.SearchHit, error) {
+	return s.Search(ctx, collection, query, k)
 }
 func (s *indexVectors) Delete(context.Context, string, []int64) error { return nil }
 func (s *indexVectors) DropCollection(context.Context, string) error  { return nil }
@@ -144,7 +156,7 @@ func TestRetrieveRejectsUnpublishedAndForeignDenseMetadata(t *testing.T) {
 	engine.cfg.RRFK = 60
 	engine.cfg.DenseTopK = 10
 	store.hits = []vector.SearchHit{{Record: vector.Record{ID: 1, Metadata: map[string]any{"content": "unpublished or foreign data"}}, Score: 1}}
-	kb := &model.KnowledgeBase{ID: 1, MilvusCollection: "test"}
+	kb := &model.KnowledgeBase{ID: 1, UserID: 7, EmbeddingVersion: strings.Repeat("a", 64), MilvusCollection: "test"}
 	refs, err := engine.Retrieve(context.Background(), kb, "query")
 	if err != nil || len(refs) != 0 {
 		t.Fatalf("unpublished hit exposed: %+v %v", refs, err)

@@ -36,6 +36,7 @@ import type {
 
 /** 正在流式生成的助手消息（done 后由服务端 messages 替换） */
 export interface StreamingMsg {
+	preparationWarnings?: string[];
   sessionId: string;
   content: string;
   reasoning: string;
@@ -210,6 +211,7 @@ function reduce(
     case 'meta':
       return {
         ...cur,
+		preparationWarnings: Array.isArray(data.preparation_warnings) ? data.preparation_warnings.filter((v): v is string => typeof v === 'string') : cur.preparationWarnings,
         sessionId: String(data.session_id ?? ''),
         expert: data.expert ? String(data.expert) : undefined,
       };

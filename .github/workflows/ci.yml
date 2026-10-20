@@ -69,7 +69,7 @@ jobs:
           go-version: '1.26.0'
           cache-dependency-path: backend/go.sum
       - run: docker compose -f backend/deployments/docker-compose.acceptance.yaml up -d --wait --wait-timeout 180
-      - run: go test -p 1 -race -tags 'integration infrastructure' ./internal/vector ./internal/service -run 'TestMilvusUpsertAndDimensionContract|TestDocumentPipelineRealInfrastructure' -count=1 -timeout 180s
+      - run: go test -p 1 -race -tags 'integration infrastructure' ./internal/vector ./internal/service -run 'TestMilvusUpsertAndDimensionContract|TestMilvusScope|TestDocumentPipelineRealInfrastructure|TestFixed100QueryRetrievalEvaluation' -count=1 -timeout 300s -v
         working-directory: backend
       - if: failure()
         run: docker compose -f backend/deployments/docker-compose.acceptance.yaml logs --tail 100

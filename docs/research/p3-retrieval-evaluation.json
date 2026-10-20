@@ -1,0 +1,67 @@
+{
+  "dataset_sha256": "595d3840308810f6ed32ea4bce1b996e21e5480f16574db2f710b2efc28a216e",
+  "documents": 20,
+  "embedding": "controlled vocabulary features, 32 dimensions",
+  "evidence": "application ranking/isolation/citations only; no trained semantic model or answer quality claim",
+  "queries": 100,
+  "real_model": false,
+  "reranker": "cosine of the same controlled features",
+  "results": [
+    {
+      "strategy": "dense",
+      "Queries": 100,
+      "Answerable": 80,
+      "NoAnswer": 10,
+      "Permission": 10,
+      "RecallAt3": 1,
+      "MRR": 0.99375,
+      "NoAnswerFalseCitations": 0,
+      "PermissionLeaks": 0,
+      "CitationMismatches": 0,
+      "Errors": 0,
+      "P95Milliseconds": 418.776
+    },
+    {
+      "strategy": "keyword_tfidf",
+      "Queries": 100,
+      "Answerable": 80,
+      "NoAnswer": 10,
+      "Permission": 10,
+      "RecallAt3": 1,
+      "MRR": 0.9854166666666668,
+      "NoAnswerFalseCitations": 0,
+      "PermissionLeaks": 0,
+      "CitationMismatches": 0,
+      "Errors": 0,
+      "P95Milliseconds": 4.827
+    },
+    {
+      "strategy": "hybrid",
+      "Queries": 100,
+      "Answerable": 80,
+      "NoAnswer": 10,
+      "Permission": 10,
+      "RecallAt3": 1,
+      "MRR": 0.99375,
+      "NoAnswerFalseCitations": 0,
+      "PermissionLeaks": 0,
+      "CitationMismatches": 0,
+      "Errors": 0,
+      "P95Milliseconds": 419.633
+    },
+    {
+      "strategy": "hybrid_rerank",
+      "Queries": 100,
+      "Answerable": 80,
+      "NoAnswer": 10,
+      "Permission": 10,
+      "RecallAt3": 1,
+      "MRR": 0.99375,
+      "NoAnswerFalseCitations": 0,
+      "PermissionLeaks": 0,
+      "CitationMismatches": 0,
+      "Errors": 0,
+      "P95Milliseconds": 463.769
+    }
+  ]
+}

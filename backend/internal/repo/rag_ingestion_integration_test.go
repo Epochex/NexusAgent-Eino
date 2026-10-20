@@ -10,6 +10,7 @@ import (
 
 	"github.com/chengpeng-cp/nexus-agent/internal/ingestion"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
+	"github.com/chengpeng-cp/nexus-agent/internal/security"
 	"github.com/chengpeng-cp/nexus-agent/internal/testutil/testpg"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -97,5 +98,40 @@ func TestStaleChunkWriterIsRejected(t *testing.T) {
 	rows := []model.DocumentChunk{{KBID: kb.ID, DocumentID: doc.ID, IndexVersion: 1, EmbeddingVersion: kb.EmbeddingVersion, Seq: 0, Content: "late"}}
 	if err := repository.BatchCreate(ingestion.WithJob(context.Background(), job), rows); err == nil {
 		t.Fatal("stale generation wrote chunks")
+	}
+}
+
+func TestPublishedScopeUsesReadyGenerationsAndCurrentOwner(t *testing.T) {
+	repository, store, _, owner, kb, doc, job := chunkFixture(t)
+	ctx := security.WithUserID(context.Background(), owner)
+	scope, err := repository.PublishedScope(ctx, kb)
+	if err != nil || len(scope.DocumentVersions) != 0 {
+		t.Fatal("partial document in ANN scope", scope, err)
+	}
+	rows := []model.DocumentChunk{{KBID: kb.ID, DocumentID: doc.ID, IndexVersion: 1, EmbeddingVersion: kb.EmbeddingVersion, Seq: 0, Content: "published scope", TokenCount: 4, Meta: datatypes.JSON(`{"page":1}`)}}
+	if err = repository.BatchCreate(ingestion.WithJob(ctx, job), rows); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Complete(ctx, job, ingestion.Stats{ChunkCount: 1, TokenCount: 4}); err != nil {
+		t.Fatal(err)
+	}
+	scope, err = repository.PublishedScope(ctx, kb)
+	if err != nil || scope.DocumentVersions[doc.ID] != 1 || scope.UserID != owner {
+		t.Fatal("ready generation absent from ANN scope", scope, err)
+	}
+	foreign := security.WithUserID(context.Background(), owner+1)
+	if _, err = repository.PublishedScope(foreign, kb); err == nil {
+		t.Fatal("foreign scope accepted")
+	}
+	found, err := repository.ListByIDs(foreign, []int64{rows[0].ID})
+	if err != nil || len(found) != 0 {
+		t.Fatal("foreign authoritative content exposed", found, err)
+	}
+	if err = store.Cancel(ctx, owner, doc.ID); err != nil {
+		t.Fatal(err)
+	}
+	scope, err = repository.PublishedScope(ctx, kb)
+	if err != nil || len(scope.DocumentVersions) != 0 {
+		t.Fatal("archived generation in ANN scope", scope, err)
 	}
 }

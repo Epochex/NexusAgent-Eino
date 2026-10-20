@@ -54,6 +54,8 @@ llm:
   default_embedding: bge-m3
 
 rag:
+  query_timeout: 8s
+  dense_score_threshold: 0 # calibrate cosine thresholds against the actual model
   chunk_size: 512
   chunk_overlap: 64
   dense_top_k: 25

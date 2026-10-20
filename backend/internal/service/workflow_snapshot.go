@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"sort"
 	"strconv"
 
@@ -22,6 +24,8 @@ type frozenModel struct {
 	Descriptor   llm.ModelDescriptor `json:"descriptor"`
 	EncryptedKey string              `json:"encrypted_key"`
 }
+
+const frozenKBRerankKey = "\x00kb-rerank" // NUL cannot appear in persisted model aliases.
 type frozenTool struct {
 	Name         string         `json:"name"`
 	Description  string         `json:"description"`
@@ -35,6 +39,7 @@ func (s *WorkflowService) freeze(ctx context.Context, ownerID int64, w *model.Wo
 	visiting := map[int64]bool{w.ID: true}
 	count := 0
 	capabilities := map[string]bool{}
+	rerankCaptured := false
 	var walk func(string, int) error
 	walk = func(text string, depth int) error {
 		if depth > 8 {
@@ -71,6 +76,19 @@ func (s *WorkflowService) freeze(ctx context.Context, ownerID int64, w *model.Wo
 				}
 			case "kb":
 				capabilities["rag"] = true
+				if !rerankCaptured {
+					rerankCaptured = true
+					configured, err := s.svcs.Repos.LLM.DefaultModel(ctx, "bge-reranker", model.ModelTypeRerank)
+					if err == nil {
+						raw, err := s.captureModel(configured)
+						if err != nil {
+							return err
+						}
+						definition.Models[frozenKBRerankKey] = raw
+					} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+						return err
+					}
+				}
 				kb, err := s.svcs.Repos.KB.GetKBForUser(ctx, node.KbID, ownerID)
 				if err != nil {
 					return errcode.ErrKBNotFound.WithCause(err)
@@ -215,6 +233,13 @@ func (s *WorkflowService) frozenDeps(ctx context.Context, run *execution.Run, de
 				return nil, 0, err
 			}
 			return descriptor, kb.EmbeddingDimension, nil
+		})
+		deps.RAG = deps.RAG.WithRerankResolver(func(ctx context.Context) (*llm.ModelDescriptor, error) {
+			if _, exists := models[frozenKBRerankKey]; !exists {
+				return nil, nil
+			}
+			descriptor, _, err := resolve(ctx, frozenKBRerankKey)
+			return descriptor, err
 		})
 	}
 	deps.GetKB = func(ctx context.Context, id int64) (*model.KnowledgeBase, error) {

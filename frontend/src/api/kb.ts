@@ -40,7 +40,7 @@ export const deleteDoc = (kbId: number, docId: number) =>
 
 /** 检索测试台：POST /kbs/:id/retrieve {query} → Ref[] */
 export const testRetrieve = (kbId: number, query: string) =>
-  http.post<RAGRef[]>(`/kbs/${kbId}/retrieve`, { query });
+  http.post<{refs: RAGRef[]; mode: string; degraded: string[]}>(`/kbs/${kbId}/retrieve/details`, { query });
 
 /** 分块列表 */
 export const listChunks = (docId: number, q?: PageQuery) =>

@@ -166,6 +166,27 @@ func (h *Handler) TestRetrieve(ctx context.Context, c *app.RequestContext) {
 	OK(c, refs)
 }
 
+func (h *Handler) RetrievalDetails(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	var request struct {
+		Query string `json:"query"`
+	}
+	if err = c.BindAndValidate(&request); err != nil {
+		Fail(c, err)
+		return
+	}
+	result, err := h.svcs.KB.InspectRetrieval(ctx, userID(c), id, request.Query)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, result)
+}
+
 // pathIDNamed 按名字解析路径参数。
 func (h *Handler) InitializeKB(ctx context.Context, c *app.RequestContext) {
 	id, err := pathID(c)

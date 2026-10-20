@@ -16,6 +16,7 @@ import (
 )
 
 type chatRun struct {
+	Warnings    []string
 	ID          string
 	Session     *model.Session
 	Agent       *model.Agent
@@ -59,7 +60,7 @@ func (s *ChatService) pump(ctx context.Context, cancel context.CancelFunc, run c
 	}
 	started := time.Now()
 	firstToken := -1
-	deliveryErr := emit(ctx, agent.Evt(agent.TypeMeta, map[string]any{"session_id": run.Session.ID, "agent": run.Agent.Name, "message_id": run.UserMessage.ID}))
+	deliveryErr := emit(ctx, agent.Evt(agent.TypeMeta, map[string]any{"session_id": run.Session.ID, "agent": run.Agent.Name, "message_id": run.UserMessage.ID, "preparation_warnings": run.Warnings}))
 	var content, reasoning strings.Builder
 	var calls []llm.ToolCall
 	var prompt, completion int
@@ -141,9 +142,14 @@ consume:
 	if len(run.Refs) > 0 {
 		assistant.Refs, _ = json.Marshal(run.Refs)
 	}
+	metadata := map[string]any{}
 	if run.Trace != nil {
-		assistant.Metadata, _ = json.Marshal(run.Trace.Snapshot())
+		metadata["agent_trace"] = run.Trace.Snapshot()
 	}
+	if len(run.Warnings) > 0 {
+		metadata["preparation_warnings"] = run.Warnings
+	}
+	assistant.Metadata, _ = json.Marshal(metadata)
 	// Request cancellation must not cancel the final write. The independent
 	// deadline also bounds lock waits and outages, including usage/stat updates.
 	persistCtx, done := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)

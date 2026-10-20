@@ -62,7 +62,12 @@ func Fuse(denseHits []vector.SearchHit, kwHits []ScoredChunk, k float64, topN in
 	for _, e := range byID {
 		out = append(out, FusedChunk{Chunk: e.chunk, Filename: e.filename, Score: float32(e.score)})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Score == out[j].Score {
+			return out[i].Chunk.ID < out[j].Chunk.ID
+		}
+		return out[i].Score > out[j].Score
+	})
 	if topN > 0 && len(out) > topN {
 		out = out[:topN]
 	}

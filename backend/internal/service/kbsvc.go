@@ -15,6 +15,8 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/pagination"
+	"github.com/chengpeng-cp/nexus-agent/internal/rag/engine"
+	"github.com/chengpeng-cp/nexus-agent/internal/security"
 )
 
 // MaxDocSize 文档上传大小上限（教学版 20MB）。
@@ -158,6 +160,17 @@ func (s *KBService) ListChunks(ctx context.Context, userID, docID int64, q pagin
 }
 
 // TestRetrieve 检索测试台：只检索不回答（调参用，Ep 08 演示核心）。
+func (s *KBService) InspectRetrieval(ctx context.Context, userID, kbID int64, query string) (engine.RetrievalResult, error) {
+	kb, err := s.GetKB(ctx, userID, kbID)
+	if err != nil {
+		return engine.RetrievalResult{}, err
+	}
+	if s.svcs.ragEngine == nil {
+		return engine.RetrievalResult{}, errcode.ErrNotImplement.WithMsg("rag engine 未装配")
+	}
+	return s.svcs.ragEngine.RetrieveDetailed(security.WithUserID(ctx, userID), kb, query)
+}
+
 func (s *KBService) TestRetrieve(ctx context.Context, userID, kbID int64, query string) ([]RetrievalRef, error) {
 	kb, err := s.GetKB(ctx, userID, kbID)
 	if err != nil {

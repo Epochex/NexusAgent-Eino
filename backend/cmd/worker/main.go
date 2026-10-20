@@ -102,6 +102,7 @@ func run() error {
 		rag := engine.New(gateway, store, repos.KB, &cfg.RAG, cfg.Milvus.Dim)
 		rag.SetModels(svcs.DefaultEmbedding, svcs.DefaultRerank)
 		rag.SetEmbeddingResolver(svcs.ResolveKBEmbedding)
+		rag.SetRerankResolver(svcs.ResolveRerank)
 		svcs.SetRAGEngine(rag)
 		tool.RegisterKBSearch(reg, func(callCtx context.Context, kbID int64, query string, topK int) (string, error) {
 			userID, ok := security.UserIDFromContext(callCtx)

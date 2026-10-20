@@ -7,6 +7,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
@@ -285,15 +286,18 @@ func derefCaps(p *[]string) []string {
 // 保证管理页改配置后无需重启即生效；返回值为本请求独享，可安全修改采样参数）。
 // fallbackID 为 Agent 配置的备用模型（0 表示无备用）。
 func (s *Services) ResolveModel(ctx context.Context, modelConfigID, fallbackID int64) (*llm.ModelDescriptor, *llm.ModelDescriptor, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 	if modelConfigID == 0 {
-		if d := s.DefaultChat(); d != nil {
-			return d, nil, nil
-		}
-		return nil, nil, errcode.ErrProviderNotFound.WithMsg("默认对话模型尚未配置")
+		descriptor, err := s.resolveByNameContext(ctx, s.Cfg.LLM.DefaultChat, modelTypeChat)
+		return descriptor, nil, err
 	}
 	m, err := s.Deps.Repos.LLM.GetModel(ctx, modelConfigID)
 	if err != nil {
 		return nil, nil, errcode.ErrProviderNotFound.WithCause(err)
+	}
+	if m.Type != modelTypeChat {
+		return nil, nil, errcode.ErrProviderNotFound.WithMsg("请选择对话模型")
 	}
 	// 采样参数以模型配置为准（Agent 级覆盖在 ChatService 组装时完成）
 	primary, err := s.descriptorOf(m, 0, 0)
@@ -312,7 +316,12 @@ func (s *Services) ResolveModel(ctx context.Context, modelConfigID, fallbackID i
 
 // resolveByName 按别名解析（alias → 配置 → 描述符）。
 func (s *Services) resolveByName(alias, typ string) (*llm.ModelDescriptor, error) {
-	m, err := s.Deps.Repos.LLM.DefaultModel(context.Background(), alias, typ)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return s.resolveByNameContext(ctx, alias, typ)
+}
+func (s *Services) resolveByNameContext(ctx context.Context, alias, typ string) (*llm.ModelDescriptor, error) {
+	m, err := s.Deps.Repos.LLM.DefaultModel(ctx, alias, typ)
 	if err != nil {
 		return nil, errcode.ErrProviderNotFound.WithMsg("默认模型 %q 未配置", alias).WithCause(err)
 	}
@@ -322,6 +331,9 @@ func (s *Services) resolveByName(alias, typ string) (*llm.ModelDescriptor, error
 // descriptorOf 单条配置 → 描述符（解密 api_key）。
 // temp/topP ≤0 时取模型配置缺省（0.7/0.9）。
 func (s *Services) descriptorOf(m *model.ModelConfig, temp, topP float32) (*llm.ModelDescriptor, error) {
+	if m == nil || m.Status != 1 || m.Provider == nil || m.Provider.Status != 1 {
+		return nil, errcode.ErrProviderNotFound.WithMsg("模型或供应商已停用")
+	}
 	if m.Provider == nil {
 		return nil, errcode.ErrProviderNotFound.WithMsg("模型 %q 未关联供应商", m.Alias)
 	}

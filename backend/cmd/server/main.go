@@ -138,6 +138,7 @@ func run() error {
 	ragEngine := engine.New(gateway, store, repos.KB, &cfg.RAG, cfg.Milvus.Dim)
 	ragEngine.SetModels(svcs.DefaultEmbedding, svcs.DefaultRerank)
 	ragEngine.SetEmbeddingResolver(svcs.ResolveKBEmbedding)
+	ragEngine.SetRerankResolver(svcs.ResolveRerank)
 	svcs.SetRAGEngine(ragEngine)
 
 	// Workflow handlers persist submissions; the separate worker owns Eino execution.

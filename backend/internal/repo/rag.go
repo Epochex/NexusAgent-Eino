@@ -3,6 +3,7 @@ package repo
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -162,16 +163,18 @@ func (r *KBRepo) ListByIDs(ctx context.Context, ids []int64) ([]model.DocumentCh
 	return list, err
 }
 
-// KeywordSearch 关键词检索（BM25-lite，教学自研版）。
+// KeywordSearch 关键词检索（ILIKE/TF-IDF，教学自研版）。
 //
 // 两步走（教学点：全文检索的本质 = 召回 + 打分）：
 //  1. SQL 粗召回：任一分词 ILIKE 命中的候选（走 pg_trgm GIN 索引可加速，见迁移）；
 //  2. Go 精排：TF-IDF 打分 —— tf(词频) × idf(逆文档频率，基于候选池近似)。
 func (r *KBRepo) KeywordSearch(ctx context.Context, kbID int64, terms []string, limit int) ([]engine.ScoredChunk, error) {
-	if len(terms) == 0 {
+	if len(terms) == 0 || limit <= 0 {
 		return nil, nil
 	}
-
+	if len(terms) > 64 || limit > 256 {
+		return nil, fmt.Errorf("keyword query exceeds bounded budget")
+	}
 	// ① 粗召回：OR 条件任一命中
 	var candidates []model.DocumentChunk
 	q := visibleChunks(r.db.WithContext(ctx)).Where("document_chunks.kb_id = ?", kbID)
@@ -182,40 +185,32 @@ func (r *KBRepo) KeywordSearch(ctx context.Context, kbID int64, terms []string, 
 		args = append(args, "%"+t+"%")
 	}
 	if err := q.Where(strings.Join(conds, " OR "), args...).
-		Limit(keywordCandidateLimit).Find(&candidates).Error; err != nil {
+		Order("document_chunks.id ASC").Limit(keywordCandidateLimit).Find(&candidates).Error; err != nil {
 		return nil, err
 	}
 	if len(candidates) == 0 {
 		return nil, nil
 	}
 
-	// ② 文档名联查（引用展示需要文件名）
-	docIDs := make([]int64, 0, len(candidates))
-	seen := map[int64]bool{}
-	for _, c := range candidates {
-		if !seen[c.DocumentID] {
-			seen[c.DocumentID] = true
-			docIDs = append(docIDs, c.DocumentID)
-		}
-	}
-	var docs []model.Document
-	if err := r.db.WithContext(ctx).Select("id, filename").Where("id IN ?", docIDs).Find(&docs).Error; err != nil {
-		return nil, err
-	}
-	docNames := map[int64]string{}
-	for _, d := range docs {
-		docNames[d.ID] = d.Filename
-	}
-
 	// ③ TF-IDF 打分（候选池近似 idf）
 	n := float64(len(candidates))
+	lower := make([]string, len(candidates))
+	frequencies := make(map[string]int, len(terms))
+	for i, candidate := range candidates {
+		lower[i] = strings.ToLower(candidate.Content)
+		for _, term := range terms {
+			if strings.Contains(lower[i], strings.ToLower(term)) {
+				frequencies[term]++
+			}
+		}
+	}
 	type hit struct {
 		chunk model.DocumentChunk
 		score float64
 	}
 	hits := make([]hit, 0, len(candidates))
-	for _, c := range candidates {
-		content := strings.ToLower(c.Content)
+	for candidateIndex, c := range candidates {
+		content := lower[candidateIndex]
 		var score float64
 		for _, t := range terms {
 			tf := float64(strings.Count(content, strings.ToLower(t)))
@@ -223,12 +218,7 @@ func (r *KBRepo) KeywordSearch(ctx context.Context, kbID int64, terms []string, 
 				continue
 			}
 			// idf：候选池中包含该词的文档占比的倒数（平滑）
-			df := 0
-			for _, c2 := range candidates {
-				if strings.Contains(strings.ToLower(c2.Content), strings.ToLower(t)) {
-					df++
-				}
-			}
+			df := frequencies[t]
 			idf := math.Log(1 + n/float64(df+1))
 			score += tf * idf
 		}
@@ -237,13 +227,18 @@ func (r *KBRepo) KeywordSearch(ctx context.Context, kbID int64, terms []string, 
 		}
 	}
 
-	sort.Slice(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
+	sort.Slice(hits, func(i, j int) bool {
+		if hits[i].score == hits[j].score {
+			return hits[i].chunk.ID < hits[j].chunk.ID
+		}
+		return hits[i].score > hits[j].score
+	})
 	if limit > 0 && len(hits) > limit {
 		hits = hits[:limit]
 	}
 	out := make([]engine.ScoredChunk, 0, len(hits))
 	for _, h := range hits {
-		out = append(out, engine.ScoredChunk{Chunk: h.chunk, Filename: docNames[h.chunk.DocumentID], Score: h.score})
+		out = append(out, engine.ScoredChunk{Chunk: h.chunk, Filename: h.chunk.SourceFilename, Score: h.score})
 	}
 	return out, nil
 }

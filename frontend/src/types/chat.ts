@@ -71,7 +71,7 @@ export interface Message {
   status: 1 | 2 | 3;
   trace_id: string;
   /** 含 agent_trace: TraceStep[] 决策链 */
-  metadata?: { agent_trace?: TraceStep[] } & Record<string, unknown>;
+  metadata?: { agent_trace?: TraceStep[]; preparation_warnings?: string[] } & Record<string, unknown>;
   created_at: string;
 }
 
@@ -100,6 +100,7 @@ export type SSEEventType =
 
 /** meta：会话元信息（首个事件） */
 export interface MetaData {
+	preparation_warnings?: string[];
   session_id: string;
   agent: string;
   message_id: number;
