@@ -141,7 +141,7 @@ func (s *Store) ClaimSupported(ctx context.Context, worker string, lease time.Du
 			return nil
 		}
 		var run Run
-		query := tx.Where("definition IS NOT NULL AND available_at<=NOW() AND (status IN ? OR (status=? AND lease_until<NOW()))", []string{Queued, RetryWait}, Running)
+		query := tx.Where("definition IS NOT NULL AND available_at<=clock_timestamp() AND (status IN ? OR (status=? AND lease_until<clock_timestamp()))", []string{Queued, RetryWait}, Running)
 		query = query.Where("(SELECT count(*) FROM execution_active_capacity c WHERE c.owner_id=workflow_runs.owner_id) < ?", limits.OwnerActiveLimit)
 		if capabilities != nil {
 			raw, err := json.Marshal(capabilities)

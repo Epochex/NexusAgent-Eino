@@ -41,7 +41,7 @@ func (h *Handler) Chat(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	streamCtx, cancel := context.WithCancel(ctx)
+	streamCtx, cancel := h.streamContext(ctx)
 	events, err := h.chat.Stream(streamCtx, userID(c), &service.ChatInput{
 		SessionID:     req.SessionID,
 		AgentID:       req.AgentID,

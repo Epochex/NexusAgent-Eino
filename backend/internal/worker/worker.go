@@ -11,7 +11,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,14 +62,17 @@ func (p *Publisher) PublishEvalRun(ctx context.Context, runID int64) error {
 }
 
 type Worker struct {
-	repos   *repo.Repos
-	engine  *engine.Engine
-	minio   *minio.Client
-	bucket  string
-	cfg     config.Worker
-	wake    chan struct{}
-	running atomic.Bool
+	repos     *repo.Repos
+	engine    *engine.Engine
+	minio     *minio.Client
+	bucket    string
+	cfg       config.Worker
+	wake      chan struct{}
+	running   atomic.Bool
+	pdfParser *loader.PDFClient
 }
+
+func (w *Worker) SetPDFParser(parser *loader.PDFClient) { w.pdfParser = parser }
 
 func New(_ *redis.Client, repos *repo.Repos, eng *engine.Engine, mc *minio.Client, bucket string, cfg *config.Worker) *Worker {
 	w := &Worker{repos: repos, engine: eng, minio: mc, bucket: bucket, wake: make(chan struct{}, 1)}
@@ -215,8 +220,16 @@ func (w *Worker) process(ctx context.Context, store *ingestion.Store, job *inges
 	if hex.EncodeToString(sum[:]) != doc.ContentHash || int64(len(data)) != doc.FileSize {
 		return ingestion.Permanent(fmt.Errorf("document source integrity mismatch"))
 	}
-	loaded, err := loader.Load(doc.Filename, data)
+	var loaded *loader.LoadedDoc
+	if strings.EqualFold(filepath.Ext(doc.Filename), ".pdf") {
+		loaded, err = w.pdfParser.Load(ctx, data)
+	} else {
+		loaded, err = loader.Load(doc.Filename, data)
+	}
 	if err != nil {
+		if errors.Is(err, loader.ErrPDFUnavailable) {
+			return err
+		}
 		return ingestion.Permanent(err)
 	}
 	if err = store.Stage(ctx, job, model.DocStatusChunking, loaded.Warnings); err != nil {

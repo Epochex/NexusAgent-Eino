@@ -1,0 +1,14 @@
+# Go 1.26.0, resolved from the verified acceptance toolchain image.
+FROM golang@sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84 AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY internal/rag/loader ./internal/rag/loader
+COPY cmd/docparser ./cmd/docparser
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/docparser ./cmd/docparser
+
+FROM scratch
+WORKDIR /app
+COPY --from=build /out/docparser /app/docparser
+USER 65532:65532
+EXPOSE 8095
+ENTRYPOINT ["/app/docparser"]

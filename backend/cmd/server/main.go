@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	_ "net/http/pprof" // Ep18 演示：导入即把 pprof handler 注册到 DefaultServeMux
 	"os"
 	"os/signal"
 	"runtime"
@@ -73,14 +72,21 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("pg: %w", err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	defer sqlDB.Close()
 	rdb, err := infra.NewRedis(ctx, &cfg.Redis)
 	if err != nil {
 		return fmt.Errorf("redis: %w", err)
 	}
+	defer rdb.Close()
 	mcli, err := infra.NewMilvus(ctx, &cfg.Milvus)
 	if err != nil {
 		return fmt.Errorf("milvus: %w", err)
 	}
+	defer mcli.Close()
 	mio, err := infra.NewMinIO(ctx, &cfg.MinIO)
 	if err != nil {
 		return fmt.Errorf("minio: %w", err)
@@ -129,7 +135,8 @@ func run() error {
 
 	// ===== ⑦ service 层 =====
 	svcs, err := service.New(service.Deps{
-		Cfg: cfg, Repos: repos, Gateway: gateway,
+		Root: ctx,
+		Cfg:  cfg, Repos: repos, Gateway: gateway,
 		Encryptor: encryptor, JWT: jwtMgr, RDB: rdb,
 		Vector: store, Executor: executor, Registry: reg,
 		Streams: worker.NewPublisher(rdb),
@@ -137,6 +144,12 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("services: %w", err)
 	}
+	defer svcs.PDFParser.Close()
+	defer func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+		defer stop()
+		_ = svcs.Chat.Close(cleanup)
+	}()
 	if err = svcs.MCP.RestoreRegistry(ctx); err != nil {
 		return fmt.Errorf("MCP registry restore: %w", err)
 	}
@@ -176,11 +189,20 @@ func run() error {
 	root.GET("/metrics", api.Metrics())
 	api.Register(root, api.New(svcs), jwtMgr)
 
-	// ===== ⑫' pprof 诊断端口（Ep18 演示）：单独监听 6060，与业务 8080 完全隔离 =====
-	// 生产环境此端口绝不能对外暴露。用法：
-	//   go tool pprof -http :8090 "http://localhost:6060/debug/pprof/profile?seconds=15"
-	//   curl -s "http://localhost:6060/debug/pprof/goroutine?debug=1" | head -3
-	go func() { _ = http.ListenAndServe("localhost:6060", nil) }()
+	// Private diagnostics is opt-in and owns a bounded shutdown lifecycle.
+	diagnostics, err := observability.StartDiagnostics(ctx, cfg.Observability.DiagnosticsAddr, sqlDB)
+	if err != nil {
+		return fmt.Errorf("diagnostics: %w", err)
+	}
+	var diagnosticsFailure <-chan error
+	if diagnostics != nil {
+		diagnosticsFailure = diagnostics.Errors()
+		defer func() {
+			cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+			defer stop()
+			_ = diagnostics.Close(cleanup)
+		}()
+	}
 
 	// ===== ⑬ A2A 对外端点（独立 net/http 端口，回调标准对话链路） =====
 	var closeA2A func(context.Context) error
@@ -207,13 +229,14 @@ func run() error {
 	case <-quit:
 	case serveErr = <-a2aFailure:
 	case serveErr = <-httpFailure:
+	case serveErr = <-diagnosticsFailure:
 	}
 	observability.LogInfo("shutting down...")
 
 	shutdownCtx, c := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
 	defer c()
 	cancel() // 通知后台 goroutine
-	shutdownErr := h.Shutdown(shutdownCtx)
+	shutdownErr := errors.Join(svcs.Chat.Close(shutdownCtx), h.Shutdown(shutdownCtx))
 	if closeA2A != nil {
 		shutdownErr = errors.Join(shutdownErr, closeA2A(shutdownCtx))
 	}

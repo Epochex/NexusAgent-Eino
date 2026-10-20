@@ -38,6 +38,14 @@ func TestUploadWithoutObjectStoreCannotLoseSource(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("unrecoverable document created: %d", count)
 	}
+	_, err = service.UploadDoc(context.Background(), owner, kb.ID, "source.pdf", []byte("%PDF-fixture"))
+	if !errors.As(err, &be) || be.HTTPStatus != 503 || !strings.Contains(be.Message, "PDF") {
+		t.Fatalf("unconfigured PDF was not explicitly unavailable: %v", err)
+	}
+	_, err = service.UploadDoc(context.Background(), owner+1, kb.ID, "source.pdf", []byte("%PDF-fixture"))
+	if !errors.As(err, &be) || be.HTTPStatus != 404 {
+		t.Fatalf("PDF readiness exposed a foreign KB: %v", err)
+	}
 	_, err = service.UploadDoc(context.Background(), owner+1, kb.ID, "source.txt", []byte("foreign"))
 	if !errors.As(err, &be) || be.HTTPStatus != 404 {
 		t.Fatalf("foreign upload leaked/used KB: %v", err)

@@ -52,6 +52,7 @@ func run() error {
 		return err
 	}
 	logger.Init(cfg.Log.Level, cfg.Log.Format)
+	observability.InitMetrics()
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	db, err := infra.NewPG(ctx, &cfg.PG)
@@ -63,6 +64,17 @@ func run() error {
 		return err
 	}
 	defer sqlDB.Close()
+	diagnostics, err := observability.StartDiagnostics(ctx, cfg.Observability.DiagnosticsAddr, sqlDB)
+	if err != nil {
+		return fmt.Errorf("diagnostics: %w", err)
+	}
+	if diagnostics != nil {
+		defer func() {
+			cleanup, stop := context.WithTimeout(context.Background(), 3*time.Second)
+			defer stop()
+			_ = diagnostics.Close(cleanup)
+		}()
+	}
 	encryptor, err := security.NewEncryptor(cfg.SecretKey)
 	if err != nil {
 		return fmt.Errorf("encryptor: %w", err)
@@ -102,10 +114,11 @@ func run() error {
 		defer mcli.Close()
 		store = vector.NewMilvusStore(mcli)
 	}
-	svcs, err := service.New(service.Deps{Cfg: cfg, Repos: repos, Gateway: gateway, Encryptor: encryptor, RDB: rdb, Vector: store, Executor: executor, Registry: reg})
+	svcs, err := service.New(service.Deps{Root: ctx, Cfg: cfg, Repos: repos, Gateway: gateway, Encryptor: encryptor, RDB: rdb, Vector: store, Executor: executor, Registry: reg})
 	if err != nil {
 		return fmt.Errorf("services: %w", err)
 	}
+	defer svcs.PDFParser.Close()
 	if selected["execution"] {
 		if err = svcs.MCP.RestoreRegistry(ctx); err != nil {
 			return fmt.Errorf("MCP registry restore: %w", err)
@@ -148,6 +161,7 @@ func run() error {
 			return fmt.Errorf("doc-etl minio: %w", e)
 		}
 		etl = worker.New(rdb, repos, rag, mc, cfg.MinIO.Bucket, &cfg.Worker)
+		etl.SetPDFParser(svcs.PDFParser)
 	}
 	var memoryWorker *long_term.Worker
 	if selected["memory"] {
@@ -174,8 +188,19 @@ func run() error {
 		}
 	}
 	observability.LogInfo("nexus-agent worker started", "queues", *queues, "execution_slots", fmt.Sprint(*concurrency))
-	results := make(chan error, 4)
+	results := make(chan error, 5)
 	count := 0
+	if diagnostics != nil {
+		count++
+		go func() {
+			select {
+			case err := <-diagnostics.Errors():
+				results <- err
+			case <-ctx.Done():
+				results <- nil
+			}
+		}()
+	}
 	if durable != nil {
 		count++
 		go func() { results <- durable.Run(ctx) }()

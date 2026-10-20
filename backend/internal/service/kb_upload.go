@@ -41,6 +41,9 @@ func (s *KBService) uploadDurable(ctx context.Context, owner, kbID int64, filena
 	if err != nil {
 		return nil, err
 	}
+	if extOf(filename) == ".pdf" && s.svcs.PDFParser == nil {
+		return nil, errcode.ErrUnavailable.WithMsg("PDF 文档解析暂不可用，请联系管理员或上传 TXT/DOCX 文件")
+	}
 	if s.minio == nil || s.bucket == "" {
 		return nil, errcode.ErrStorageUnavailable
 	}

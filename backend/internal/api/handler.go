@@ -22,6 +22,20 @@ type Handler struct {
 // New 构造。
 func New(svcs *service.Services) *Handler { return &Handler{svcs: svcs, chat: svcs.Chat} }
 
+// A streamed response outlives the handler call, so its body owns this cancel
+// function. Process shutdown interrupts both Chat and idle workflow subscribers.
+func (h *Handler) streamContext(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	if h.svcs == nil || h.svcs.Root == nil {
+		return ctx, cancel
+	}
+	stop := context.AfterFunc(h.svcs.Root, cancel)
+	if h.svcs.Root.Err() != nil {
+		cancel()
+	}
+	return ctx, func() { stop(); cancel() }
+}
+
 // pathID 解析路径参数 :id。
 func pathID(c *app.RequestContext) (int64, error) {
 	return parseID(c.Param("id"))

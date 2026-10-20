@@ -348,13 +348,14 @@ func (s *Services) descriptorOf(m *model.ModelConfig, temp, topP float32) (*llm.
 		topP = 0.9
 	}
 	return &llm.ModelDescriptor{
-		ContextWindow: m.ContextWindow,
-		ProviderCode:  m.Provider.Code,
-		BaseURL:       m.Provider.BaseURL,
-		APIKey:        apiKey,
-		ModelName:     m.ModelName,
-		Temperature:   temp,
-		TopP:          topP,
-		MaxTokens:     m.MaxOutput,
+		MaxOutputTokens: m.MaxOutput,
+		ContextWindow:   m.ContextWindow,
+		ProviderCode:    m.Provider.Code,
+		BaseURL:         m.Provider.BaseURL,
+		APIKey:          apiKey,
+		ModelName:       m.ModelName,
+		Temperature:     temp,
+		TopP:            topP,
+		MaxTokens:       m.MaxOutput,
 	}, nil
 }

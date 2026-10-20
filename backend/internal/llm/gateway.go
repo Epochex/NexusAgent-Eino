@@ -146,8 +146,13 @@ func (g *Gateway) Chat(ctx context.Context, primary, fallback *ModelDescriptor, 
 }
 
 func (g *Gateway) chatOnce(ctx context.Context, desc *ModelDescriptor, req *ChatRequest) (*ChatResponse, *ModelDescriptor, error) {
+	bounded, err := boundChatDescriptor(desc, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	desc = bounded
 	var resp *ChatResponse
-	err := g.runWithGuard(ctx, desc, func(ctx context.Context, p Provider) error {
+	err = g.runWithGuard(ctx, desc, func(ctx context.Context, p Provider) error {
 		var e error
 		resp, e = p.Chat(ctx, desc, req)
 		return e
@@ -226,9 +231,11 @@ func spanOnClose(ctx context.Context, src <-chan StreamEvent, span trace.Span) <
 }
 
 func (g *Gateway) guardStream(ctx context.Context, desc *ModelDescriptor, req *ChatRequest) (<-chan StreamEvent, error) {
-	if desc == nil || req == nil {
-		return nil, fmt.Errorf("model descriptor and request are required")
+	bounded, budgetErr := boundChatDescriptor(desc, req)
+	if budgetErr != nil {
+		return nil, budgetErr
 	}
+	desc = bounded
 	p, breaker, sem := g.providerFor(desc.ProviderCode)
 	if !breaker.Allow() {
 		return nil, ErrCircuitOpen

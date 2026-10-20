@@ -95,7 +95,9 @@ func (h *Handler) RunEvents(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	// Maximum subscriber lifetime bounds idle sockets; clients resume by sequence.
-	streamCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	deadlineCtx, cancelDeadline := context.WithTimeout(ctx, 30*time.Minute)
+	streamCtx, cancelRoot := h.streamContext(deadlineCtx)
+	cancel := func() { cancelRoot(); cancelDeadline() }
 	pr, pw := io.Pipe()
 	body := &sseBody{PipeReader: pr, conn: c.GetConn(), cancel: cancel, timeout: 2 * time.Second}
 	body.stop = context.AfterFunc(streamCtx, body.abort)

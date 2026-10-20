@@ -3,6 +3,9 @@
 # 环境变量映射示例：http.port -> NX_HTTP__PORT
 
 env: dev
+pdf_parser:
+  endpoint: ""                   # private operator-owned origin; no path or query
+  token: ""                      # NX_PDF_PARSER__TOKEN; no PDF parsing when unconfigured
 outbound:
   private_origins: [] # Exact operator-approved http(s) origins for internal MCP/A2A services
 http:
@@ -94,6 +97,8 @@ sandbox:
   pool_size: 2
 
 observability:
+  # Explicit private operations listener; keep this port out of public ingress.
+  diagnostics_addr: ""           # example 127.0.0.1:6060; empty disables pprof/runtime/metrics listener
   otel_endpoint: http://127.0.0.1:4318   # Jaeger OTLP HTTP
   otel_enabled: true
   metrics_enabled: true

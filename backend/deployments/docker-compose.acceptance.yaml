@@ -2,6 +2,30 @@
 # Keep this project's named volumes when investigating a failed validation.
 name: nexus-eino-acceptance
 services:
+  docparser:
+    image: nexus-eino/docparser:acceptance
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile.docparser
+    environment:
+      NX_PDF_PARSER_TOKEN: public-parser-acceptance-token-32-characters
+      GOMAXPROCS: "1"
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1
+    pids_limit: 32
+    read_only: true
+    user: "65532:65532"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m,uid=65532,gid=65532"]
+    restart: unless-stopped
+    networks: [parser]
+    healthcheck:
+      test: [CMD, /app/docparser, -healthcheck]
+      interval: 3s
+      timeout: 2s
+      retries: 10
   postgres:
     image: postgres@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
     environment:
@@ -76,3 +100,6 @@ volumes:
   etcd:
   vectors-objects:
   vectors:
+networks:
+  parser:
+    internal: true

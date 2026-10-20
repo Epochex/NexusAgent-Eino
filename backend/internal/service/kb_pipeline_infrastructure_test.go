@@ -23,6 +23,8 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/rag/engine"
+	"github.com/chengpeng-cp/nexus-agent/internal/rag/loader"
+	"github.com/chengpeng-cp/nexus-agent/internal/testutil/pdfsample"
 	"github.com/chengpeng-cp/nexus-agent/internal/vector"
 	"github.com/chengpeng-cp/nexus-agent/internal/worker"
 	"github.com/minio/minio-go/v7"
@@ -123,7 +125,16 @@ func TestDocumentPipelineRealInfrastructure(t *testing.T) {
 	}
 	processCtx, stopWorker := context.WithCancel(ctx)
 	done := make(chan error, 1)
-	go func() { done <- worker.New(nil, services.Repos, rag, mc, bucket, &services.Cfg.Worker).Run(processCtx) }()
+	if endpoint := os.Getenv("NX_TEST_PDF_PARSER_URL"); endpoint != "" {
+		services.PDFParser, err = loader.NewPDFClient(endpoint, os.Getenv("NX_TEST_PDF_PARSER_TOKEN"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(services.PDFParser.Close)
+	}
+	docWorker := worker.New(nil, services.Repos, rag, mc, bucket, &services.Cfg.Worker)
+	docWorker.SetPDFParser(services.PDFParser)
+	go func() { done <- docWorker.Run(processCtx) }()
 	t.Cleanup(func() {
 		stopWorker()
 		select {
@@ -279,6 +290,38 @@ func TestDocumentPipelineRealInfrastructure(t *testing.T) {
 	services.Repos.DB.First(&retried, repairJob.ID)
 	if retried.Attempts != 2 || retried.RetryEpoch != 1 {
 		t.Fatalf("repair lost retry history %+v", retried)
+	}
+	if services.PDFParser != nil {
+		pdfDoc, e := services.KB.UploadDoc(ctx, owner, kb.ID, "isolated.pdf", pdfsample.Simple("isolated PDF pipeline accepted"))
+		if e != nil {
+			t.Fatal("real PDF upload", e)
+		}
+		doc = pdfDoc
+		wait("ready")
+		var chunks []model.DocumentChunk
+		if e = services.Repos.DB.Where("document_id=?", pdfDoc.ID).Find(&chunks).Error; e != nil || len(chunks) != 1 || !strings.Contains(chunks[0].Content, "isolated PDF pipeline accepted") {
+			t.Fatal("PDF parser/worker/index lost actual text or citation", chunks, e)
+		}
+		var source struct {
+			Page int `json:"page"`
+		}
+		if json.Unmarshal(chunks[0].Meta, &source) != nil || source.Page != 1 {
+			t.Fatal("PDF chunk lost its source page", string(chunks[0].Meta))
+		}
+		refs, e := rag.Retrieve(ctx, kb, "isolated PDF pipeline accepted")
+		if e != nil {
+			t.Fatal(e)
+		}
+		found := false
+		for _, ref := range refs {
+			if ref.DocumentID == pdfDoc.ID && ref.Page == 1 {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("ready PDF not actually retrievable with its source page", refs)
+		}
+		t.Log("actual PDF upload→dedicated parser process→chunk/embedding→Milvus→retrieval with page citation verified")
 	}
 	if err = services.KB.DeleteKB(ctx, owner, kb.ID); err != nil {
 		t.Fatal(err)

@@ -39,6 +39,9 @@ func copyDescriptor(m *llm.ModelDescriptor) *llm.ModelDescriptor {
 		return nil
 	}
 	next := *m
+	if next.MaxOutputTokens == 0 {
+		next.MaxOutputTokens = m.MaxTokens
+	}
 	return &next
 }
 

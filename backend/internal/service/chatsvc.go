@@ -39,13 +39,43 @@ import (
 
 // ChatService 对话业务。
 type ChatService struct {
-	svcs   *Services
-	memory *long_term.Manager // 长期记忆（main 注入，可 nil）
+	svcs      *Services
+	memory    *long_term.Manager // 长期记忆（main 注入，可 nil）
+	root      context.Context
+	stop      context.CancelFunc
+	mu        sync.Mutex
+	closing   bool
+	active    sync.WaitGroup
+	closeOnce sync.Once
+	closed    chan struct{}
 }
 
 // NewChatService 构造。
 func NewChatService(svcs *Services) *ChatService {
-	return &ChatService{svcs: svcs}
+	root := svcs.Root
+	if root == nil {
+		root = context.Background()
+	}
+	root, stop := context.WithCancel(root)
+	return &ChatService{svcs: svcs, root: root, stop: stop, closed: make(chan struct{})}
+}
+
+// Close stops new interactive runs and waits for independently bounded final
+// writes and capacity release, before the process closes its database pool.
+func (s *ChatService) Close(ctx context.Context) error {
+	s.closeOnce.Do(func() {
+		s.mu.Lock()
+		s.closing = true
+		s.stop()
+		s.mu.Unlock()
+		go func() { s.active.Wait(); close(s.closed) }()
+	})
+	select {
+	case <-s.closed:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // SetLongTermMemory 注入长期记忆管理器。
@@ -62,15 +92,28 @@ type ChatInput struct {
 
 // Stream 执行一次对话，返回统一事件流（handler 层转 SSE）。
 func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (<-chan agent.Event, error) {
+	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		return nil, errcode.ErrUnavailable.WithMsg("服务正在关闭，请稍后重试")
+	}
+	s.active.Add(1)
+	s.mu.Unlock()
 	timeout := s.svcs.Cfg.Agent.RunTimeout
 	if timeout <= 0 {
 		timeout = 5 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
+	stopRoot := context.AfterFunc(s.root, cancel)
+	if s.root.Err() != nil {
+		cancel()
+	}
 	releaseCapacity := func() {}
 	started := false
 	defer func() {
 		if !started {
+			defer s.active.Done()
+			stopRoot()
 			cancel()
 			releaseCapacity()
 		}
@@ -151,6 +194,8 @@ func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (
 	out := make(chan agent.Event, buffer)
 	started = true
 	go func() {
+		defer s.active.Done()
+		defer stopRoot()
 		defer releaseCapacity()
 		s.pump(ctx, cancel, chatRun{ID: runInput.RunID, Session: session, Agent: ag, UserMessage: userMsg, Refs: refs, Trace: runInput.Trace, Warnings: append([]string(nil), runInput.PreparationWarnings...)}, events, out)
 	}()
@@ -530,9 +575,14 @@ func truncateTitle(s string) string {
 
 func agentSampling(primary, fallback *llm.ModelDescriptor, ag *model.Agent) (*llm.ModelDescriptor, *llm.ModelDescriptor) {
 	copy := *primary
+	if copy.MaxOutputTokens == 0 {
+		copy.MaxOutputTokens = primary.MaxTokens
+	}
 	copy.Temperature = ag.Temperature
 	copy.TopP = ag.TopP
-	copy.MaxTokens = ag.MaxTokens
+	if ag.MaxTokens > 0 {
+		copy.MaxTokens = ag.MaxTokens
+	}
 	if fallback != nil {
 		secondary := *fallback
 		fallback = &secondary

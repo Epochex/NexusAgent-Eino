@@ -1,6 +1,7 @@
 // Token 本地估算：上游不返回 usage 时的兜底计量。
-// 教学要点：中英文混合场景，用"字节数/字符数启发式"即可到 ±20%，
-// 精确计量应优先用上游 usage（网关已优先取上游值）。
+// This heuristic has no verified universal error bound. Prefer actual upstream
+// usage for accounting; the model context gate separately reserves output and
+// uses a conservative serialized-byte budget, not this estimate as a guarantee.
 package llm
 
 import "strings"

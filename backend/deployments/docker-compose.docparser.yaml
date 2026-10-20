@@ -1,0 +1,31 @@
+name: nexus-eino-parser
+services:
+  docparser:
+    image: nexus-eino/docparser:local
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile.docparser
+    environment:
+      NX_PDF_PARSER_TOKEN: ${NX_PDF_PARSER_TOKEN:?Set a private parser token with at least 32 characters}
+      GOMAXPROCS: "1"
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1
+    pids_limit: 32
+    read_only: true
+    user: "65532:65532"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m,uid=65532,gid=65532"]
+    restart: unless-stopped
+    networks: [parser]
+    healthcheck:
+      test: [CMD, /app/docparser, -healthcheck]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+networks:
+  parser:
+    internal: true
+# Attach API and document worker to this private network as a second network.
+# Never mount a Docker socket or application/host data into this container.

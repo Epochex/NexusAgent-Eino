@@ -52,7 +52,7 @@ jobs:
         env:
           NX_TEST_DATABASE_DSN: postgres://postgres@localhost:5432/nexus_eino_test?sslmode=disable
           NX_TEST_REDIS_ADDR: localhost:6379
-      - run: go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate
+      - run: go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate ./cmd/docparser
   data-infrastructure:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -70,8 +70,16 @@ jobs:
           go-version: '1.26.0'
           cache-dependency-path: backend/go.sum
       - run: docker compose -f backend/deployments/docker-compose.acceptance.yaml up -d --wait --wait-timeout 180
-      - run: go test -p 1 -race -tags 'integration infrastructure' ./internal/vector ./internal/service ./internal/memory/long_term ./internal/execution ./internal/api -run 'TestMilvusUpsertAndDimensionContract|TestMilvusScope|TestMemoryScope|TestDocumentPipelineRealInfrastructure|TestFixed100QueryRetrievalEvaluation|TestMemoryPipeline|TestMemorySupersededMigration|TestMemoryWorkerProcess|TestMemoryHTTP|TestA2AServerProcess' -count=1 -timeout 300s -v
-        working-directory: backend
+      - run: |
+          docker run --rm --network nexus-eino-acceptance_default --network nexus-eino-acceptance_parser --cpus=2 --memory=2g \
+            --env 'NX_TEST_DATABASE_DSN=postgres://postgres@postgres:5432/nexus_acceptance_test?sslmode=disable' \
+            --env NX_TEST_REDIS_ADDR=redis:6379 --env NX_TEST_MILVUS_ADDR=milvus:19530 --env NX_TEST_MINIO_ADDR=minio:9000 \
+            --env NX_TEST_PDF_PARSER_URL=http://docparser:8095 --env NX_TEST_PDF_PARSER_TOKEN=public-parser-acceptance-token-32-characters \
+            --env GOMEMLIMIT=1GiB --env GOMAXPROCS=2 \
+            --mount "type=bind,source=$PWD,target=/workspace" --mount "type=bind,source=$(go env GOMODCACHE),target=/go/pkg/mod" \
+            --mount type=volume,source=nexus-eino-go-build,target=/root/.cache/go-build -w /workspace/backend \
+            golang@sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84 \
+            go test -p 1 -race -tags 'integration infrastructure' ./internal/vector ./internal/service ./internal/memory/long_term ./internal/execution ./internal/api ./internal/rag/loader -run 'TestMilvusUpsertAndDimensionContract|TestMilvusScope|TestMemoryScope|TestDocumentPipelineRealInfrastructure|TestFixed100QueryRetrievalEvaluation|TestMemoryPipeline|TestMemorySupersededMigration|TestMemoryWorkerProcess|TestMemoryHTTP|TestA2AServerProcess|TestChatServerProcess|TestPDFParserContainer' -count=1 -timeout 300s -v
       - if: failure()
         run: docker compose -f backend/deployments/docker-compose.acceptance.yaml logs --tail 100
   frontend:

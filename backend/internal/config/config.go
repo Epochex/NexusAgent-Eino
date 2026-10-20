@@ -29,6 +29,7 @@ type Config struct {
 	Worker        Worker        `mapstructure:"worker"`
 	Sandbox       Sandbox       `mapstructure:"sandbox"`
 	Observability Observability `mapstructure:"observability"`
+	PDFParser     PDFParser     `mapstructure:"pdf_parser"`
 	MCP           MCP           `mapstructure:"mcp"`
 	A2A           A2A           `mapstructure:"a2a"`
 	Search        Search        `mapstructure:"search"`
@@ -37,6 +38,11 @@ type Config struct {
 
 type Outbound struct {
 	PrivateOrigins []string `mapstructure:"private_origins"`
+}
+
+type PDFParser struct {
+	Endpoint string `mapstructure:"endpoint"`
+	Token    string `mapstructure:"token"`
 }
 
 type HTTP struct {
@@ -137,9 +143,10 @@ type Sandbox struct {
 }
 
 type Observability struct {
-	OtelEndpoint   string `mapstructure:"otel_endpoint"`
-	OtelEnabled    bool   `mapstructure:"otel_enabled"`
-	MetricsEnabled bool   `mapstructure:"metrics_enabled"`
+	DiagnosticsAddr string `mapstructure:"diagnostics_addr"`
+	OtelEndpoint    string `mapstructure:"otel_endpoint"`
+	OtelEnabled     bool   `mapstructure:"otel_enabled"`
+	MetricsEnabled  bool   `mapstructure:"metrics_enabled"`
 }
 
 type MCP struct {

@@ -18,6 +18,7 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/rag/engine"
+	"github.com/chengpeng-cp/nexus-agent/internal/rag/loader"
 	"github.com/chengpeng-cp/nexus-agent/internal/repo"
 	"github.com/chengpeng-cp/nexus-agent/internal/security"
 	"github.com/chengpeng-cp/nexus-agent/internal/tool"
@@ -27,6 +28,7 @@ import (
 
 // Deps service 层依赖全集（main 装配）。
 type Deps struct {
+	Root      context.Context // process lifecycle, distinct from a pooled HTTP request
 	Cfg       *config.Config
 	Repos     *repo.Repos
 	Gateway   *llm.Gateway
@@ -54,16 +56,17 @@ type Services struct {
 
 	ragEngine *engine.Engine // RAG 引擎（main 构造后注入）
 
-	Auth     *AuthService
-	Models   *ModelService
-	Chat     *ChatService
-	Agent    *AgentService
-	KB       *KBService
-	Workflow *WorkflowService
-	MCP      *MCPService
-	A2A      *A2AService
-	Memory   *MemoryService
-	Capacity *capacity.Store
+	Auth      *AuthService
+	Models    *ModelService
+	Chat      *ChatService
+	Agent     *AgentService
+	KB        *KBService
+	Workflow  *WorkflowService
+	MCP       *MCPService
+	A2A       *A2AService
+	Memory    *MemoryService
+	Capacity  *capacity.Store
+	PDFParser *loader.PDFClient
 }
 
 // New 装配全部业务服务。
@@ -77,6 +80,10 @@ func New(d Deps) (*Services, error) {
 	}
 	probe.CloseIdleConnections()
 	s := &Services{Deps: d}
+	s.PDFParser, err = loader.NewPDFClient(d.Cfg.PDFParser.Endpoint, d.Cfg.PDFParser.Token)
+	if err != nil {
+		return nil, fmt.Errorf("PDF parser configuration: %w", err)
+	}
 	if d.Repos != nil && d.Repos.DB != nil {
 		s.Capacity = capacity.New(d.Repos.DB)
 		if err = s.Capacity.Validate(context.Background()); err != nil {

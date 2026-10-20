@@ -97,6 +97,7 @@ var (
 	ErrA2ACardFetch = &Error{http.StatusBadGateway, 80004, "Agent Card 获取失败", nil}
 	// 9xxxx 系统
 	ErrInternal     = &Error{http.StatusInternalServerError, 90001, "系统内部错误", nil}
+	ErrUnavailable  = &Error{http.StatusServiceUnavailable, 90003, "服务暂不可用", nil}
 	ErrNotImplement = &Error{http.StatusNotImplemented, 90002, "功能未实现", nil}
 )
 

@@ -196,3 +196,29 @@ func TestModelRejectsUnsupportedOptions(t *testing.T) {
 		t.Fatal("unsupported stop option was silently ignored")
 	}
 }
+
+func TestModelOutputOverrideCannotRaiseConfiguredLimit(t *testing.T) {
+	peer := llmstub.New(t, func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			MaxTokens int `json:"max_tokens"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+		}
+		if request.MaxTokens != 128 {
+			t.Errorf("model output cap raised by option: %d", request.MaxTokens)
+		}
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"bounded"},"finish_reason":"stop"}]}`)
+	})
+	desc := &llm.ModelDescriptor{BaseURL: peer.URL, ModelName: "bounded", ContextWindow: 8192, MaxTokens: 128}
+	m, err := NewChatModel(gateway(), desc, nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Generate(context.Background(), []*schema.Message{schema.UserMessage("q")}, model.WithMaxTokens(4096)); err != nil {
+		t.Fatal(err)
+	}
+	if desc.MaxTokens != 128 {
+		t.Fatal("configured descriptor mutated")
+	}
+}

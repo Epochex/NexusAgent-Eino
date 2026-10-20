@@ -29,11 +29,12 @@ try {
         $mounts += @('--mount', 'type=volume,source=nexus-eino-acceptance-go-mods,target=/go/pkg/mod')
     }
     # Dedicated test database and public fixture credentials; no user model keys.
-    $dockerArgs = @('run', '--rm', '--network', 'nexus-eino-acceptance_default', '--cpus=4', '--memory=4g',
+    $dockerArgs = @('run', '--rm', '--network', 'nexus-eino-acceptance_default', '--network', 'nexus-eino-acceptance_parser', '--cpus=4', '--memory=4g',
         '--env', 'NX_TEST_DATABASE_DSN=postgres://postgres@postgres:5432/nexus_acceptance_test?sslmode=disable',
         '--env', 'NX_TEST_REDIS_ADDR=redis:6379', '--env', 'NX_TEST_MILVUS_ADDR=milvus:19530',
-        '--env', 'NX_TEST_MINIO_ADDR=minio:9000') + $mounts + @('-w', '/workspace/backend', 'golang:1.26.0', 'sh', '-c',
-        'go vet ./... && go test -race ./... -count=1 -timeout=180s && go test -race -tags "integration infrastructure" ./internal/execution ./internal/service ./internal/api ./internal/repo ./internal/ingestion ./internal/vector ./internal/memory/long_term ./internal/tool ./internal/a2a ./internal/capacity -count=1 -timeout=300s && go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate')
+        '--env', 'NX_TEST_MINIO_ADDR=minio:9000', '--env', 'NX_TEST_PDF_PARSER_URL=http://docparser:8095',
+        '--env', 'NX_TEST_PDF_PARSER_TOKEN=public-parser-acceptance-token-32-characters') + $mounts + @('-w', '/workspace/backend', 'golang@sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84', 'sh', '-c',
+        'go vet ./... && go test -race ./... -count=1 -timeout=180s && go test -race -tags "integration infrastructure" ./internal/execution ./internal/service ./internal/api ./internal/repo ./internal/ingestion ./internal/vector ./internal/memory/long_term ./internal/tool ./internal/a2a ./internal/capacity -count=1 -timeout=300s && go test -race -tags "integration infrastructure" ./internal/rag/loader -count=1 -timeout=90s && go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate ./cmd/docparser')
     & docker @dockerArgs
     if ($LASTEXITCODE -ne 0) { throw "Backend acceptance failed ($LASTEXITCODE)" }
     }
