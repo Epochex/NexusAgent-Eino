@@ -92,10 +92,11 @@ func run() error {
 		tool.RegisterFiles(reg, tool.FileOpsConfig{BaseDir: "./data/files", MaxSize: 10 << 20})
 		tool.RegisterDBQuery(reg, db)
 		if cfg.Sandbox.Enabled {
-			sandbox, e := tool.NewSandbox(tool.SandboxConfig{Image: cfg.Sandbox.Image, Memory: cfg.Sandbox.Memory, CPUs: cfg.Sandbox.CPUs, Timeout: cfg.Sandbox.Timeout, PoolSize: cfg.Sandbox.PoolSize})
+			sandbox, e := tool.NewSandbox(tool.SandboxConfig{Image: cfg.Sandbox.Image, Memory: cfg.Sandbox.Memory, CPUs: cfg.Sandbox.CPUs, Timeout: cfg.Sandbox.Timeout, PoolSize: cfg.Sandbox.PoolSize, RequireRemote: cfg.Env == "prod" || cfg.Env == "production"})
 			if e != nil {
 				return fmt.Errorf("configured sandbox unavailable: %w", e)
 			}
+			defer sandbox.Close()
 			tool.RegisterCodeExec(reg, sandbox, db)
 		}
 	}

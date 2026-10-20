@@ -121,15 +121,16 @@ func run() error {
 	tool.RegisterFiles(reg, tool.FileOpsConfig{BaseDir: "./data/files", MaxSize: 10 << 20})
 	tool.RegisterDBQuery(reg, db)
 	if cfg.Sandbox.Enabled {
-		// Docker 沙箱失败不阻断启动：code_exec 不可用而已（降级思维）
-		if sandbox, err := tool.NewSandbox(tool.SandboxConfig{
+		sandbox, err := tool.NewSandbox(tool.SandboxConfig{
 			Image: cfg.Sandbox.Image, Memory: cfg.Sandbox.Memory,
 			CPUs: cfg.Sandbox.CPUs, Timeout: cfg.Sandbox.Timeout, PoolSize: cfg.Sandbox.PoolSize,
-		}); err != nil {
-			observability.LogWarn("sandbox init failed, code_exec disabled", "err", err.Error())
-		} else {
-			tool.RegisterCodeExec(reg, sandbox, db)
+			RequireRemote: cfg.Env == "prod" || cfg.Env == "production",
+		})
+		if err != nil {
+			return fmt.Errorf("configured sandbox unavailable: %w", err)
 		}
+		defer sandbox.Close()
+		tool.RegisterCodeExec(reg, sandbox, db)
 	}
 	executor := tool.NewExecutor(repos.Tool, reg, tool.ExecutorConfig{DefaultTimeout: 30 * time.Second})
 

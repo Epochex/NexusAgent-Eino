@@ -89,8 +89,8 @@ worker:
   claim_interval: 30s            # XAUTOCLAIM 收尸间隔
 
 sandbox:
-  enabled: false                 # P0 基础版默认关闭，Ep 15 打开
-  image: nexus/sandbox:latest
+  enabled: false                 # Optional; production requires a dedicated TLS Docker daemon
+  image: ""                     # Explicit preloaded immutable image digest, never a mutable tag
   memory: 512m
   cpus: "1"
   timeout: 30s

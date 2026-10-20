@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -42,7 +43,12 @@ func RegisterCodeExec(r Registry, sandbox *Sandbox, db *gorm.DB) {
 				StdoutHead: truncate(result.Stdout, 8192),
 				StderrHead: truncate(result.Stderr, 8192),
 			}
-			_ = db.Create(exec).Error
+			auditCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+			err = db.WithContext(auditCtx).Create(exec).Error
+			cancel()
+			if err != nil {
+				return "", fmt.Errorf("code execution audit commit failed; inspect effects before retry")
+			}
 		}
 
 		out, _ := json.Marshal(map[string]any{

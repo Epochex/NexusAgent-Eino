@@ -1,0 +1,8 @@
+# Optional code execution image. Operators must deploy its resulting immutable
+# digest on a dedicated Docker daemon; the platform never pulls images at run.
+FROM golang@sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84 AS go
+FROM python@sha256:2c285c669cc837aa3bcf1af23ea1932b7b5214f9c9d3aad22417446ad91cb4fb
+COPY --from=go /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}" CGO_ENABLED=0 GOTOOLCHAIN=local GOPROXY=off GOMAXPROCS=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /sandbox
+USER 65532:65532
