@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -260,7 +261,7 @@ func TestWorkerProcessFaultRecovery(t *testing.T) {
 		if !blocked {
 			t.Fatalf("worker did not reach commit boundary: %s", first.log.String())
 		}
-		effect := filepath.Join(dir, "data", "files", "effect.txt")
+		effect := filepath.Join(dir, "data", "files", strconv.FormatInt(owner, 10), "effect.txt")
 		before, err := os.Stat(effect)
 		if err != nil {
 			t.Fatal("external effect missing: ", err)
