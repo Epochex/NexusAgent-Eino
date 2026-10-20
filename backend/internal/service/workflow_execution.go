@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/chengpeng-cp/nexus-agent/internal/capacity"
 	"time"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/execution"
@@ -169,6 +170,8 @@ func workflowError(err error) error {
 		return errcode.ErrRunConflict.WithCause(err)
 	case errors.Is(err, execution.ErrInvalidInput):
 		return errcode.ErrInvalidParam.WithCause(err)
+	case errors.Is(err, capacity.ErrBusy):
+		return errcode.ErrRateLimited.WithMsg("共享待处理任务已达容量上限")
 	case errors.Is(err, execution.ErrCursorExpired):
 		return errcode.ErrEventCursorExpired
 	default:

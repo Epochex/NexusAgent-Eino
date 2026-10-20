@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/agent"
+	"github.com/chengpeng-cp/nexus-agent/internal/capacity"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/observability"
@@ -159,6 +160,18 @@ consume:
 		observability.LogWarn("persist assistant message failed", "run_id", run.ID, "session_id", run.Session.ID, "error", err.Error())
 		ev := agent.EvtError(errcode.ErrInternal.Code, "消息保存失败，请刷新会话确认结果")
 		ev.Data["persisted"] = false
+		if errors.Is(err, capacity.ErrLeaseLost) {
+			// The successful INSERT rolled back. Preserve the provisional answer
+			// as failed, without granting a stale executor success authority.
+			assistant.ID = 0
+			assistant.Status = model.MsgStatusFailed
+			ev = agent.EvtError(errcode.ErrInternal.Code, "执行租约已失效，答案未确认成功")
+			ev.Data["persisted"] = false
+			if saveErr := repo.CreateMessage(persistCtx, assistant); saveErr == nil {
+				ev.Data["persisted"] = true
+				ev.Data["assistant_message_id"] = assistant.ID
+			}
+		}
 		terminal = &ev
 	} else {
 		// Optional accounting cannot turn a committed answer into a failed answer.

@@ -107,6 +107,8 @@ func Register(g *route.RouterGroup, h *Handler, jwt *security.JWTManager) {
 	// ---- 管理接口（admin）----
 	admin := v1.Group("/admin", Auth(jwt, h.svcs.Auth.Identity), AdminOnly())
 	{
+		admin.GET("/capacity", h.CapacitySnapshot)
+		admin.PUT("/capacity/:scope", h.UpdateCapacity)
 		// 模型网关配置
 		admin.GET("/models/providers", h.ListProviders)
 		admin.POST("/models/providers", h.CreateProvider)

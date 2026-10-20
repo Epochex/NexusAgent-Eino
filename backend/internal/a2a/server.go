@@ -86,7 +86,7 @@ func NewServer(card *AgentCard, handler AgentFunc, options ...ServerOption) *Ser
 		a2asrv.WithTaskStore(cfg.Store), a2asrv.WithCapabilityChecks(&s.card.Capabilities),
 		a2asrv.WithConcurrencyConfig(limiter.ConcurrencyConfig{MaxExecutions: cfg.MaxConcurrency, GetMaxExecutions: func(string) int { return 2 }}),
 		a2asrv.WithAgentInactivityTimeout(cfg.RunTimeout+time.Second),
-		a2asrv.WithCallInterceptors(serverIdentity{}),
+		a2asrv.WithCallInterceptors(serverIdentity{store: cfg.Store}),
 		a2asrv.WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))),
 	)
 	s.rpc = a2asrv.NewJSONRPCHandler(handlerSDK, a2asrv.WithTransportPanicHandler(func(any) error { return sdk.ErrInternalError }))
@@ -153,9 +153,10 @@ func (s *Server) Close(ctx context.Context) error {
 
 type serverIdentity struct {
 	a2asrv.PassthroughCallInterceptor
+	store taskstore.Store
 }
 
-func (serverIdentity) Before(ctx context.Context, call *a2asrv.CallContext, request *a2asrv.Request) (context.Context, any, error) {
+func (identity serverIdentity) Before(ctx context.Context, call *a2asrv.CallContext, request *a2asrv.Request) (context.Context, any, error) {
 	owner, ok := security.UserIDFromContext(ctx)
 	if !ok || owner < 1 {
 		return ctx, nil, sdk.ErrUnauthenticated
@@ -164,8 +165,23 @@ func (serverIdentity) Before(ctx context.Context, call *a2asrv.CallContext, requ
 		return ctx, nil, sdk.ErrUnsupportedOperation
 	}
 	call.User = a2asrv.NewAuthenticatedUser(strconv.FormatInt(owner, 10), nil)
+	if params := call.ServiceParams(); params != nil {
+		if versions, ok := params.Get("A2A-Version"); ok {
+			for _, version := range versions {
+				if version != "" && version != string(sdk.Version) {
+					return ctx, nil, sdk.ErrVersionNotSupported
+				}
+			}
+		}
+	}
 	if req, ok := request.Payload.(*sdk.SendMessageRequest); ok {
-		if req == nil || req.Message == nil || req.Message.TaskID != "" {
+		if req == nil || req.Message == nil {
+			return ctx, nil, sdk.ErrUnsupportedOperation
+		}
+		if req.Message.TaskID != "" {
+			if _, err := identity.store.Get(ctx, req.Message.TaskID); err != nil {
+				return ctx, nil, err
+			}
 			return ctx, nil, sdk.ErrUnsupportedOperation
 		}
 		if req.Config != nil && req.Config.PushConfig != nil {

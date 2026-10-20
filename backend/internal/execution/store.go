@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/chengpeng-cp/nexus-agent/internal/capacity"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -65,6 +66,9 @@ func (s *Store) EnqueueRequest(ctx context.Context, ownerID, workflowID int64, d
 		run.RequestKey = &requestKey
 	}
 	err = s.transaction(ctx, func(tx *gorm.DB) error {
+		if err := capacity.LockQueue(tx); err != nil {
+			return err
+		}
 		if requestKey != "" {
 			existing, err := findRequest(tx, ownerID, workflowID, requestKey, in)
 			if err != nil {
@@ -74,6 +78,9 @@ func (s *Store) EnqueueRequest(ctx context.Context, ownerID, workflowID int64, d
 				*run = *existing
 				return nil
 			}
+		}
+		if err := capacity.CheckQueue(tx, ownerID); err != nil {
+			return err
 		}
 		var found struct {
 			ID      int64
@@ -122,8 +129,20 @@ func (s *Store) ClaimSupported(ctx context.Context, worker string, lease time.Du
 	}
 	var claimed *Run
 	err := s.transaction(ctx, func(tx *gorm.DB) error {
+		limits, err := capacity.LockRun(tx)
+		if err != nil {
+			return err
+		}
+		active, err := capacity.RunCount(tx)
+		if err != nil {
+			return err
+		}
+		if active >= limits.ActiveLimit {
+			return nil
+		}
 		var run Run
 		query := tx.Where("definition IS NOT NULL AND available_at<=NOW() AND (status IN ? OR (status=? AND lease_until<NOW()))", []string{Queued, RetryWait}, Running)
+		query = query.Where("(SELECT count(*) FROM execution_active_capacity c WHERE c.owner_id=workflow_runs.owner_id) < ?", limits.OwnerActiveLimit)
 		if capabilities != nil {
 			raw, err := json.Marshal(capabilities)
 			if err != nil {
@@ -131,7 +150,7 @@ func (s *Store) ClaimSupported(ctx context.Context, worker string, lease time.Du
 			}
 			query = query.Where("COALESCE(definition->'required_capabilities','[]'::jsonb) <@ ?::jsonb", string(raw))
 		}
-		err := query.Order("available_at,id").Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Take(&run).Error
+		err = query.Order("COALESCE((SELECT last_claimed_at FROM execution_owner_fairness f WHERE f.owner_id=workflow_runs.owner_id),'epoch'::timestamptz),available_at,id").Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Take(&run).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
@@ -151,6 +170,9 @@ func (s *Store) ClaimSupported(ctx context.Context, worker string, lease time.Du
 		res := tx.Raw(`UPDATE workflow_runs SET status=?,generation=generation+1,lease_owner=?,lease_until=clock_timestamp()+(? * INTERVAL '1 millisecond'),started_at=COALESCE(started_at,NOW()) WHERE id=? RETURNING *`, Running, worker, lease.Milliseconds(), run.ID).Scan(&run)
 		if res.Error != nil {
 			return res.Error
+		}
+		if err = tx.Exec("INSERT INTO execution_owner_fairness(owner_id,last_claimed_at) VALUES(?,clock_timestamp()) ON CONFLICT(owner_id) DO UPDATE SET last_claimed_at=EXCLUDED.last_claimed_at", run.OwnerID).Error; err != nil {
+			return err
 		}
 		if err := appendEvent(tx, run.ID, "running", map[string]any{"generation": run.Generation}); err != nil {
 			return err

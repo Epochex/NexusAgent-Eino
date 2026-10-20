@@ -16,6 +16,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/agent"
 	"github.com/chengpeng-cp/nexus-agent/internal/agent/host"
 	"github.com/chengpeng-cp/nexus-agent/internal/agent/runtime"
+	"github.com/chengpeng-cp/nexus-agent/internal/capacity"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
 	"github.com/chengpeng-cp/nexus-agent/internal/memory/long_term"
 	short_term "github.com/chengpeng-cp/nexus-agent/internal/memory/short_term"
@@ -60,11 +62,17 @@ type ChatInput struct {
 
 // Stream 执行一次对话，返回统一事件流（handler 层转 SSE）。
 func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (<-chan agent.Event, error) {
-	ctx, cancel := context.WithCancel(ctx)
+	timeout := s.svcs.Cfg.Agent.RunTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	releaseCapacity := func() {}
 	started := false
 	defer func() {
 		if !started {
 			cancel()
+			releaseCapacity()
 		}
 	}()
 	if in == nil {
@@ -78,6 +86,20 @@ func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (
 	}
 	in.Content = security.SanitizeUserInput(in.Content)
 	ctx = security.WithUserID(ctx, userID)
+	if userID < 1 {
+		return nil, errcode.ErrUnauthorized
+	}
+	if s.svcs.Capacity != nil {
+		admitted, release, err := s.svcs.Capacity.HoldRun(ctx, userID)
+		if err != nil {
+			if errors.Is(err, capacity.ErrBusy) {
+				return nil, errcode.ErrRateLimited.WithMsg("共享运行额度已满，请稍后再试")
+			}
+			return nil, errcode.ErrInternal.WithCause(err)
+		}
+		ctx = admitted
+		releaseCapacity = release
+	}
 
 	// ① 会话保障与归属校验
 	session, err := s.ensureSession(ctx, userID, in)
@@ -128,7 +150,10 @@ func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (
 	}
 	out := make(chan agent.Event, buffer)
 	started = true
-	go s.pump(ctx, cancel, chatRun{ID: runInput.RunID, Session: session, Agent: ag, UserMessage: userMsg, Refs: refs, Trace: runInput.Trace, Warnings: append([]string(nil), runInput.PreparationWarnings...)}, events, out)
+	go func() {
+		defer releaseCapacity()
+		s.pump(ctx, cancel, chatRun{ID: runInput.RunID, Session: session, Agent: ag, UserMessage: userMsg, Refs: refs, Trace: runInput.Trace, Warnings: append([]string(nil), runInput.PreparationWarnings...)}, events, out)
+	}()
 	return out, nil
 }
 

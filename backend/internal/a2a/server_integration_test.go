@@ -4,11 +4,14 @@ package a2a
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -38,7 +41,9 @@ func TestA2AServerRealJWTTaskOwnershipCancellationAndFailure(t *testing.T) {
 	peer := httptest.NewUnstartedServer(nil)
 	base := "http://" + peer.Listener.Addr().String()
 	card := &sdk.AgentCard{Name: "owner-aware-agent", Version: "1", SupportedInterfaces: []*sdk.AgentInterface{sdk.NewAgentInterface(base+"/a2a", sdk.TransportProtocolJSONRPC)}}
+	var executions atomic.Int32
 	adapter := NewServer(card, func(ctx context.Context, text string) (string, error) {
+		executions.Add(1)
 		if id, ok := security.UserIDFromContext(ctx); !ok || id != users[0].ID {
 			return "", fmt.Errorf("wrong execution owner")
 		}
@@ -97,6 +102,37 @@ func TestA2AServerRealJWTTaskOwnershipCancellationAndFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer foreign.Destroy()
+	t.Run("unsupported version does not invoke Agent", func(t *testing.T) {
+		pair, err := jwt.Generate(users[0].ID, "user", users[0].Username)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := `{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","parts":[{"text":"reject unsupported version"}],"messageId":"version-no-execution"}}}`
+		req, err := http.NewRequest(http.MethodPost, base+"/a2a", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+		req.Header.Set("A2A-Version", "99.0")
+		before := executions.Load()
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var result struct {
+			Error *struct {
+				Code int `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+			t.Fatal(err)
+		}
+		if result.Error == nil || result.Error.Code != -32009 || executions.Load() != before {
+			t.Fatalf("unsupported version returned %+v; Agent calls before=%d after=%d", result.Error, before, executions.Load())
+		}
+	})
 	response, err := owner.SendMessage(root, &sdk.SendMessageRequest{Config: &sdk.SendMessageConfig{ReturnImmediately: true}, Message: sdk.NewMessage(sdk.MessageRoleUser, sdk.NewTextPart("wait"))})
 	if err != nil {
 		t.Fatal("async acceptance", err)
@@ -136,6 +172,28 @@ func TestA2AServerRealJWTTaskOwnershipCancellationAndFailure(t *testing.T) {
 	completed, err := clients[0].SendToCard(root, base, card, "inspect")
 	if err != nil || completed.State != "completed" || ExtractText(completed) != "confirmed owner response" {
 		t.Fatal("authenticated result", completed, err)
+	}
+	for _, tc := range []struct {
+		name    string
+		id      sdk.TaskID
+		foreign bool
+		want    error
+	}{
+		{"unknown reference", "missing-message-reference", false, sdk.ErrTaskNotFound},
+		{"foreign reference", sdk.TaskID(completed.ID), true, sdk.ErrTaskNotFound},
+		{"owned reference remains unsupported", sdk.TaskID(completed.ID), false, sdk.ErrUnsupportedOperation},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			message := sdk.NewMessage(sdk.MessageRoleUser, sdk.NewTextPart("continue task"))
+			message.TaskID = tc.id
+			client := owner
+			if tc.foreign {
+				client = foreign
+			}
+			if _, err := client.SendMessage(root, &sdk.SendMessageRequest{Message: message}); !errors.Is(err, tc.want) {
+				t.Fatalf("got %v, want %v", err, tc.want)
+			}
+		})
 	}
 	if err = db.Model(&model.User{}).Where("id=?", users[0].ID).Update("status", 2).Error; err != nil {
 		t.Fatal(err)

@@ -8,16 +8,17 @@ import (
 
 // Metrics 全局指标集合。
 type Metrics struct {
-	ChatFirstToken   *prometheus.HistogramVec // 首 token 延迟
-	LLMTokens        *prometheus.CounterVec   // Token 用量（model 方向）
-	LLMCost          *prometheus.CounterVec   // 成本（模型）
-	LLMRequests      *prometheus.CounterVec   // 模型请求计数（status）
-	LLMLatency       *prometheus.HistogramVec // 模型调用延迟
-	ToolCalls        *prometheus.CounterVec   // 工具调用计数（tool,status）
-	ToolLatency      *prometheus.HistogramVec // 工具调用延迟
-	RAGSearchSeconds *prometheus.HistogramVec // 检索延迟（stage: dense/bm25/fused/rerank）
-	AgentIterations  prometheus.Histogram     // ReAct 迭代次数分布
-	ActiveStreams    prometheus.Gauge         // 活跃 SSE 流数
+	CapacityOperations *prometheus.CounterVec   // process-local operations, never a global-usage gauge
+	ChatFirstToken     *prometheus.HistogramVec // 首 token 延迟
+	LLMTokens          *prometheus.CounterVec   // Token 用量（model 方向）
+	LLMCost            *prometheus.CounterVec   // 成本（模型）
+	LLMRequests        *prometheus.CounterVec   // 模型请求计数（status）
+	LLMLatency         *prometheus.HistogramVec // 模型调用延迟
+	ToolCalls          *prometheus.CounterVec   // 工具调用计数（tool,status）
+	ToolLatency        *prometheus.HistogramVec // 工具调用延迟
+	RAGSearchSeconds   *prometheus.HistogramVec // 检索延迟（stage: dense/bm25/fused/rerank）
+	AgentIterations    prometheus.Histogram     // ReAct 迭代次数分布
+	ActiveStreams      prometheus.Gauge         // 活跃 SSE 流数
 }
 
 var m *Metrics
@@ -28,9 +29,12 @@ func MetricsInstance() *Metrics { return m }
 // InitMetrics 初始化全局指标注册。
 func InitMetrics() {
 	m = &Metrics{
+		CapacityOperations: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "capacity_operations_total", Help: "Shared admission operations observed by this process; scope and outcome only",
+		}, []string{"scope", "outcome"}),
 		ChatFirstToken: promauto.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "chat_first_token_seconds",
-			Help: "首个 token 延迟（秒）",
+			Name:    "chat_first_token_seconds",
+			Help:    "首个 token 延迟（秒）",
 			Buckets: prometheus.ExponentialBuckets(0.1, 2, 10),
 		}, []string{"model"}),
 		LLMTokens: promauto.NewCounterVec(prometheus.CounterOpts{

@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/chengpeng-cp/nexus-agent/internal/capacity"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 )
 
@@ -56,6 +57,14 @@ func (r *SessionRepo) DeleteSession(ctx context.Context, id string) error {
 
 // CreateMessage 追加消息。
 func (r *SessionRepo) CreateMessage(ctx context.Context, m *model.Message) error {
+	if m.Role == "assistant" && m.Status == model.MsgStatusDone {
+		return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(m).Error; err != nil {
+				return err
+			}
+			return capacity.FenceRun(ctx, tx)
+		})
+	}
 	return r.db.WithContext(ctx).Create(m).Error
 }
 

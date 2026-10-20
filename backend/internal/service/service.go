@@ -6,11 +6,13 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/chengpeng-cp/nexus-agent/internal/capacity"
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
@@ -61,6 +63,7 @@ type Services struct {
 	MCP      *MCPService
 	A2A      *A2AService
 	Memory   *MemoryService
+	Capacity *capacity.Store
 }
 
 // New 装配全部业务服务。
@@ -74,6 +77,25 @@ func New(d Deps) (*Services, error) {
 	}
 	probe.CloseIdleConnections()
 	s := &Services{Deps: d}
+	if d.Repos != nil && d.Repos.DB != nil {
+		s.Capacity = capacity.New(d.Repos.DB)
+		if err = s.Capacity.Validate(context.Background()); err != nil {
+			return nil, fmt.Errorf("shared capacity schema: %w", err)
+		}
+		if d.Gateway != nil {
+			d.Gateway.SetProviderAdmission(func(ctx context.Context, desc *llm.ModelDescriptor) (context.Context, func(), error) {
+				origin, err := security.OutboundOrigin(desc.BaseURL)
+				if err != nil {
+					return nil, nil, err
+				}
+				// Same origin shares one pool, including old frozen descriptors and
+				// renamed provider records. Different credentials are conservative peers.
+				key := sha256.Sum256([]byte(origin))
+				owner, _ := security.UserIDFromContext(ctx)
+				return s.Capacity.HoldProvider(ctx, fmt.Sprintf("%x", key), owner)
+			})
+		}
+	}
 
 	// ② 各业务服务
 	s.Auth = NewAuthService(d.Repos, d.JWT, d.RDB)

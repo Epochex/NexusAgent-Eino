@@ -29,12 +29,16 @@ func TestMCPLegacyUpgradeRequiresReviewAndEncryptsOnlyExplicitly(t *testing.T) {
 	if err := db.Exec(`INSERT INTO tools(code,name,type,description,parameters,mcp_server_id,is_dangerous,replay_policy,status) VALUES('mcp_legacy_write','write','mcp','legacy write','{"type":"object"}',?,FALSE,'readonly',1)`, serverID).Error; err != nil {
 		t.Fatal(err)
 	}
-	migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", "011_mcp_authority.up.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = db.Exec(string(migration)).Error; err != nil {
-		t.Fatal(err)
+	// Seed at the old boundary, then upgrade to the schema required by the
+	// current production constructor. Never bypass admission's startup check.
+	for _, filename := range []string{"011_mcp_authority.up.sql", "012_a2a_authority.up.sql", "013_shared_capacity.up.sql"} {
+		migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", filename))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = db.Exec(string(migration)).Error; err != nil {
+			t.Fatal(err)
+		}
 	}
 	repos := repo.New(db)
 	stored, err := repos.Tool.GetByCode(context.Background(), "mcp_legacy_write")

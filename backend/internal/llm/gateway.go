@@ -26,6 +26,19 @@ type Gateway struct {
 	semaphores map[string]*Semaphore      // 按 provider code
 	retryCfg   RetryConfig
 	cfg        *config.LLM
+	admission  func(context.Context, *ModelDescriptor) (context.Context, func(), error)
+}
+
+// SetProviderAdmission is installed once during service construction. The
+// gateway stays independent of the database implementation and test fixtures.
+func (g *Gateway) SetProviderAdmission(admit func(context.Context, *ModelDescriptor) (context.Context, func(), error)) {
+	g.admission = admit
+}
+func (g *Gateway) holdProvider(ctx context.Context, desc *ModelDescriptor) (context.Context, func(), error) {
+	if g.admission == nil {
+		return ctx, func() {}, nil
+	}
+	return g.admission(ctx, desc)
 }
 
 // NewGateway 构造。
@@ -63,7 +76,10 @@ func (g *Gateway) providerFor(code string) (Provider, *CircuitBreaker, *Semaphor
 }
 
 // runWithGuard 带熔断+限流+重试+指标 的统一执行管道。
-func (g *Gateway) runWithGuard(ctx context.Context, desc *ModelDescriptor, fn func(p Provider) error) error {
+func (g *Gateway) runWithGuard(ctx context.Context, desc *ModelDescriptor, fn func(context.Context, Provider) error) error {
+	if desc == nil {
+		return fmt.Errorf("model descriptor is required")
+	}
 	p, breaker, sem := g.providerFor(desc.ProviderCode)
 
 	// 熔断检查：打开则立即失败，调用方决定是否走 fallback
@@ -78,8 +94,13 @@ func (g *Gateway) runWithGuard(ctx context.Context, desc *ModelDescriptor, fn fu
 			return aErr
 		}
 		defer sem.Release()
+		callCtx, release, err := g.holdProvider(ctx, desc)
+		if err != nil {
+			return err
+		}
+		defer release()
 		providerAttempted = true
-		return fn(p)
+		return fn(callCtx, p)
 	})
 
 	// 指标与熔断记录
@@ -126,7 +147,7 @@ func (g *Gateway) Chat(ctx context.Context, primary, fallback *ModelDescriptor, 
 
 func (g *Gateway) chatOnce(ctx context.Context, desc *ModelDescriptor, req *ChatRequest) (*ChatResponse, *ModelDescriptor, error) {
 	var resp *ChatResponse
-	err := g.runWithGuard(ctx, desc, func(p Provider) error {
+	err := g.runWithGuard(ctx, desc, func(ctx context.Context, p Provider) error {
 		var e error
 		resp, e = p.Chat(ctx, desc, req)
 		return e
@@ -215,16 +236,31 @@ func (g *Gateway) guardStream(ctx context.Context, desc *ModelDescriptor, req *C
 	streamCtx, cancel := context.WithCancel(ctx)
 	start := time.Now()
 	var source <-chan StreamEvent
+	var admittedDone <-chan struct{}
+	var admittedContext context.Context
+	releaseCapacity := func() {}
 	providerAttempted := false
 	err := RetryDo(streamCtx, g.retryCfg, func(ctx context.Context) error {
 		if err := sem.Acquire(ctx); err != nil {
 			return err
 		}
+		callCtx, release, admitErr := g.holdProvider(ctx, desc)
+		if admitErr != nil {
+			sem.Release()
+			return admitErr
+		}
 		var callErr error
 		providerAttempted = true
-		source, callErr = p.ChatStream(ctx, desc, req)
+		source, callErr = p.ChatStream(callCtx, desc, req)
 		if callErr != nil {
+			release()
 			sem.Release()
+		} else {
+			releaseCapacity = release
+			if g.admission != nil {
+				admittedContext = callCtx
+				admittedDone = callCtx.Done()
+			}
 		}
 		return callErr
 	})
@@ -237,17 +273,42 @@ func (g *Gateway) guardStream(ctx context.Context, desc *ModelDescriptor, req *C
 	go func() {
 		var streamErr error
 		var usage Usage
+		admissionInterrupted := func() {
+			streamErr = fmt.Errorf("provider admission interrupted: %w", admittedContext.Err())
+			failure := StreamEvent{Err: streamErr}
+			select {
+			case out <- failure:
+			default:
+				// An interrupted answer is incomplete. Reserve visibility for its
+				// terminal error even when the consumer stopped reading partials.
+				select {
+				case <-out:
+				default:
+				}
+				select {
+				case out <- failure:
+				default:
+				}
+			}
+		}
 		defer close(out)
 		defer cancel()
 		defer sem.Release()
+		defer releaseCapacity()
 		defer func() { g.finishStream(desc, breaker, start, streamErr, usage, true) }()
 		for {
 			select {
+			case <-admittedDone:
+				admissionInterrupted()
+				return
 			case <-streamCtx.Done():
 				streamErr = streamCtx.Err()
 				return
 			case ev, ok := <-source:
 				if !ok {
+					if admittedContext != nil && admittedContext.Err() != nil {
+						admissionInterrupted()
+					}
 					return
 				}
 				if ev.Err != nil {
@@ -258,6 +319,9 @@ func (g *Gateway) guardStream(ctx context.Context, desc *ModelDescriptor, req *C
 				}
 				select {
 				case out <- ev:
+				case <-admittedDone:
+					admissionInterrupted()
+					return
 				case <-streamCtx.Done():
 					streamErr = streamCtx.Err()
 					return
@@ -297,7 +361,7 @@ func (g *Gateway) Embed(ctx context.Context, desc *ModelDescriptor, texts []stri
 	defer span.End()
 
 	var vectors [][]float32
-	err := g.runWithGuard(ctx, desc, func(p Provider) error {
+	err := g.runWithGuard(ctx, desc, func(ctx context.Context, p Provider) error {
 		var e error
 		vectors, e = p.Embed(ctx, desc, texts)
 		return e
@@ -313,7 +377,7 @@ func (g *Gateway) Rerank(ctx context.Context, desc *ModelDescriptor, query strin
 	defer span.End()
 
 	var results []RerankResult
-	err := g.runWithGuard(ctx, desc, func(p Provider) error {
+	err := g.runWithGuard(ctx, desc, func(ctx context.Context, p Provider) error {
 		var e error
 		results, e = p.Rerank(ctx, desc, query, docs, topN)
 		return e
