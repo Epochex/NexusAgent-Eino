@@ -39,11 +39,11 @@ type ToolDef struct {
 // ChatRequest 单次对话请求。
 type ChatRequest struct {
 	Messages    []Message
-	Tools       []ToolDef      // 有工具时才传
+	Tools       []ToolDef // 有工具时才传
 	Temperature float32
 	TopP        float32
 	MaxTokens   int
-	Stream      bool           // 是否流式
+	Stream      bool // 是否流式
 }
 
 // Usage Token 用量。
@@ -64,6 +64,7 @@ type ChatResponse struct {
 
 // StreamEvent 流式事件（网关到调用方的统一流协议）。
 type StreamEvent struct {
+	Err              error      `json:"-"` // terminal provider/transport error; never serialized to clients
 	Content          string     // 增量文本
 	ReasoningContent string     // 增量推理内容
 	ToolCalls        []ToolCall // 聚合完成的工具调用（最后一次出现）
@@ -74,10 +75,10 @@ type StreamEvent struct {
 
 // ModelDescriptor 模型描述（网关按它实例化 Provider 请求）。
 type ModelDescriptor struct {
-	ProviderCode string  // deepseek/qwen/doubao/ollama/...
-	BaseURL      string  // 供应商 API 地址
-	APIKey       string  // 解密后的密钥
-	ModelName    string  // 上游模型名
+	ProviderCode string // deepseek/qwen/doubao/ollama/...
+	BaseURL      string // 供应商 API 地址
+	APIKey       string // 解密后的密钥
+	ModelName    string // 上游模型名
 	Temperature  float32
 	TopP         float32
 	MaxTokens    int

@@ -1,9 +1,9 @@
 // OpenAI 兼容协议实现：覆盖 DeepSeek / 通义 / 智谱 / Kimi / 豆包 Ark / Ollama。
 //
 // 教学要点（Ep 02）：
-//   1. Chat Completions 的消息协议：assistant 的 tool_calls 如何回传、tool 消息如何接续；
-//   2. SSE 流式解析：delta 增量拼接、tool_calls 按 index 聚合片段、[DONE] 终止帧；
-//   3. 手写 SSE 解析是理解"流式输出本质"的最佳练习（对比 eino 内部实现）。
+//  1. Chat Completions 的消息协议：assistant 的 tool_calls 如何回传、tool 消息如何接续；
+//  2. SSE 流式解析：delta 增量拼接、tool_calls 按 index 聚合片段、[DONE] 终止帧；
+//  3. 手写 SSE 解析是理解"流式输出本质"的最佳练习（对比 eino 内部实现）。
 package llm
 
 import (
@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -24,11 +25,15 @@ type openaiCompatibleProvider struct {
 	httpClient   *http.Client
 }
 
+// A shared client reuses connections without lazy writes racing between runs.
+// Request contexts own deadlines and close in-flight response bodies on cancel.
+var providerHTTPClient = &http.Client{}
+
 func (p *openaiCompatibleProvider) client() *http.Client {
-	if p.httpClient == nil {
-		p.httpClient = &http.Client{Timeout: 0} // 超时由 ctx 控制
+	if p.httpClient != nil {
+		return p.httpClient
 	}
-	return p.httpClient
+	return providerHTTPClient
 }
 
 // ---- 请求结构 ----
@@ -61,11 +66,11 @@ type streamOptions struct {
 }
 
 type openaiMsg struct {
-	Role             string        `json:"role"`
-	Content          any           `json:"content"` // string 或 null（有 tool_calls 时）
-	ReasoningContent string        `json:"reasoning_content,omitempty"`
-	ToolCalls        []openaiCall  `json:"tool_calls,omitempty"`
-	ToolCallID       string        `json:"tool_call_id,omitempty"`
+	Role             string       `json:"role"`
+	Content          any          `json:"content"` // string 或 null（有 tool_calls 时）
+	ReasoningContent string       `json:"reasoning_content,omitempty"`
+	ToolCalls        []openaiCall `json:"tool_calls,omitempty"`
+	ToolCallID       string       `json:"tool_call_id,omitempty"`
 }
 
 type openaiCall struct {
@@ -284,10 +289,12 @@ func (p *openaiCompatibleProvider) consumeStream(ctx context.Context, body io.Re
 	var usage *Usage
 	model := ""
 
-	emit := func(ev StreamEvent) {
+	emit := func(ev StreamEvent) bool {
 		select {
 		case events <- ev:
+			return true
 		case <-ctx.Done(): // 上游取消，停止读取
+			return false
 		}
 	}
 
@@ -302,7 +309,8 @@ func (p *openaiCompatibleProvider) consumeStream(ctx context.Context, body io.Re
 		}
 
 		var frame struct {
-			Model   string `json:"model"`
+			Error   *openaiErr `json:"error"`
+			Model   string     `json:"model"`
 			Choices []struct {
 				Delta struct {
 					Content          string       `json:"content"`
@@ -314,7 +322,12 @@ func (p *openaiCompatibleProvider) consumeStream(ctx context.Context, body io.Re
 			Usage *openaiUsage `json:"usage"`
 		}
 		if err := json.Unmarshal([]byte(data), &frame); err != nil {
-			continue // 跳过无法解析的帧（部分供应商会发注释帧）
+			emit(StreamEvent{Err: fmt.Errorf("invalid model SSE data: %w", err)})
+			return
+		}
+		if frame.Error != nil {
+			emit(StreamEvent{Err: fmt.Errorf("model stream error: %s", frame.Error.Message)})
+			return
 		}
 		if frame.Model != "" {
 			model = frame.Model
@@ -323,10 +336,14 @@ func (p *openaiCompatibleProvider) consumeStream(ctx context.Context, body io.Re
 		for _, ch := range frame.Choices {
 			d := ch.Delta
 			if d.ReasoningContent != "" {
-				emit(StreamEvent{ReasoningContent: d.ReasoningContent, Model: model})
+				if !emit(StreamEvent{ReasoningContent: d.ReasoningContent, Model: model}) {
+					return
+				}
 			}
 			if d.Content != "" {
-				emit(StreamEvent{Content: d.Content, Model: model})
+				if !emit(StreamEvent{Content: d.Content, Model: model}) {
+					return
+				}
 			}
 			for _, tc := range d.ToolCalls {
 				agg := aggs[tc.Index]
@@ -350,13 +367,29 @@ func (p *openaiCompatibleProvider) consumeStream(ctx context.Context, body io.Re
 			usage = &Usage{PromptTokens: frame.Usage.PromptTokens, CompletionTokens: frame.Usage.CompletionTokens}
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		emit(StreamEvent{Err: err})
+		return
+	}
+	if err := scanner.Err(); err != nil {
+		emit(StreamEvent{Err: fmt.Errorf("read model SSE: %w", err)})
+		return
+	}
+	if finish == "" {
+		emit(StreamEvent{Err: io.ErrUnexpectedEOF})
+		return
+	}
 
 	// 终帧：携带聚合完成的工具调用与用量
 	calls := make([]ToolCall, 0, len(aggs))
-	for i := 0; i < len(aggs); i++ {
-		if a, ok := aggs[i]; ok {
-			calls = append(calls, ToolCall{ID: a.id.String(), Name: a.name.String(), ArgsJSON: a.args.String()})
-		}
+	indices := make([]int, 0, len(aggs))
+	for index := range aggs {
+		indices = append(indices, index)
+	}
+	sort.Ints(indices)
+	for _, index := range indices {
+		a := aggs[index]
+		calls = append(calls, ToolCall{ID: a.id.String(), Name: a.name.String(), ArgsJSON: a.args.String()})
 	}
 	if len(calls) > 0 {
 		finish = "tool_calls"

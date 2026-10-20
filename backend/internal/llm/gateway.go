@@ -7,6 +7,7 @@ package llm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -142,17 +143,17 @@ func (g *Gateway) ChatStream(ctx context.Context, primary, fallback *ModelDescri
 	// （若放进 runWithGuard，拿到通道就返回，span 只有几毫秒，等于没测）。
 	ctx, span := observability.StartSpan(ctx, "llm.chat_stream", llmAttrs(primary)...)
 
-	events, err := g.streamOnce(ctx, primary, req)
+	events, err := g.guardStream(ctx, primary, req)
 	if err == nil {
-		return spanOnClose(events, span), primary, nil
+		return spanOnClose(ctx, events, span), primary, nil
 	}
 
 	span.SetAttributes(attribute.String("llm.primary_error", err.Error()))
 	if fallback != nil && fallback.ProviderCode != primary.ProviderCode {
-		events2, err2 := g.streamOnce(ctx, fallback, req)
+		events2, err2 := g.guardStream(ctx, fallback, req)
 		if err2 == nil {
 			span.SetAttributes(attribute.String("llm.fallback_model", fallback.ModelName))
-			return spanOnClose(events2, span), fallback, nil
+			return spanOnClose(ctx, events2, span), fallback, nil
 		}
 		err = fmt.Errorf("primary: %w; fallback: %w", err, err2)
 	}
@@ -163,7 +164,7 @@ func (g *Gateway) ChatStream(ctx context.Context, primary, fallback *ModelDescri
 
 // spanOnClose 把 span 的生命周期绑定到事件流：源通道关闭（流消费完）时结束 span。
 // 通道容量与源保持一致，不改变原有背压特性。
-func spanOnClose(src <-chan StreamEvent, span trace.Span) <-chan StreamEvent {
+func spanOnClose(ctx context.Context, src <-chan StreamEvent, span trace.Span) <-chan StreamEvent {
 	if !span.SpanContext().IsValid() {
 		// 追踪未启用（no-op span）：不额外起转发协程，零开销原样透传
 		span.End()
@@ -173,24 +174,114 @@ func spanOnClose(src <-chan StreamEvent, span trace.Span) <-chan StreamEvent {
 	go func() {
 		defer close(out)
 		defer span.End()
-		for ev := range src {
-			out <- ev
+		for {
+			select {
+			case <-ctx.Done():
+				observability.MarkError(span, ctx.Err())
+				return
+			case ev, ok := <-src:
+				if !ok {
+					return
+				}
+				if ev.Err != nil {
+					observability.MarkError(span, ev.Err)
+				}
+				if ev.Usage != nil {
+					span.SetAttributes(usageAttrs(*ev.Usage)...)
+				}
+				select {
+				case out <- ev:
+				case <-ctx.Done():
+					return
+				}
+			}
 		}
 	}()
 	return out
 }
 
-func (g *Gateway) streamOnce(ctx context.Context, desc *ModelDescriptor, req *ChatRequest) (<-chan StreamEvent, error) {
-	var events <-chan StreamEvent
-	err := g.runWithGuard(ctx, desc, func(p Provider) error {
-		var e error
-		events, e = p.ChatStream(ctx, desc, req)
-		return e
+func (g *Gateway) guardStream(ctx context.Context, desc *ModelDescriptor, req *ChatRequest) (<-chan StreamEvent, error) {
+	if desc == nil || req == nil {
+		return nil, fmt.Errorf("model descriptor and request are required")
+	}
+	p, breaker, sem := g.providerFor(desc.ProviderCode)
+	if !breaker.Allow() {
+		return nil, ErrCircuitOpen
+	}
+	streamCtx, cancel := context.WithCancel(ctx)
+	start := time.Now()
+	var source <-chan StreamEvent
+	err := RetryDo(streamCtx, g.retryCfg, func(ctx context.Context) error {
+		if err := sem.Acquire(ctx); err != nil {
+			return err
+		}
+		var callErr error
+		source, callErr = p.ChatStream(ctx, desc, req)
+		if callErr != nil {
+			sem.Release()
+		}
+		return callErr
 	})
 	if err != nil {
+		cancel()
+		g.finishStream(desc, breaker, start, err, Usage{})
 		return nil, err
 	}
-	return events, nil
+	out := make(chan StreamEvent, 64)
+	go func() {
+		var streamErr error
+		var usage Usage
+		defer close(out)
+		defer cancel()
+		defer sem.Release()
+		defer func() { g.finishStream(desc, breaker, start, streamErr, usage) }()
+		for {
+			select {
+			case <-streamCtx.Done():
+				streamErr = streamCtx.Err()
+				return
+			case ev, ok := <-source:
+				if !ok {
+					return
+				}
+				if ev.Err != nil {
+					streamErr = ev.Err
+				}
+				if ev.Usage != nil {
+					usage = *ev.Usage
+				}
+				select {
+				case out <- ev:
+				case <-streamCtx.Done():
+					streamErr = streamCtx.Err()
+					return
+				}
+				if ev.Err != nil {
+					return
+				}
+			}
+		}
+	}()
+	return out, nil
+}
+
+func (g *Gateway) finishStream(desc *ModelDescriptor, breaker *CircuitBreaker, start time.Time, err error, usage Usage) {
+	// Caller cancellation is neither a provider failure nor a breaker sample.
+	if !errors.Is(err, context.Canceled) {
+		breaker.Record(err == nil)
+	}
+	status := "ok"
+	if err != nil {
+		status = "error"
+	}
+	if errors.Is(err, context.Canceled) {
+		status = "canceled"
+	}
+	if m := observability.MetricsInstance(); m != nil {
+		m.LLMRequests.WithLabelValues(desc.ModelName, status).Inc()
+		m.LLMLatency.WithLabelValues(desc.ModelName).Observe(time.Since(start).Seconds())
+	}
+	g.recordUsage(desc.ModelName, usage)
 }
 
 // Embed 向量化。
