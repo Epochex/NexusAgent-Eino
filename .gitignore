@@ -15,3 +15,11 @@
 .env
 .env.*
 !.env.example
+
+# Generated acceptance credentials, browser sessions and private runtime files
+/output/
+/.superpowers/
+/.playwright-cli/
+/backend/data/
+/backend/configs/config.*.yaml
+/backend/configs/config.*.yml
