@@ -76,7 +76,10 @@ func TestWorkflowHTTPDurableLifecycle(t *testing.T) {
 		}
 	})
 	base := "http://" + ln.Addr().String()
-	client := &http.Client{Timeout: 3 * time.Second}
+	client := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{}}
+	// This fixture owns its keep-alive pool. Close idle test connections before
+	// shutting down Hertz; otherwise transport.Shutdown waits for idle timeout.
+	t.Cleanup(client.CloseIdleConnections)
 	request := func(method, path, body string, foreign bool) (int, []byte) {
 		t.Helper()
 		req, _ := http.NewRequest(method, base+path, strings.NewReader(body))
