@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -13,14 +14,57 @@ import (
 	"time"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/agent"
+	"github.com/chengpeng-cp/nexus-agent/internal/agent/runtime"
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/repo"
+	"github.com/chengpeng-cp/nexus-agent/internal/testutil/llmstub"
+	"github.com/chengpeng-cp/nexus-agent/internal/tool"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+type integrationNoTools struct{}
+
+func (integrationNoTools) ListContext(context.Context, string) ([]llm.ToolDef, error) {
+	return nil, nil
+}
+func (integrationNoTools) Invoke(context.Context, string, string, string) tool.ToolResult {
+	return tool.ToolResult{}
+}
+
+func TestChatEmptyModelAnswerPersistsFailed(t *testing.T) {
+	f := pumpFixture(t)
+	modelServer := llmstub.New(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+	})
+	runner, err := runtime.NewEinoRunner(llm.NewGateway(&config.LLM{}), integrationNoTools{}, runtime.EinoConfig{StepTimeout: time.Second, RunTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, err := runner.Run(ctx, &runtime.RunInput{AgentName: "test", Messages: []llm.Message{{Role: llm.RoleUser, Content: "q"}}, Primary: &llm.ModelDescriptor{BaseURL: modelServer.URL, ModelName: "stub"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(chan agent.Event, 16)
+	go f.chat.pump(ctx, cancel, chatRun{ID: "empty-run", Session: f.session, Agent: f.ag, UserMessage: f.user}, events, out)
+	var failed bool
+	for ev := range out {
+		if ev.Type == agent.TypeDone {
+			t.Fatal("empty model answer reported done")
+		}
+		if ev.Type == agent.TypeError {
+			failed = true
+		}
+	}
+	if row := assistant(t, f); !failed || row.Status != model.MsgStatusFailed {
+		t.Fatalf("empty answer persisted success: %+v failed=%v", row, failed)
+	}
+}
 
 type pumpTestFixture struct {
 	chat    *ChatService

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/cloudwego/hertz/pkg/network/standard"
 	"github.com/minio/minio-go/v7"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/a2a"
@@ -160,9 +161,12 @@ func run() error {
 
 	// ===== ⑫ Hertz 服务 =====
 	h := server.New(
+		// Keep cancellation/deadline semantics identical to the real TCP tests.
+		// Evaluate alternative transports with the P4 workload, not by assumption.
+		server.WithTransport(standard.NewTransporter),
 		server.WithHostPorts(":"+cfg.HTTP.Port),
 		server.WithReadTimeout(30*time.Second),
-		server.WithWriteTimeout(0), // SSE 长连接不超时
+		server.WithWriteTimeout(0), // SSE body refreshes a 2s deadline per network chunk
 		server.WithIdleTimeout(120*time.Second),
 		server.WithSenseClientDisconnection(runtime.GOOS != "windows"),
 	)

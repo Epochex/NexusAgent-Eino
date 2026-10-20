@@ -278,6 +278,11 @@ func (m *runMiddleware) AfterModelRewriteState(ctx context.Context, state *adk.C
 		}
 		seen[call.ID] = true
 	}
+	// Validate the final model step, rather than text accumulated before a
+	// tool call. Reasoning alone is not a user-facing answer in this runner.
+	if len(last.ToolCalls) == 0 && strings.TrimSpace(last.Content) == "" {
+		return ctx, state, errcode.ErrModelUnavail.WithMsg("模型未生成有效回答")
+	}
 	return ctx, state, nil
 }
 func (m *runMiddleware) WrapInvokableToolCall(_ context.Context, next adk.InvokableToolCallEndpoint, tool *adk.ToolContext) (adk.InvokableToolCallEndpoint, error) {

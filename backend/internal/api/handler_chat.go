@@ -14,9 +14,11 @@ import (
 	"encoding/json"
 	"io"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/network"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/agent"
 	"github.com/chengpeng-cp/nexus-agent/internal/service"
@@ -55,23 +57,26 @@ func (h *Handler) Chat(ctx context.Context, c *app.RequestContext) {
 	// 流式响应：把事件 Channel 转写为 SSE。
 	// SetBodyStream(reader, -1) = 未知长度的 chunked 流式响应。
 	pr, pw := io.Pipe()
+	// The response body owns cancellation through the last network flush.
+	// Refresh the socket deadline per chunk; an idle model is not a slow reader.
+	body := &sseBody{PipeReader: pr, conn: c.GetConn(), cancel: cancel, timeout: 2 * time.Second}
+	body.stop = context.AfterFunc(streamCtx, body.abort)
 	c.Response.Header.Set("Content-Type", "text/event-stream")
 	c.Response.Header.Set("Cache-Control", "no-cache")
 	c.Response.Header.Set("Connection", "keep-alive")
 	c.Response.Header.Set("X-Accel-Buffering", "no") // Nginx 不缓冲
-	c.Response.SetBodyStream(pr, -1)
+	c.Response.SetBodyStream(body, -1)
 
 	// SSE 是长连接：handler 在这里就返回了，但事件流还要写很久。
 	// 所以从 Tracing 中间件手里接管根 span，等流真正写完再结束它，
 	// 否则 Jaeger 里会看到"根 span 只有几毫秒、子 span 却好几秒"。
 	streamSpan := TakeRootSpan(c)
+	if streamSpan != nil {
+		body.endSpan = func() { streamSpan.End() }
+	}
 
 	go func() {
-		defer cancel()
 		defer pw.Close()
-		if streamSpan != nil {
-			defer streamSpan.End()
-		}
 		heartbeat := 15 * time.Second
 		// Hertz connstate does not support Windows. A small comment write wakes
 		// the body writer to notice a closed socket even while the model is idle.
@@ -113,6 +118,62 @@ func (h *Handler) Chat(ctx context.Context, c *app.RequestContext) {
 			}
 		}
 	}()
+}
+
+// sseBody bridges Hertz's socket writer and the producer without retaining the
+// pooled RequestContext. Close is called after the final flush or a write error.
+type sseBody struct {
+	*io.PipeReader
+	conn    network.Conn
+	cancel  context.CancelFunc
+	timeout time.Duration
+	mu      sync.Mutex
+	closed  bool
+	aborted bool
+	stop    func() bool
+	endSpan func()
+}
+
+func (b *sseBody) Read(p []byte) (int, error) {
+	n, err := b.PipeReader.Read(p)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.aborted {
+		return 0, context.Canceled
+	}
+	if setErr := b.conn.SetWriteTimeout(b.timeout); setErr != nil {
+		return 0, setErr
+	}
+	return n, err
+}
+
+func (b *sseBody) abort() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return
+	}
+	b.aborted = true
+	// Interrupt Flush without racing Hertz's ownership of Conn.Close/stater.
+	_ = b.conn.SetWriteDeadline(time.Now())
+	_ = b.PipeReader.CloseWithError(context.Canceled)
+}
+
+func (b *sseBody) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return nil
+	}
+	b.closed = true
+	b.stop()
+	err := b.PipeReader.Close()
+	b.cancel()
+	_ = b.conn.SetWriteTimeout(0)
+	if b.endSpan != nil {
+		b.endSpan()
+	}
+	return err
 }
 
 // writeSSE 写一条 SSE 事件。

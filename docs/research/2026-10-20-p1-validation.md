@@ -16,12 +16,17 @@ Agent 工具只从绑定列表构建，调用前验证 JSON Schema 并刷新权�
 
 - Windows/amd64：Go 1.26.0 全包测试、vet、server/worker/cli/migrate 构建；Node v24.14.1 的前端 typecheck/build。
 - Linux/amd64 Docker：Go 1.26.0，全包 race；PostgreSQL 16 的真实迁移和集成测试。每个测试创建独立 schema，清理范围限制为自己创建的 schema，测试数据库名必须以 `_test` 结尾。
+- 审查修复后的固定源码最终矩阵：Linux 全包 race 的顶层用例 68 个通过、0 失败；带 integration tag 的 `-run TestChat` 命令有 10 个顶层用例通过、0 失败（包含 1 个普通入口选择用例，不能把 10 个都称为 PG 用例）。同轮 vet、四入口构建及 Windows 全包/前端检查均通过。
 - HTTP：真实 Hertz listener 与标准 HTTP 客户端，模型使用本地 HTTP/SSE 桩。验证正常流、未知终止、部分输出后错误、非法帧、过大响应、交错工具调用、并发额度、取消、慢消费者和客户端断开。
 - PostgreSQL：用表锁阻塞消息提交，确认 done 没有提前发出；用 CHECK 约束拒绝助手消息，确认没有虚假成功；阻塞超过期限验证最终写库有界；验证取消后的 Stopped、失败后的 Failed 及外部用户会话拒绝。
 - Host/CLI：专家采用自己的工具与危险标记；失败不聚合，merge 在成功终态前；CLI 延续会话 ID，识别 SSE error 和缺失终态，兼容扩展字段与 comment 心跳。
 - 轨迹：验证切片扩容后完成状态不丢失、并发步骤和快照隔离，以及工具耗时覆盖实际执行。
 
 Windows 下 Hertz connstate 不支持远端关闭感知，使用 250 ms comment 心跳唤醒底层写操作检测断连；Linux 开启原生关闭感知并使用 15 秒心跳。两个平台均运行实际断连测试。
+
+独立全分支审查发现两项 Important，已补回归并修复：最终模型步骤为空白/只有 reasoning/工具调用前有文字而最终为空时，返回模型空响应错误（50001），不再报告 done、成功 trace 或 Host merge；真实 PostgreSQL 验证其落 Failed。TCP 停读回归保持连接打开并停止读取，缩小 socket 缓冲并发送 3 MiB 桩输出：旧实现超过 4 秒仍不释放连接；新实现每个网络 chunk 更新 2 秒写期限，超时退出 Hertz body writer，关闭 Pipe、取消模型并结束根 span。另测模型正常停顿 2.2 秒后继续完成，确保该期限不限制正常推理时长。
+
+server 显式使用 Hertz standard transport，使生产入口与两平台真实 TCP 测试使用同一套期限/取消语义；取消通过 socket deadline 打断 Flush，连接 Close 由 Hertz 管理。P4 可按同口径负载比较其他 transport，不能假定更换网络库即获得性能收益。[实施裁决与审查范围](2026-10-20-p1-decisions.md) 保留接口取舍和未验收边界。
 
 ## 微基准
 

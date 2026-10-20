@@ -2,13 +2,55 @@ package host
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/agent"
+	"github.com/chengpeng-cp/nexus-agent/internal/agent/einoadapter"
 	"github.com/chengpeng-cp/nexus-agent/internal/agent/runtime"
+	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
+	"github.com/chengpeng-cp/nexus-agent/internal/testutil/llmstub"
+	"github.com/chengpeng-cp/nexus-agent/internal/tool"
 )
+
+type noTools struct{}
+
+func (noTools) ListContext(context.Context, string) ([]llm.ToolDef, error) { return nil, nil }
+func (noTools) Invoke(context.Context, string, string, string) tool.ToolResult {
+	return tool.ToolResult{}
+}
+
+var _ einoadapter.ToolSource = noTools{}
+
+func TestHostEmptyExpertAnswerDoesNotMerge(t *testing.T) {
+	model := llmstub.New(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+	})
+	runner, err := runtime.NewEinoRunner(llm.NewGateway(&config.LLM{}), noTools{}, runtime.EinoConfig{StepTimeout: time.Second, RunTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := New([]Expert{{Name: "expert", Primary: &llm.ModelDescriptor{BaseURL: model.URL, ModelName: "stub"}, Runner: runner}}, routeFirst, nil)
+	events, err := h.Run(context.Background(), hostInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failed bool
+	for ev := range events {
+		if ev.Type == agent.TypeDone || ev.Type == agent.TypeAgentEvent && ev.Data["type"] == "merge" {
+			t.Fatalf("empty expert reported success: %+v", ev)
+		}
+		if ev.Type == agent.TypeError {
+			failed = true
+		}
+	}
+	if !failed {
+		t.Fatal("empty expert failure missing")
+	}
+}
 
 type runnerFunc func(context.Context, *runtime.RunInput) (<-chan agent.Event, error)
 

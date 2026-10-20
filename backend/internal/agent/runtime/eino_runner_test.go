@@ -147,9 +147,34 @@ func TestEinoRunnerInputNotMutated(t *testing.T) {
 		t.Fatal("run mutated shared input")
 	}
 }
-func TestEinoRunnerEmptySuccessfulAnswer(t *testing.T) {
-	r, in := testRunner(t, func(w http.ResponseWriter, r *http.Request) { answer(w, "") }, runtimeTools{}, 2)
-	terminal(t, collect(t, r, in), agent.TypeDone)
+func TestEinoRunnerRejectsEmptyFinalAnswer(t *testing.T) {
+	for _, mode := range []string{"empty", "whitespace", "reasoning", "after-tool"} {
+		t.Run(mode, func(t *testing.T) {
+			var requests atomic.Int32
+			r, in := testRunner(t, func(w http.ResponseWriter, r *http.Request) {
+				if mode == "after-tool" && requests.Add(1) == 1 {
+					fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"正在查询\"}}]}\n\n")
+					toolAnswer(w, 1)
+					return
+				}
+				if mode == "reasoning" {
+					fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"thinking\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+					return
+				}
+				text := ""
+				if mode == "whitespace" {
+					text = " \n\t"
+				}
+				answer(w, text)
+			}, runtimeTools{}, 3)
+			events := collect(t, r, in)
+			terminal(t, events, agent.TypeError)
+			last := events[len(events)-1]
+			if last.Data["code"] != 50001 {
+				t.Fatalf("empty answer misclassified: %+v", last)
+			}
+		})
+	}
 }
 func TestEinoRunnerIterationLimit(t *testing.T) {
 	var calls atomic.Int32
