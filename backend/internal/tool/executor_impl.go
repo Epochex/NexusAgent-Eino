@@ -108,6 +108,12 @@ func (e *ProdExecutor) ListContext(ctx context.Context, agentToolsJSON string) (
 		if t.Status != 1 {
 			continue
 		}
+		if e.registry == nil {
+			return nil, errcode.ErrToolNotFound
+		}
+		if _, ok := e.registry.Get(t.Code); !ok {
+			return nil, errcode.ErrToolNotFound.WithMsg("工具当前未注册")
+		}
 		resolvedIDs[t.ID] = true
 		if seen[t.Code] { // 两条查询路径可能重复命中
 			continue

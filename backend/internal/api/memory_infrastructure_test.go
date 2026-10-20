@@ -144,6 +144,25 @@ func TestMemoryHTTPRealInfrastructure(t *testing.T) {
 	h := server.New(server.WithListener(ln), server.WithTransport(standard.NewTransporter), server.WithWriteTimeout(0))
 	Register(h.Group("/", Recovery()), New(svcs), jwt)
 	finish := make(chan struct{}, 1)
+	var browserFailedID atomic.Int64
+	if os.Getenv("NX_MEMORY_BROWSER") == "1" {
+		h.POST("/__test/failed-extraction", func(ctx context.Context, c *app.RequestContext) {
+			malformed.Store(true)
+			message := model.Message{SessionID: session.ID, Role: "user", Content: "浏览器重试验收的新事实来源。"}
+			if err := db.Create(&message).Error; err != nil {
+				c.SetStatusCode(500)
+				return
+			}
+			job, err := svcs.Memory.ExtractNow(ctx, owner.ID, &service.ExtractInput{SessionID: session.ID})
+			if err != nil {
+				c.SetStatusCode(500)
+				return
+			}
+			browserFailedID.Store(job.ID)
+			c.JSON(202, map[string]any{"job_id": job.ID})
+		})
+		h.POST("/__test/model-ready", func(_ context.Context, c *app.RequestContext) { malformed.Store(false); c.SetStatusCode(204) })
+	}
 	h.POST("/__test/finish", func(_ context.Context, c *app.RequestContext) {
 		select {
 		case finish <- struct{}{}:
@@ -193,7 +212,11 @@ func TestMemoryHTTPRealInfrastructure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := jwt.Generate(owner.ID+1, "user", "foreign")
+	foreignUser, err := svcs.Auth.Register(ctx, &service.RegisterInput{Username: "memory-foreign", Email: "memory-foreign@test.invalid", Password: "memory-foreign-test-2026"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := jwt.Generate(foreignUser.ID, foreignUser.Role, foreignUser.Username)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,6 +337,12 @@ func TestMemoryHTTPRealInfrastructure(t *testing.T) {
 		case <-finish:
 		case <-ctx.Done():
 			t.Fatal("browser walkthrough timed out")
+		}
+		if id := browserFailedID.Load(); id > 0 {
+			wait(func() bool {
+				var job long_term.Job
+				return db.First(&job, id).Error == nil && job.Status == "done" && job.RetryEpoch == 1
+			}, "browser retry button did not complete the same failed job")
 		}
 	} else {
 		if code, _ := request("POST", fmt.Sprintf("/memories/%d/archive", memory.ID), "", false); code != 200 {

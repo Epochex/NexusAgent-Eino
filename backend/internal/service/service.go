@@ -14,6 +14,7 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
+	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/rag/engine"
 	"github.com/chengpeng-cp/nexus-agent/internal/repo"
 	"github.com/chengpeng-cp/nexus-agent/internal/security"
@@ -89,6 +90,13 @@ func New(d Deps) (*Services, error) {
 		SetAccessCheck(func(context.Context, []model.Tool) error)
 	}); ok {
 		guarded.SetAccessCheck(s.MCP.AuthorizeTools)
+	}
+	s.Agent.validateTools = func(ctx context.Context, raw string) error {
+		if d.Executor == nil {
+			return errcode.ErrToolNotFound
+		}
+		_, err := d.Executor.ListContext(ctx, raw)
+		return err
 	}
 	return s, nil
 }

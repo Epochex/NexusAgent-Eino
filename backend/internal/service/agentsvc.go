@@ -3,7 +3,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"gorm.io/gorm"
@@ -13,12 +12,14 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/pagination"
 	"github.com/chengpeng-cp/nexus-agent/internal/repo"
+	"github.com/chengpeng-cp/nexus-agent/internal/tool"
 )
 
 // AgentService Agent CRUD。
 type AgentService struct {
-	repos *repo.Repos
-	cfg   *config.Config
+	repos         *repo.Repos
+	cfg           *config.Config
+	validateTools func(context.Context, string) error
 }
 
 // NewAgentService 构造。
@@ -113,32 +114,15 @@ func (s *AgentService) validateToolBindings(ctx context.Context, toolsJSON []byt
 	if len(toolsJSON) == 0 || string(toolsJSON) == "[]" {
 		return nil
 	}
-	bindings, err := parseToolBindings(toolsJSON)
+	bindings, err := tool.ParseAgentBindings(string(toolsJSON))
 	if err != nil {
 		return errcode.ErrInvalidParam.WithMsg("tools 格式不合法")
 	}
-	for _, b := range bindings {
-		if b.ToolCode == "" {
-			continue
-		}
-		if _, err := s.repos.Tool.GetByCode(ctx, b.ToolCode); err != nil {
-			return errcode.ErrToolNotFound.WithMsg("工具 %q 不存在", b.ToolCode)
-		}
+	if len(bindings) == 0 {
+		return nil
 	}
-	return nil
-}
-
-// parseToolBindings 解析绑定 JSON。
-func parseToolBindings(raw []byte) ([]struct {
-	ToolID   int64  `json:"tool_id"`
-	ToolCode string `json:"tool_code"`
-}, error) {
-	var out []struct {
-		ToolID   int64  `json:"tool_id"`
-		ToolCode string `json:"tool_code"`
+	if s.validateTools == nil {
+		return errcode.ErrToolNotFound
 	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return s.validateTools(ctx, string(toolsJSON))
 }

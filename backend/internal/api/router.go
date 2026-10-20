@@ -32,11 +32,11 @@ func Register(g *route.RouterGroup, h *Handler, jwt *security.JWTManager) {
 		auth.POST("/login", h.Login)
 		auth.POST("/refresh", h.Refresh)
 		// 登出需登录态：吊销 refresh token 白名单（td.md 认证四件套均在 /auth 下）
-		auth.POST("/logout", Auth(jwt), h.Logout)
+		auth.POST("/logout", Auth(jwt, h.svcs.Auth.Identity), h.Logout)
 	}
 
 	// ---- 认证后的用户接口 ----
-	user := v1.Group("", Auth(jwt))
+	user := v1.Group("", Auth(jwt, h.svcs.Auth.Identity))
 	{
 		user.GET("/me", h.Me)
 
@@ -105,7 +105,7 @@ func Register(g *route.RouterGroup, h *Handler, jwt *security.JWTManager) {
 	}
 
 	// ---- 管理接口（admin）----
-	admin := v1.Group("/admin", Auth(jwt), AdminOnly())
+	admin := v1.Group("/admin", Auth(jwt, h.svcs.Auth.Identity), AdminOnly())
 	{
 		// 模型网关配置
 		admin.GET("/models/providers", h.ListProviders)

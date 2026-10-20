@@ -2,13 +2,16 @@
 
 基于 [chengpeng-cp/nexus-agent](https://github.com/chengpeng-cp/nexus-agent) 的 Go + Eino 生产工程化改造。保留完整平台功能，重点推进可靠执行、审批恢复、工具权限、数据一致性与可验证的性能。
 
-**当前实现：P0/P1 执行内核与 P2 持久工作流。** 普通 Agent、Host 专家和直答统一到 Eino ADK v0.9.22，YAML 工作流编译为实际 Eino Graph；保留 `agent/naive` 教学版。PostgreSQL 管理运行、审批、checkpoint、事件和 outbox，独立 Worker 执行；数据集成与整个平台的容量验收按 P3/P4 推进，真实模型效果尚未验收。
+**当前功能已推进至 P3 数据与集成，正在进行最终回归；P4 容量与发布仍在实施。** 普通 Agent、Host 专家和直答统一到 Eino ADK v0.9.22，YAML 工作流编译为实际 Eino Graph；保留 `agent/naive` 教学版。PostgreSQL 管理运行、审批、checkpoint、事件和 outbox，独立 Worker 执行；文档、检索、记忆及 MCP/A2A 已有真实依赖和故障验收，真实模型效果尚未验收。
 
 - [生产化设计与分阶段验收](docs/superpowers/specs/2026-10-20-nexus-agent-eino-design.md)
 - [上游来源与改造归属](UPSTREAM.md)
 - [首阶段验证、微基准与边界](docs/research/2026-10-20-p1-validation.md)
 - [持久工作流验证与故障实验](docs/research/2026-10-20-p2-validation.md)
 - [运行、审批、恢复与部署](docs/research/workflow-runtime-runbook.md)
+- [P3 产品功能、权限与数据集成验收](docs/research/2026-10-20-p3-validation.md)
+- [MCP 授权、凭据与工具策略](docs/research/mcp-runtime-runbook.md)
+- [A2A 身份、任务与未知结果核对](docs/research/a2a-runtime-runbook.md)
 
 目标架构：Hertz API + Eino ADK/Graph + PostgreSQL 运行与审批状态 + Redis Streams Worker，沿用 Milvus、MinIO、OpenTelemetry 与 Prometheus。优先完成执行语义与故障恢复，再以真实测试推进吞吐和资源效率。
 

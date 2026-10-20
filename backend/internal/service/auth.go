@@ -114,7 +114,11 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*securi
 		// 过期与无效统一按"凭证失效"处理（前端引导重新登录）
 		return nil, errcode.ErrTokenInvalid
 	}
-	pair, err := s.jwt.Generate(claims.UserID, claims.Role, claims.Username)
+	principal, err := s.Identity(ctx, claims.UserID)
+	if err != nil {
+		return nil, err
+	}
+	pair, err := s.jwt.Generate(principal.ID, principal.Role, principal.Username)
 	if err != nil {
 		return nil, errcode.ErrInternal.WithCause(err)
 	}
@@ -128,6 +132,27 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*securi
 		return nil, errcode.ErrTokenInvalid.WithMsg("refresh token 已失效")
 	}
 	return pair, nil
+}
+
+// Identity rechecks current account authority; signed claims alone can outlive
+// a role change or account disable. Database failures fail closed.
+func (s *AuthService) Identity(parent context.Context, id int64) (*model.User, error) {
+	if id < 1 {
+		return nil, errcode.ErrUnauthorized
+	}
+	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+	defer cancel()
+	user, err := s.users.GetByID(ctx, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errcode.ErrUnauthorized
+	}
+	if err != nil {
+		return nil, errcode.ErrInternal.WithCause(err)
+	}
+	if user.Status != 1 {
+		return nil, errcode.ErrUnauthorized
+	}
+	return user, nil
 }
 
 // Logout 登出：吊销该用户全部 refresh token。

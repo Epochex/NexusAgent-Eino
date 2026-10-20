@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/observability"
 	"github.com/chengpeng-cp/nexus-agent/internal/security"
 )
@@ -125,7 +126,7 @@ func TakeRootSpan(c *app.RequestContext) trace.Span {
 }
 
 // Auth JWT 认证：校验 Bearer Token 并把身份注入请求上下文。
-func Auth(jwt *security.JWTManager) app.HandlerFunc {
+func Auth(jwt *security.JWTManager, identities ...func(context.Context, int64) (*model.User, error)) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		// Chat SSE 使用 fetch + Authorization header；认证信息不从 URL 查询参数读取，
 		// 避免令牌进入浏览器历史、代理访问日志或 Referer。
@@ -142,6 +143,15 @@ func Auth(jwt *security.JWTManager) app.HandlerFunc {
 		if err != nil {
 			abort(c, 401, errTokenInvalid)
 			return
+		}
+		if len(identities) > 0 {
+			principal, err := identities[0](ctx, claims.UserID)
+			if err != nil {
+				Fail(c, err)
+				c.Abort()
+				return
+			}
+			claims.Role, claims.Username = principal.Role, principal.Username
 		}
 		c.Set(claimsKey, claims)
 		c.Next(security.WithUserID(ctx, claims.UserID))

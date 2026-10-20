@@ -84,7 +84,7 @@ func (h *Handler) DeleteAgent(ctx context.Context, c *app.RequestContext) {
 
 // ListTools GET /api/v1/tools —— 工具清单（绑定 Agent 用）。
 func (h *Handler) ListTools(ctx context.Context, c *app.RequestContext) {
-	list, total, err := h.svcs.Repos.Tool.List(ctx, string(c.Query("type")), parsePagination(c).Offset(), parsePagination(c).Limit())
+	list, total, err := h.svcs.AvailableTools(ctx, string(c.Query("type")), parsePagination(c))
 	if err != nil {
 		Fail(c, err)
 		return

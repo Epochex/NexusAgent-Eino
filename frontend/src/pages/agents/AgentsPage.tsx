@@ -98,6 +98,13 @@ export function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [tools, setTools] = useState<Tool[]>([]);
+	const [toolsPage,setToolsPage] = useState(1);
+	const [toolsTotal,setToolsTotal] = useState(0);
+	const [toolsKeyword,setToolsKeyword] = useState('');
+	const [toolsLoading,setToolsLoading] = useState(false);
+	const [toolsError,setToolsError] = useState('');
+	const [agentPage,setAgentPage] = useState(1);
+	const [agentTotal,setAgentTotal] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [form, setForm] = useState<AgentForm>(EMPTY_FORM);
@@ -105,18 +112,19 @@ export function AgentsPage() {
   const [delTarget, setDelTarget] = useState<Agent | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  /** 拉取 Agent 清单（单页 100 条足够管理场景） */
+  /** 有界分页；超过单页的配置仍可访问。 */
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listAgents({ page: 1, page_size: 100 });
+      const data = await listAgents({ page: agentPage, page_size: 24 });
       setAgents(data.list);
+	  setAgentTotal(data.total);
     } catch (e) {
       toast.err(errMsg(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [agentPage]);
 
   useEffect(() => {
     void refresh();
@@ -135,18 +143,24 @@ export function AgentsPage() {
   // Modal 打开时拉取工具清单，供绑定勾选
   useEffect(() => {
     if (!modalOpen) return;
-    listTools({ page: 1, page_size: 100 })
-      .then((d) => setTools(d.list))
-      .catch((e) => toast.err(errMsg(e)));
-  }, [modalOpen]);
+	let active=true;
+	setToolsLoading(true);setToolsError('');
+    listTools({ page: toolsPage, page_size: 20, keyword: toolsKeyword })
+      .then((d) => {if(active){setTools(d.list);setToolsTotal(d.total);}})
+      .catch((e) => {if(active){setTools([]);setToolsError(errMsg(e));}})
+	  .finally(() => {if(active)setToolsLoading(false);});
+	return () => {active=false;};
+  }, [modalOpen,toolsPage,toolsKeyword]);
 
   const openCreate = () => {
+	setToolsPage(1);setToolsKeyword('');
     setEditing(null);
     setForm(EMPTY_FORM);
     setModalOpen(true);
   };
 
   const openEdit = (a: Agent) => {
+	setToolsPage(1);setToolsKeyword('');
     setEditing(a);
     setForm(toForm(a));
     setModalOpen(true);
@@ -159,6 +173,7 @@ export function AgentsPage() {
 
   /** 工具勾选切换 */
   const toggleTool = (id: number) => {
+	if(!form.tool_ids.includes(id) && form.tool_ids.length>=128){toast.err('最多绑定 128 个工具');return;}
     setForm((f) => ({
       ...f,
       tool_ids: f.tool_ids.includes(id)
@@ -300,6 +315,11 @@ export function AgentsPage() {
           ))}
         </div>
       )}
+	  <div className="mt-4 flex items-center justify-end gap-3 text-xs text-fog">
+		<Button variant="ghost" disabled={loading || agentPage===1} onClick={() => setAgentPage(p => p-1)}>上一页 Agent</Button>
+		<span>{agentPage} / {Math.max(1,Math.ceil(agentTotal/24))} · 共 {agentTotal} 个</span>
+		<Button variant="ghost" disabled={loading || agentPage*24>=agentTotal} onClick={() => setAgentPage(p => p+1)}>下一页 Agent</Button>
+	  </div>
 
       {/* 新建 / 编辑 Modal（复用同一表单，编辑时预填） */}
       <Modal
@@ -441,8 +461,16 @@ export function AgentsPage() {
           {/* 工具绑定：checkbox 列表，危险工具带 coral 警示 */}
           <div>
             <label className="field-label">工具绑定</label>
+			<Input placeholder="搜索可用工具名称或代码" value={toolsKeyword} maxLength={128}
+			  onChange={e => {setToolsKeyword(e.target.value);setToolsPage(1);}} />
+			{form.tool_ids.length>0 && <div className="my-2 flex flex-wrap gap-1">
+			  {form.tool_ids.map(id => <button type="button" key={id} onClick={() => toggleTool(id)} className="rounded border border-smoke px-2 py-1 text-xs text-fog" aria-label={`移除工具 ${id}`}>
+				{tools.find(item => item.id===id)?.name || `工具 #${id}`} ×
+			  </button>)}
+			</div>}
+			{toolsError && <p className="my-2 text-xs text-coral">工具加载失败：{toolsError}</p>}
             <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-lg border border-smoke/60 bg-graphite/40 p-2">
-              {tools.map((t) => (
+			  {toolsLoading ? <Spinner /> : tools.map((t) => (
                 <label
                   key={t.id}
                   className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-obsidian"
@@ -458,10 +486,15 @@ export function AgentsPage() {
                   {t.is_dangerous && <Badge tone="coral" className="ml-auto">危险</Badge>}
                 </label>
               ))}
-              {tools.length === 0 && (
+              {!toolsLoading && !toolsError && tools.length === 0 && (
                 <p className="py-2 text-center text-xs text-ash">暂无可用工具</p>
               )}
             </div>
+			<div className="mt-2 flex items-center justify-between gap-2 text-xs text-fog">
+			  <Button type="button" variant="ghost" disabled={toolsLoading || toolsPage===1} onClick={() => setToolsPage(p => p-1)}>上一页工具</Button>
+			  <span>{toolsPage} / {Math.max(1,Math.ceil(toolsTotal/20))} · 已选 {form.tool_ids.length}/128</span>
+			  <Button type="button" variant="ghost" disabled={toolsLoading || toolsPage*20>=toolsTotal} onClick={() => setToolsPage(p => p+1)}>下一页工具</Button>
+			</div>
           </div>
         </form>
       </Modal>
