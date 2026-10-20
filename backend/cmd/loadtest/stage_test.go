@@ -9,3 +9,11 @@ func TestCapacityTargetDoesNotPassByRejectingOfferedWork(t *testing.T) {
 		t.Fatal("offered capacity target incorrectly passed by rejecting half the work")
 	}
 }
+
+func TestCapacityTargetDoesNotHideOffersAfterWindow(t *testing.T) {
+	r := &stageReport{Wire: 2, WireAfterWindow: 1, Arrivals: arrivalSnapshot{Target: 2}, Outcomes: map[string]int{}, Database: &databaseAudit{WorkflowTotal: 2, WorkflowStates: map[string]int{"succeeded": 2}}, Latency: map[string]distribution{"control_query": {Count: 1}, "control_approve": {Count: 1}, "control_cancel": {Count: 1}}}
+	assessStage(r)
+	if r.Passed {
+		t.Fatal("late HTTP offers hidden behind scheduled callback counts")
+	}
+}

@@ -466,7 +466,7 @@ func collectResources(parent context.Context, client *http.Client, db *gorm.DB, 
 		r.Error += "; PG observation unavailable"
 	}
 	_ = db.WithContext(ctx).Table("workflow_runs").Where("definition IS NOT NULL AND status NOT IN ('succeeded','failed','canceled')").Count(&r.Outstanding).Error
-	output, err := exec.CommandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{json .}}", "nexus-eino-capacity-server-1", "nexus-eino-capacity-worker-1", "nexus-eino-capacity-peer-1", "nexus-eino-acceptance-postgres-1", "nexus-eino-acceptance-redis-1", "nexus-eino-acceptance-milvus-1", "nexus-eino-acceptance-minio-1", "nexus-eino-acceptance-docparser-1").Output()
+	output, err := exec.CommandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{json .}}", "nexus-eino-capacity-server-1", "nexus-eino-capacity-worker-1", "nexus-eino-capacity-peer-1", "nexus-eino-acceptance-postgres-1", "nexus-eino-acceptance-redis-1", "nexus-eino-acceptance-milvus-1", "nexus-eino-acceptance-minio-1", "nexus-eino-acceptance-docparser-1", "nexus-eino-acceptance-etcd-1", "nexus-eino-acceptance-milvus-minio-1").Output()
 	if err != nil {
 		if parent.Err() == nil {
 			r.Error += "; Docker CPU/memory observation unavailable"
@@ -500,6 +500,9 @@ func controlLoop(ctx context.Context, api *apiClient, seeds []streamTarget, stat
 		requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		err := api.call(requestCtx, "GET", fmt.Sprintf("/workflows/runs/%d", target.id), target.actor.Token, nil, nil)
 		cancel()
+		if err != nil && ctx.Err() != nil {
+			return
+		}
 		stats.latencyValue("control_query", float64(time.Since(start))/1e6)
 		if err != nil && ctx.Err() == nil {
 			stats.outcome("control_error", err)
@@ -541,6 +544,9 @@ func controlLoop(ctx context.Context, api *apiClient, seeds []streamTarget, stat
 	}
 }
 func assessStage(r *stageReport) {
+	if r.WireAfterWindow > 0 {
+		r.Gaps = append(r.Gaps, "actual HTTP offers occurred after the scheduled arrival window")
+	}
 	if r.Outcomes["workflow_rejected"]+r.Outcomes["chat_rejected"] > 0 {
 		r.Gaps = append(r.Gaps, "admission rejected offered traffic; this stage does not sustain the full offered rate")
 	}
