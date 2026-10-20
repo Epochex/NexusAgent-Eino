@@ -48,11 +48,11 @@ jobs:
           cache-dependency-path: backend/go.sum
       - run: go vet ./...
       - run: go test -race ./... -timeout 180s
-      - run: go test -race -tags=integration ./internal/service ./internal/execution ./internal/api ./internal/ingestion ./internal/repo ./internal/memory/long_term ./internal/tool ./internal/a2a ./internal/capacity -count=1 -timeout 240s
+      - run: go test -race -tags=integration ./internal/service ./internal/execution ./internal/api ./internal/ingestion ./internal/repo ./internal/memory/long_term ./internal/tool ./internal/a2a ./internal/capacity ./cmd/loadtest -count=1 -timeout 240s
         env:
           NX_TEST_DATABASE_DSN: postgres://postgres@localhost:5432/nexus_eino_test?sslmode=disable
           NX_TEST_REDIS_ADDR: localhost:6379
-      - run: go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate ./cmd/docparser
+      - run: go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate ./cmd/docparser ./cmd/loadtest
   data-infrastructure:
     runs-on: ubuntu-latest
     timeout-minutes: 20

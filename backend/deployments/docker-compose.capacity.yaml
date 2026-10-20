@@ -1,0 +1,87 @@
+# Controlled acceptance workload only. The generated binaries/configs are
+# mounted read-only; the load driver runs outside the server+worker budget.
+name: nexus-eino-capacity
+x-app-env: &app-env
+  NX_ENV: test
+  NX_PG__DSN: "postgres://postgres@postgres:5432/nexus_acceptance_test?sslmode=disable&search_path=${NX_CAPACITY_SCHEMA:?Set the isolated test schema}"
+  NX_PG__MAX_OPEN_CONNS: "32"
+  NX_PG__MAX_IDLE_CONNS: "12"
+  NX_REDIS__ADDR: redis:6379
+  NX_REDIS__DB: "10"
+  NX_MILVUS__ADDR: milvus:19530
+  NX_MINIO__ENDPOINT: minio:9000
+  NX_MINIO__ACCESS_KEY: minioadmin
+  NX_MINIO__SECRET_KEY: minioadmin
+  NX_MINIO__BUCKET: nexus-capacity-fixture
+  NX_SECRET_KEY: "01234567890123456789012345678901"
+  NX_JWT__SECRET: capacity-public-test-only-jwt-secret-2026
+  NX_JWT__ACCESS_TTL: 2h
+  NX_JWT__REFRESH_TTL: 4h
+  NX_LLM__DEFAULT_CHAT: load-controlled
+  NX_LLM__MAX_CONNS_PER_PROVIDER: "64"
+  NX_LLM__CIRCUIT_ERROR_RATE: "1"
+  NX_AGENT__RUN_TIMEOUT: 60s
+  NX_AGENT__STEP_TIMEOUT: 10s
+  NX_AGENT__MEMORY_EXTRACT_EVERY: "0"
+  NX_A2A__ENABLED: "false"
+  NX_MCP__ENABLED: "true"
+  NX_SANDBOX__ENABLED: "false"
+  NX_OUTBOUND__PRIVATE_ORIGINS: http://peer:18080
+  NX_PDF_PARSER__ENDPOINT: http://docparser:8095
+  NX_PDF_PARSER__TOKEN: public-parser-acceptance-token-32-characters
+  NX_OBSERVABILITY__OTEL_ENABLED: "false"
+  GOMAXPROCS: "2"
+  GOMEMLIMIT: 3GiB
+  HTTP_PROXY: ""
+  HTTPS_PROXY: ""
+  ALL_PROXY: ""
+  NO_PROXY: "*"
+x-app: &app
+  image: golang@sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84
+  user: "65532:65532"
+  working_dir: /work
+  volumes: ["../../output/capacity-bin:/bench:ro"]
+  read_only: true
+  tmpfs: ["/work:rw,noexec,nosuid,nodev,size=64m,uid=65532,gid=65532", "/tmp:rw,noexec,nosuid,nodev,size=16m,uid=65532,gid=65532"]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  cpus: 2
+  mem_limit: 4g
+  memswap_limit: 4g
+  pids_limit: 256
+  networks: [default, parser]
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "2"}
+services:
+  peer:
+    <<: *app
+    command: [/bench/loadtest, -mode, peer, -listen, ":18080"]
+    cpus: 1
+    mem_limit: 512m
+    memswap_limit: 512m
+    networks: [default]
+    ports: ["127.0.0.1:58080:18080"]
+    environment: {GOMAXPROCS: "1", GOMEMLIMIT: 384MiB}
+  server:
+    <<: *app
+    command: [/bench/server]
+    environment:
+      <<: *app-env
+      NX_HTTP__PORT: "8080"
+      NX_OBSERVABILITY__DIAGNOSTICS_ADDR: 0.0.0.0:6060
+    ports: ["127.0.0.1:18090:8080", "127.0.0.1:16060:6060"]
+  worker:
+    <<: *app
+    command: [/bench/worker, -queues, "execution,doc-etl,memory", -execution-concurrency, "64", -memory-concurrency, "1"]
+    environment:
+      <<: *app-env
+      NX_OBSERVABILITY__DIAGNOSTICS_ADDR: 0.0.0.0:6061
+    ports: ["127.0.0.1:16061:6061"]
+networks:
+  default:
+    external: true
+    name: nexus-eino-acceptance_default
+  parser:
+    external: true
+    name: nexus-eino-acceptance_parser
