@@ -38,7 +38,6 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/tool"
 	"github.com/chengpeng-cp/nexus-agent/internal/vector"
 	"github.com/chengpeng-cp/nexus-agent/internal/worker"
-	"github.com/chengpeng-cp/nexus-agent/internal/workflow"
 )
 
 func main() {
@@ -140,15 +139,7 @@ func run() error {
 	ragEngine.SetModels(svcs.DefaultEmbedding, svcs.DefaultRerank)
 	svcs.SetRAGEngine(ragEngine)
 
-	// ===== ⑨ 工作流引擎（复用既有组件，不重复造轮子） =====
-	svcs.Workflow.SetEngine(workflow.New(workflow.Deps{
-		Gateway:      gateway,
-		Tools:        executor,
-		RAG:          ragEngine,
-		ResolveModel: svcs.ResolveModelByAlias,
-		GetKB:        svcs.Workflow.GetWorkflowLookup(),
-		SubRunner:    svcs.Workflow.SubflowRunner(),
-	}))
+	// Workflow handlers persist submissions; the separate worker owns Eino execution.
 
 	// ===== ⑩ 长期记忆（抽取用低成本 chat 模型，实时解析） =====
 	memoryMgr := long_term.NewManager(gateway, svcs.DefaultChat, svcs.DefaultEmbedding, repos.Memory, store)

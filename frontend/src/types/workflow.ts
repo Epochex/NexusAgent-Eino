@@ -18,6 +18,9 @@ export interface Workflow {
 
 /** 执行状态 */
 export type RunStatus =
+  | 'queued'
+  | 'retry_wait'
+  | 'needs_attention'
   | 'running'
   | 'waiting_approval'
   | 'succeeded'
@@ -54,6 +57,35 @@ export interface WorkflowRun {
   finished_at?: string | null;
   created_at: string;
   steps?: WorkflowStepRun[];
+  definition_hash?: string;
+  definition_release_id?: number;
+  last_seq?: number;
+  approvals?: WorkflowApproval[];
+  approval_history?: WorkflowApproval[];
+  approval_history_truncated?: boolean;
+}
+
+export interface WorkflowApproval {
+  id: number;
+  interrupt_id: string;
+  path: string;
+  args_hash: string;
+  prompt: string;
+  decision: 'pending' | 'approved' | 'rejected';
+  comment?: string;
+  expires_at: string;
+  decided_at?: string;
+  decided_by?: number;
+}
+export interface WorkflowOperation {
+  id: string;
+  path: string;
+  args_hash: string;
+  status: string;
+  replay_policy: string;
+  output?: unknown;
+  error?: string;
+  attempt: number;
 }
 
 /* ---- DSL 结构（YAML 解析目标，供编辑器提示与校验错误对照） ---- */

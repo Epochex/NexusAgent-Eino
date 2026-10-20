@@ -87,6 +87,10 @@ func Register(g *route.RouterGroup, h *Handler, jwt *security.JWTManager) {
 		user.GET("/workflows/runs", h.ListRuns)
 		user.GET("/workflows/runs/:id", h.GetRun)
 		user.POST("/workflows/runs/:id/approve", h.ApproveRun)
+		user.POST("/workflows/runs/:id/cancel", h.CancelRun)
+		user.GET("/workflows/runs/:id/operations", h.RunOperations)
+		user.POST("/workflows/runs/:id/reconcile", h.ReconcileRun)
+		user.GET("/workflows/runs/:id/events", h.RunEvents)
 	}
 
 	// ---- 管理接口（admin）----

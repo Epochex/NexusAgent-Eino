@@ -8,8 +8,10 @@
  *    就地展示结果（状态 / 输出 / 错误），waiting_approval 时引导到执行记录页审批。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   createWorkflow,
+  getRun,
   deleteWorkflow,
   listWorkflows,
   runWorkflow,
@@ -42,7 +44,7 @@ nodes:
     prompt: |
       根据资料回答问题。资料：{{retrieve.result}}
       问题：{{question}}
-edges: [retrieve, answer]
+edges: [{from: retrieve, to: answer}]
 `;
 
 export function WorkflowsPage() {
@@ -65,6 +67,20 @@ export function WorkflowsPage() {
   const [inputText, setInputText] = useState('{}');
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<WorkflowRun | null>(null);
+  const requestRef = useRef<{ signature: string; key: string } | null>(null);
+
+  useEffect(() => {
+    if (!runTarget || !runResult || !['queued', 'running', 'retry_wait'].includes(runResult.status)) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try { const next = await getRun(runResult.id); if (!stopped) setRunResult(next); }
+      catch (e) { if (!stopped) toast.err(errMsg(e)); }
+      if (!stopped) timer = setTimeout(() => void poll(), 1500);
+    };
+    timer = setTimeout(() => void poll(), 750);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [runTarget, runResult?.id, runResult?.status]);
 
   /* ---- 删除确认 ---- */
   const [delTarget, setDelTarget] = useState<Workflow | null>(null);
@@ -126,7 +142,7 @@ export function WorkflowsPage() {
     try {
       const payload = { name: name.trim(), description: description.trim(), dsl };
       if (editing) {
-        await updateWorkflow(editing.id, payload);
+        await updateWorkflow(editing.id, { ...payload, version: editing.version });
         toast.ok('工作流已保存');
       } else {
         await createWorkflow(payload);
@@ -146,6 +162,7 @@ export function WorkflowsPage() {
     setRunTarget(w);
     setInputText('{}');
     setRunResult(null);
+    requestRef.current = null;
   };
 
   /** 解析入参文本：必须是 JSON 对象（拒绝数组/字面量），失败时 toast 并返回 null */
@@ -171,7 +188,9 @@ export function WorkflowsPage() {
     if (!parsed) return;
     setRunning(true);
     try {
-      const run = await runWorkflow(runTarget.id, parsed);
+      const signature = JSON.stringify([runTarget.id, parsed]);
+      if (requestRef.current?.signature !== signature) requestRef.current = { signature, key: crypto.randomUUID() };
+      const run = await runWorkflow(runTarget.id, parsed, requestRef.current.key);
       setRunResult(run);
     } catch (e) {
       toast.err(errMsg(e));
@@ -202,7 +221,7 @@ export function WorkflowsPage() {
         title="工作流"
         desc="用 YAML DSL 编排 LLM、工具、知识库等节点，支持人工审批（HITL）"
         action={
-          <Button onClick={() => openEditor()}>＋ 新建工作流</Button>
+          <div className="flex items-center gap-4"><Link className="text-sm text-lime" to="/workflows/runs">执行记录</Link><Button onClick={() => openEditor()}>＋ 新建工作流</Button></div>
         }
       />
 
@@ -247,11 +266,15 @@ export function WorkflowsPage() {
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-fog">v{w.version}</td>
                   <td className="px-4 py-3">
-                    <Badge tone={w.is_active ? 'pulse' : 'gray'}>{w.is_active ? '启用' : '停用'}</Badge>
+                    <Badge tone={w.status === 1 ? 'pulse' : 'gray'}>{w.status === 1 ? '启用' : '停用'}</Badge>
                   </td>
                   <td className="px-4 py-3 text-xs text-ash">{relativeTime(w.updated_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-3 text-xs">
+                      <button className="text-ash hover:text-lime" onClick={() => {
+                        void updateWorkflow(w.id, { status: w.status === 1 ? 0 : 1, version: w.version })
+                          .then(() => load()).catch((e) => toast.err(errMsg(e)));
+                      }}>{w.status === 1 ? '停用' : '启用'}</button>
                       <button className="text-ash transition-colors hover:text-lime" onClick={() => openEditor(w)}>
                         编辑
                       </button>
@@ -325,8 +348,8 @@ export function WorkflowsPage() {
             <Button variant="ghost" onClick={() => setRunTarget(null)}>
               关闭
             </Button>
-            <Button loading={running} onClick={() => void handleRun()}>
-              执行
+            <Button loading={running} disabled={runResult !== null} onClick={() => void handleRun()}>
+              {runResult ? '已提交' : '提交运行'}
             </Button>
           </>
         }
@@ -348,12 +371,13 @@ export function WorkflowsPage() {
           {runResult && (
             <div className="space-y-2 border-t border-smoke/60 pt-3">
               <div className="flex items-center gap-2">
-                <span className="section-title">执行结果</span>
+                <span className="section-title">运行 #{runResult.id}</span>
                 <StatusBadge status={runResult.status} />
               </div>
+              <p className="text-xs text-ash">关闭窗口后继续运行；可在执行记录页查看、审批或取消。</p>
               {runResult.status === 'waiting_approval' && (
                 <p className="rounded-lg border border-lime/40 bg-lime/10 px-3 py-2 text-xs text-lime">
-                  已挂起等待审批，请在执行记录页处理
+                  已挂起等待审批，<Link className="underline" to="/workflows/runs">前往执行记录处理</Link>
                 </p>
               )}
               {runResult.error && <p className="text-xs text-coral">✕ {runResult.error}</p>}

@@ -19,10 +19,13 @@ import (
 // Definition is frozen when a run is accepted. Opaque model snapshots hold
 // encrypted credentials and immutable settings interpreted by service wiring.
 type Definition struct {
-	DSL      string                     `json:"dsl"`
-	Subflows map[int64]string           `json:"subflows,omitempty"`
-	Models   map[string]json.RawMessage `json:"models,omitempty"`
-	KBs      map[int64]json.RawMessage  `json:"knowledge_bases,omitempty"`
+	RequiredCapabilities []string                   `json:"required_capabilities,omitempty"`
+	Version              int                        `json:"workflow_version,omitempty"`
+	DSL                  string                     `json:"dsl"`
+	Subflows             map[int64]string           `json:"subflows,omitempty"`
+	Models               map[string]json.RawMessage `json:"models,omitempty"`
+	KBs                  map[int64]json.RawMessage  `json:"knowledge_bases,omitempty"`
+	Tools                map[string]json.RawMessage `json:"tools,omitempty"`
 }
 type Driver struct {
 	store       *Store

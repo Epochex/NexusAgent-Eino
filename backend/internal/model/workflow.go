@@ -5,38 +5,61 @@ import (
 	"time"
 
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 // Workflow 工作流定义（DSL 为 YAML 文本）。
 type Workflow struct {
-	ID          int64     `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"size:128" json:"name"`
-	Description string    `gorm:"type:text" json:"description"`
-	DSL         string    `gorm:"column:dsl;type:text" json:"dsl"`
-	Version     int       `gorm:"default:1" json:"version"`
-	IsActive    bool      `json:"is_active"`
-	CreatorID   int64     `json:"creator_id"`
-	Status      int16     `gorm:"default:1" json:"status"` // default:1 启用——零值 0 会被误当成"停用"，未显式传 status 时落库取 DB 默认 1
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          int64          `gorm:"primaryKey" json:"id"`
+	Name        string         `gorm:"size:128" json:"name"`
+	Description string         `gorm:"type:text" json:"description"`
+	DSL         string         `gorm:"column:dsl;type:text" json:"dsl"`
+	Version     int            `gorm:"default:1" json:"version"`
+	IsActive    bool           `json:"is_active"`
+	CreatorID   int64          `json:"creator_id"`
+	Status      int16          `gorm:"default:1" json:"status"` // default:1 启用——零值 0 会被误当成"停用"，未显式传 status 时落库取 DB 默认 1
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	ArchivedAt  gorm.DeletedAt `gorm:"column:archived_at" json:"-"`
 }
 
 // WorkflowRun 工作流执行记录。
 type WorkflowRun struct {
-	ID          int64          `gorm:"primaryKey" json:"id"`
-	WorkflowID  int64          `gorm:"index" json:"workflow_id"`
-	TriggerType string         `gorm:"size:20;default:manual" json:"trigger_type"`
-	Status      string         `gorm:"size:24;index;default:running" json:"status"`
-	Input       datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"input"`
-	Output      datatypes.JSON `gorm:"type:jsonb" json:"output,omitempty"`
-	Error       string         `gorm:"size:512" json:"error"`
-	TraceID     string         `gorm:"size:64" json:"trace_id"`
-	StartedAt   *time.Time     `json:"started_at"`
-	FinishedAt  *time.Time     `json:"finished_at"`
-	CreatedAt   time.Time      `json:"created_at"`
+	ID                       int64              `gorm:"primaryKey" json:"id"`
+	WorkflowID               int64              `gorm:"index" json:"workflow_id"`
+	TriggerType              string             `gorm:"size:20;default:manual" json:"trigger_type"`
+	Status                   string             `gorm:"size:24;index;default:running" json:"status"`
+	Input                    datatypes.JSON     `gorm:"type:jsonb;default:'{}'" json:"input"`
+	Output                   datatypes.JSON     `gorm:"type:jsonb" json:"output,omitempty"`
+	Error                    string             `gorm:"size:512" json:"error"`
+	TraceID                  string             `gorm:"size:64" json:"trace_id"`
+	StartedAt                *time.Time         `json:"started_at"`
+	FinishedAt               *time.Time         `json:"finished_at"`
+	CreatedAt                time.Time          `json:"created_at"`
+	DefinitionHash           string             `json:"definition_hash,omitempty"`
+	DefinitionReleaseID      *int64             `json:"definition_release_id,omitempty"`
+	StateVersion             int64              `json:"state_version,omitempty"`
+	LastSeq                  int64              `gorm:"column:next_seq" json:"last_seq,omitempty"`
+	DeadlineAt               time.Time          `json:"deadline_at,omitempty"`
+	Approvals                []WorkflowApproval `gorm:"-" json:"approvals,omitempty"`
+	ApprovalHistory          []WorkflowApproval `gorm:"-" json:"approval_history,omitempty"`
+	ApprovalHistoryTruncated bool               `gorm:"-" json:"approval_history_truncated,omitempty"`
 
 	// 非库字段：步骤轨迹
 	Steps []WorkflowStepRun `gorm:"foreignKey:RunID" json:"steps,omitempty"`
+}
+
+type WorkflowApproval struct {
+	DecidedAt   *time.Time `json:"decided_at,omitempty"`
+	DecidedBy   *int64     `json:"decided_by,omitempty"`
+	ID          int64      `json:"id"`
+	InterruptID string     `json:"interrupt_id"`
+	Path        string     `json:"path"`
+	ArgsHash    string     `json:"args_hash"`
+	Prompt      string     `json:"prompt"`
+	Decision    string     `json:"decision"`
+	Comment     string     `json:"comment,omitempty"`
+	ExpiresAt   time.Time  `json:"expires_at"`
 }
 
 // 工作流执行状态。

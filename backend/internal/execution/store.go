@@ -42,6 +42,10 @@ func object(raw []byte, max int) (datatypes.JSON, error) {
 func hash(raw []byte) string { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }
 
 func (s *Store) Enqueue(ctx context.Context, ownerID, workflowID int64, definition, input json.RawMessage, deadline time.Time) (*Run, error) {
+	return s.EnqueueRequest(ctx, ownerID, workflowID, definition, input, "", deadline)
+}
+
+func (s *Store) EnqueueRequest(ctx context.Context, ownerID, workflowID int64, definition, input json.RawMessage, requestKey string, deadline time.Time) (*Run, error) {
 	def, err := object(definition, 1<<20)
 	if err != nil {
 		return nil, err
@@ -53,18 +57,56 @@ func (s *Store) Enqueue(ctx context.Context, ownerID, workflowID int64, definiti
 	if ownerID <= 0 || workflowID <= 0 || !deadline.After(time.Now()) || deadline.After(time.Now().Add(7*24*time.Hour)) {
 		return nil, ErrInvalidInput
 	}
+	if len(requestKey) > 64 {
+		return nil, ErrInvalidInput
+	}
 	run := &Run{OwnerID: ownerID, WorkflowID: workflowID, Definition: def, DefinitionHash: hash(def), EngineVersion: EngineVersion, GraphSchema: GraphSchema, Status: Queued, Input: in, DeadlineAt: deadline, AvailableAt: time.Now(), PendingIDs: datatypes.JSON(`[]`)}
+	if requestKey != "" {
+		run.RequestKey = &requestKey
+	}
 	err = s.transaction(ctx, func(tx *gorm.DB) error {
-		var found struct{ ID int64 }
-		res := tx.Table("workflows").Select("id").Where("id=? AND creator_id=? AND status=1", workflowID, ownerID).Clauses(clause.Locking{Strength: "SHARE"}).Take(&found)
+		if requestKey != "" {
+			existing, err := findRequest(tx, ownerID, workflowID, requestKey, in)
+			if err != nil {
+				return err
+			}
+			if existing != nil {
+				*run = *existing
+				return nil
+			}
+		}
+		var found struct {
+			ID      int64
+			Version int
+		}
+		res := tx.Table("workflows").Select("id,version").Where("id=? AND creator_id=? AND status=1 AND archived_at IS NULL", workflowID, ownerID).Clauses(clause.Locking{Strength: "SHARE"}).Take(&found)
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			return ErrNotFound
 		}
 		if res.Error != nil {
 			return res.Error
 		}
-		if err := tx.Create(run).Error; err != nil {
+		if err := publishSnapshot(tx, run, found.Version); err != nil {
 			return err
+		}
+		create := tx
+		if requestKey != "" {
+			create = tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "owner_id"}, {Name: "request_key"}}, DoNothing: true})
+		}
+		result := create.Create(run)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			existing, err := findRequest(tx, ownerID, workflowID, requestKey, in)
+			if err != nil {
+				return err
+			}
+			if existing == nil {
+				return ErrConflict
+			}
+			*run = *existing
+			return nil
 		}
 		return appendEvent(tx, run.ID, "queued", map[string]any{"definition_hash": run.DefinitionHash})
 	})
@@ -72,13 +114,24 @@ func (s *Store) Enqueue(ctx context.Context, ownerID, workflowID int64, definiti
 }
 
 func (s *Store) Claim(ctx context.Context, worker string, lease time.Duration) (*Run, error) {
+	return s.ClaimSupported(ctx, worker, lease, nil)
+}
+func (s *Store) ClaimSupported(ctx context.Context, worker string, lease time.Duration, capabilities []string) (*Run, error) {
 	if worker == "" || len(worker) > 128 || lease < time.Second || lease > 10*time.Minute {
 		return nil, ErrInvalidInput
 	}
 	var claimed *Run
 	err := s.transaction(ctx, func(tx *gorm.DB) error {
 		var run Run
-		err := tx.Where("definition IS NOT NULL AND available_at<=NOW() AND (status IN ? OR (status=? AND lease_until<NOW()))", []string{Queued, RetryWait}, Running).Order("available_at,id").Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Take(&run).Error
+		query := tx.Where("definition IS NOT NULL AND available_at<=NOW() AND (status IN ? OR (status=? AND lease_until<NOW()))", []string{Queued, RetryWait}, Running)
+		if capabilities != nil {
+			raw, err := json.Marshal(capabilities)
+			if err != nil {
+				return ErrInvalidInput
+			}
+			query = query.Where("COALESCE(definition->'required_capabilities','[]'::jsonb) <@ ?::jsonb", string(raw))
+		}
+		err := query.Order("available_at,id").Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Take(&run).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
@@ -225,6 +278,12 @@ func (s *Store) Suspend(ctx context.Context, run *Run, pending []Approval) error
 }
 
 func (s *Store) Decide(ctx context.Context, ownerID, runID int64, interruptID, argsHash string, approved bool) error {
+	return s.DecideWithComment(ctx, ownerID, runID, interruptID, argsHash, approved, "")
+}
+func (s *Store) DecideWithComment(ctx context.Context, ownerID, runID int64, interruptID, argsHash string, approved bool, comment string) error {
+	if len(comment) > 2048 {
+		return ErrInvalidInput
+	}
 	return s.transaction(ctx, func(tx *gorm.DB) error {
 		var run Run
 		if err := tx.Where("id=? AND owner_id=? AND definition IS NOT NULL", runID, ownerID).Clauses(clause.Locking{Strength: "UPDATE"}).Take(&run).Error; err != nil {
@@ -271,7 +330,7 @@ func (s *Store) Decide(ctx context.Context, ownerID, runID int64, interruptID, a
 		if !active || run.Status != Waiting && run.Status != Queued {
 			return ErrConflict
 		}
-		result := tx.Model(&a).Where("decision='pending' AND expires_at>clock_timestamp()").Updates(map[string]any{"decision": decision, "decided_by": ownerID, "decided_at": gorm.Expr("NOW()")})
+		result := tx.Model(&a).Where("decision='pending' AND expires_at>clock_timestamp()").Updates(map[string]any{"decision": decision, "decided_by": ownerID, "decided_at": gorm.Expr("NOW()"), "comment": comment})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -291,7 +350,7 @@ func (s *Store) Decide(ctx context.Context, ownerID, runID int64, interruptID, a
 		if err := tx.Model(&Run{}).Where("id=?", runID).Updates(updates).Error; err != nil {
 			return err
 		}
-		if err := appendEvent(tx, runID, "approval_decided", map[string]any{"interrupt_id": interruptID, "decision": decision, "args_hash": a.ArgsHash}); err != nil {
+		if err := appendEvent(tx, runID, "approval_decided", map[string]any{"interrupt_id": interruptID, "decision": decision, "args_hash": a.ArgsHash, "comment": comment}); err != nil {
 			return err
 		}
 		return appendEvent(tx, runID, status, map[string]any{"reason": "approval"})
@@ -309,6 +368,29 @@ func (s *Store) Cancel(ctx context.Context, ownerID, id int64) error {
 		}
 		if terminal(run.Status) {
 			return nil
+		}
+		// Cancel cannot undo a remote call already sent. Preserve uncertainty
+		// before fencing the executor so operators can inspect what happened.
+		var inflight []Operation
+		if err = tx.Where("run_id=? AND status='running'", id).Find(&inflight).Error; err != nil {
+			return err
+		}
+		for _, op := range inflight {
+			status := "abandoned"
+			if op.ReplayPolicy == "manual" {
+				status = "unknown"
+			}
+			if err = tx.Model(&Operation{}).Where("id=?", op.ID).Updates(map[string]any{"status": status, "error": "run canceled while operation in flight", "finished_at": gorm.Expr("NOW()")}).Error; err != nil {
+				return err
+			}
+			if err = tx.Exec(`UPDATE execution_attempts SET status=?,error='run canceled while operation in flight',finished_at=NOW() WHERE operation_id=? AND attempt=? AND status='running'`, status, op.ID, op.Attempt).Error; err != nil {
+				return err
+			}
+			if status == "unknown" {
+				if err = appendEvent(tx, id, "operation_unknown", map[string]any{"operation_id": op.ID, "path": op.Path, "reason": "canceled_in_flight"}); err != nil {
+					return err
+				}
+			}
 		}
 		if err = tx.Model(&run).Updates(map[string]any{"status": Canceled, "generation": gorm.Expr("generation+1"), "finished_at": gorm.Expr("NOW()"), "lease_owner": "", "lease_until": nil}).Error; err != nil {
 			return err

@@ -10,8 +10,8 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { clsx } from 'clsx';
-import { approveRun, getRun, listRuns } from '@/api/workflow';
-import type { WorkflowRun, WorkflowStepRun } from '@/types/workflow';
+import { approveRun, cancelRun, getRun, getRunOperations, reconcileRun, listRuns } from '@/api/workflow';
+import type { WorkflowRun, WorkflowStepRun, WorkflowOperation } from '@/types/workflow';
 import { Badge, Button, EmptyState, Input, PageHeader, Spinner, StatusBadge, Textarea } from '@/components/ui/primitives';
 import { Modal } from '@/components/ui/Modal';
 import { fullTime, tokenCount, truncate } from '@/lib/format';
@@ -20,6 +20,34 @@ import { errMsg } from '@/lib/request';
 
 /** 每页条数，与后端默认分页保持一致 */
 const PAGE_SIZE = 20;
+
+function OperationReconciliation({ run, onDone }: { run: WorkflowRun; onDone: () => void }) {
+  const [operations, setOperations] = useState<WorkflowOperation[]>([]);
+  const [selected, setSelected] = useState('');
+  const [output, setOutput] = useState('');
+  const [evidence, setEvidence] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { let stopped = false; void getRunOperations(run.id).then((ops) => {
+    if (!stopped) { const unknown = ops.filter((op) => op.status === 'unknown'); setOperations(unknown); setSelected(unknown[0]?.id ?? ''); }
+  }).catch((e) => { if (!stopped) toast.err(errMsg(e)); }); return () => { stopped = true; }; }, [run.id, run.last_seq]);
+  const submit = async () => {
+    const operation = operations.find((op) => op.id === selected);
+    if (!operation || !evidence.trim()) { toast.err('请选择待核查操作并填写外部核查凭据'); return; }
+    setBusy(true);
+    try { const value: unknown = JSON.parse(output); await reconcileRun(run.id, operation, value, evidence.trim()); toast.ok('已记录确认结果，运行重新排队'); onDone(); }
+    catch (e) { toast.err(errMsg(e)); } finally { setBusy(false); }
+  };
+  if (operations.length === 0) return <p className="text-xs text-ash">当前阻塞需要核查运行错误与执行版本；尚无可确认的外部操作。</p>;
+  return <div className="space-y-2 border-t border-smoke/60 pt-3">
+    <p className="text-xs text-coral">外部操作结果不确定。先到外部系统核查；确认已经成功后填写实际返回值，再恢复运行。</p>
+    <select className="field" value={selected} onChange={(e) => setSelected(e.target.value)}>
+      {operations.map((op) => <option key={op.id} value={op.id}>{op.path} · 尝试 {op.attempt}</option>)}
+    </select>
+    <Textarea aria-label="已确认的操作返回值" placeholder={'外部操作的真实返回值（JSON），例如 {"result":"..."}'} value={output} onChange={(e) => setOutput(e.target.value)} />
+    <Textarea aria-label="核查凭据" placeholder="外部记录编号、核查依据" maxLength={2048} value={evidence} onChange={(e) => setEvidence(e.target.value)} />
+    <Button loading={busy} onClick={() => void submit()}>确认已成功并恢复</Button>
+  </div>;
+}
 
 /** 步骤时间线：节点级执行快照（只读展示） */
 function StepTimeline({ steps }: { steps: WorkflowStepRun[] }) {
@@ -67,10 +95,11 @@ export function WorkflowRunsPage() {
   const [approveTarget, setApproveTarget] = useState<WorkflowRun | null>(null);
   const [comment, setComment] = useState('');
   const [approving, setApproving] = useState<'pass' | 'reject' | null>(null);
+  const [approvalID, setApprovalID] = useState('');
 
   /** 拉取执行记录列表：分页 + 可选 workflow_id 过滤 */
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       const p = await listRuns({ page, page_size: PAGE_SIZE, workflow_id: wfFilter });
       setList(p.list);
@@ -85,6 +114,18 @@ export function WorkflowRunsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      await load(true);
+      if (expandedId !== null) { try { const next = await getRun(expandedId); if (!stopped) setDetail(next); } catch { /* visible manual refresh reports failures */ } }
+      if (!stopped) timer = setTimeout(() => void refresh(), 2000);
+    };
+    timer = setTimeout(() => void refresh(), 2000);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [load, expandedId]);
 
   /** 应用过滤：空值视为清除；非正整数 ID 提示并中止 */
   const applyFilter = () => {
@@ -124,22 +165,30 @@ export function WorkflowRunsPage() {
   };
 
   /** 打开审批 Modal：重置意见 */
-  const openApprove = (run: WorkflowRun) => {
-    setApproveTarget(run);
-    setComment('');
+  const openApprove = async (run: WorkflowRun) => {
+    try {
+      const fresh = await getRun(run.id);
+      const pending = fresh.approvals?.find((approval) => approval.decision === 'pending');
+      if (!pending) { toast.err('没有待处理审批，请刷新运行状态'); void load(); return; }
+      setApproveTarget(fresh); setApprovalID(pending.interrupt_id); setComment('');
+    } catch (e) { toast.err(errMsg(e)); }
   };
 
   /** 提交审批：approved=true 通过 / false 驳回；成功后关闭并刷新列表 */
   const doApprove = async (approved: boolean) => {
     if (!approveTarget) return;
+    const approval = approveTarget.approvals?.find((a) => a.interrupt_id === approvalID && a.decision === 'pending');
+    if (!approval) return;
     setApproving(approved ? 'pass' : 'reject');
     try {
-      await approveRun(approveTarget.id, approved, comment.trim() || undefined);
+      await approveRun(approveTarget.id, approved, approval.interrupt_id, approval.args_hash, comment.trim() || undefined);
       toast.ok(approved ? '已通过审批，工作流继续执行' : '已驳回');
       setApproveTarget(null);
       void load();
     } catch (e) {
       toast.err(errMsg(e));
+      setApproveTarget(null);
+      void load();
     } finally {
       setApproving(null);
     }
@@ -241,6 +290,11 @@ export function WorkflowRunsPage() {
                       {run.error ? truncate(run.error, 30) : '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
+                      {!['succeeded', 'failed', 'canceled'].includes(run.status) && (
+                        <button className="mr-3 text-xs text-coral" onClick={(e) => {
+                          e.stopPropagation(); void cancelRun(run.id).then(() => load()).catch((error) => toast.err(errMsg(error)));
+                        }}>取消运行</button>
+                      )}
                       {/* 审批入口：阻断行点击冒泡，避免同时触发展开 */}
                       {waiting && (
                         <button
@@ -284,6 +338,17 @@ export function WorkflowRunsPage() {
                   )}
                 </div>
                 <StepTimeline steps={detail.steps ?? []} />
+                {(detail.approval_history?.length ?? 0) > 0 && <div className="space-y-2">
+                  <span className="section-title">审批历史</span>
+                  {detail.approval_history?.map((approval) => <div className="text-xs text-fog" key={approval.id}>
+                    <span className="font-mono">{approval.path}</span> · {approval.decision === 'approved' ? '通过' : '驳回'} · {fullTime(approval.decided_at)} · 用户 #{approval.decided_by}
+                    <p>{approval.comment || '未填写意见'}</p>
+                  </div>)}
+                  {detail.approval_history_truncated && <p className="text-xs text-ash">仅展示最近 256 条；更早的记录可从事件日志查询。</p>}
+                </div>}
+                <p className="text-xs text-ash">发布 #{detail.definition_release_id ?? '历史记录'} · 事件 {detail.last_seq ?? 0}</p>
+                {detail.output && <pre className="code-block max-h-64 whitespace-pre-wrap">{JSON.stringify(detail.output, null, 2)}</pre>}
+                {detail.status === 'needs_attention' && <OperationReconciliation run={detail} onDone={() => { void load(); void getRun(detail.id).then(setDetail); }} />}
               </div>
             ) : null}
           </div>
@@ -335,6 +400,10 @@ export function WorkflowRunsPage() {
       >
         {approveTarget && (
           <div className="space-y-3">
+            <label className="field-label">待审批节点</label>
+            <select className="field" value={approvalID} onChange={(e) => setApprovalID(e.target.value)}>
+              {approveTarget.approvals?.filter((a) => a.decision === 'pending').map((a) => <option key={a.interrupt_id} value={a.interrupt_id}>{a.path} · {a.prompt}</option>)}
+            </select>
             {/* run 概要 */}
             <div className="space-y-1.5 text-xs text-fog">
               <p>
@@ -358,6 +427,7 @@ export function WorkflowRunsPage() {
               <label className="field-label">审批意见（可选）</label>
               <Textarea
                 rows={3}
+                maxLength={2048}
                 placeholder="补充说明会随审批结果记录"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}

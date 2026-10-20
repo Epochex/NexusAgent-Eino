@@ -9,6 +9,38 @@ import (
 	"time"
 )
 
+func TestCancelRecordsUncertainExternalOperation(t *testing.T) {
+	s, db, owner, wf := fixture(t)
+	enqueue(t, s, owner, wf)
+	run := claim(t, s, "cancel-write")
+	op, _, err := s.BeginOperation(context.Background(), run, "root/write", "tool", "hash", "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Cancel(context.Background(), owner, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	var saved Operation
+	if err = db.First(&saved, "id=?", op.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.Status != "unknown" {
+		t.Fatalf("cancel hid uncertain write: %s", saved.Status)
+	}
+	var status string
+	db.Raw(`SELECT status FROM execution_attempts WHERE operation_id=? AND attempt=1`, op.ID).Scan(&status)
+	if status != "unknown" {
+		t.Fatalf("attempt status %s", status)
+	}
+	if err = s.CompleteOperation(context.Background(), run, op, "late", nil); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("late completion %v", err)
+	}
+	// Auditing an applied write may not resurrect a deliberately canceled job.
+	if err = s.ResolveOperation(context.Background(), owner, run.ID, op.ID, "hash", `"confirmed"`, "checked externally"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("resurrected canceled run: %v", err)
+	}
+}
+
 func TestOperationUnknownNotReplayed(t *testing.T) {
 	s, db, owner, wf := fixture(t)
 	run := enqueue(t, s, owner, wf)

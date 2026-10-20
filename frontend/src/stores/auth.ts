@@ -7,7 +7,7 @@
  * - 请求层通过 bindAuthHooks 与本 store 解耦，避免循环依赖。
  */
 import { create } from 'zustand';
-import { bindAuthHooks, http } from '@/lib/request';
+import { bindAuthHooks, http, request } from '@/lib/request';
 import type { LoginReq, RegisterReq, TokenPair, User } from '@/types/auth';
 
 interface AuthState {
@@ -27,33 +27,40 @@ interface AuthState {
 }
 
 const REFRESH_KEY = 'nx.refresh';
+let bootstrapPromise: Promise<void> | undefined;
 
-export const useAuth = create<AuthState>((set) => ({
+export const useAuth = create<AuthState>((set, get) => ({
   accessToken: undefined,
   user: undefined,
   bootstrapped: false,
 
   /** 应用启动时调用：用 localStorage 里的 refresh_token 恢复会话 */
-  bootstrap: async () => {
-    const refreshToken = localStorage.getItem(REFRESH_KEY);
-    if (refreshToken) {
-      try {
-        const pair = await http.post<TokenPair>('/auth/refresh', {
-          refresh_token: refreshToken,
-        });
-        localStorage.setItem(REFRESH_KEY, pair.refresh_token);
-        set({ accessToken: pair.access_token }); // 先注入 token，后续 /me 自动带凭证
-        const user = await http.get<User>('/me');
-        set({ user });
-      } catch {
-        localStorage.removeItem(REFRESH_KEY);
+  bootstrap: () => {
+    if (get().bootstrapped) return Promise.resolve();
+    if (bootstrapPromise) return bootstrapPromise;
+    bootstrapPromise = (async () => {
+      const refreshToken = localStorage.getItem(REFRESH_KEY);
+      if (refreshToken) {
+        try {
+          const pair = await request<TokenPair>('/auth/refresh', {
+            method: 'POST', body: { refresh_token: refreshToken }, retry401: false,
+          });
+          localStorage.setItem(REFRESH_KEY, pair.refresh_token);
+          set({ accessToken: pair.access_token });
+          const user = await http.get<User>('/me');
+          set({ user });
+        } catch {
+          localStorage.removeItem(REFRESH_KEY);
+          set({ accessToken: undefined, user: undefined });
+        }
       }
-    }
-    set({ bootstrapped: true });
+      set({ bootstrapped: true });
+    })().finally(() => { bootstrapPromise = undefined; });
+    return bootstrapPromise;
   },
 
   login: async (req) => {
-    const pair = await http.post<TokenPair>('/auth/login', req);
+    const pair = await request<TokenPair>('/auth/login', { method: 'POST', body: req, retry401: false });
     localStorage.setItem(REFRESH_KEY, pair.refresh_token);
     set({ accessToken: pair.access_token });
     const user = await http.get<User>('/me');

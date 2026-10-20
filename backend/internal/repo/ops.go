@@ -3,6 +3,7 @@ package repo
 
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 
@@ -135,18 +136,21 @@ func (r *WorkflowRepo) ListWorkflowsForCreator(ctx context.Context, creatorID in
 	return list, total, err
 }
 
-func (r *WorkflowRepo) UpdateWorkflowForCreator(ctx context.Context, w *model.Workflow, creatorID int64) error {
+var ErrWorkflowVersionConflict = errors.New("workflow version changed")
+
+func (r *WorkflowRepo) UpdateWorkflowForCreator(ctx context.Context, w *model.Workflow, creatorID int64, expectedVersion int) error {
 	result := r.db.WithContext(ctx).Model(&model.Workflow{}).
-		Where("id = ? AND creator_id = ?", w.ID, creatorID).
+		Where("id = ? AND creator_id = ? AND version=?", w.ID, creatorID, expectedVersion).
 		Updates(map[string]any{
 			"name": w.Name, "description": w.Description, "dsl": w.DSL,
 			"is_active": w.IsActive, "status": w.Status,
+			"version": w.Version,
 		})
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return ErrWorkflowVersionConflict
 	}
 	return nil
 }
