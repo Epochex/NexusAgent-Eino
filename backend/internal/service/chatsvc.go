@@ -247,11 +247,7 @@ func (s *ChatService) retrieveKBs(ctx context.Context, userID int64, kbIDs []int
 // pickRunner 按类型选择 Runner（host 多智能体 / 单 ReAct）。
 func (s *ChatService) pickRunner(ctx context.Context, userID int64, ag *model.Agent) (runtime.Runner, error) {
 	if ag.Type != model.AgentTypeHost {
-		return runtime.NewReactRunner(
-			s.svcs.Deps.Gateway, s.svcs.Deps.Executor,
-			s.svcs.Deps.Cfg.Agent.StepTimeout, s.svcs.Deps.Cfg.Agent.RunTimeout,
-			128000,
-		), nil
+		return s.newEinoRunner()
 	}
 
 	// Host：装载专家清单
@@ -266,21 +262,23 @@ func (s *ChatService) pickRunner(ctx context.Context, userID int64, ag *model.Ag
 		if err != nil {
 			continue // 单专家配置缺失跳过
 		}
+		runner, err := s.newEinoRunner()
+		if err != nil {
+			return nil, err
+		}
 		experts = append(experts, host.Expert{
-			Name:        e.Name,
-			Description: e.Description,
-			System:      e.SystemPrompt,
-			ToolsJSON:   string(e.Tools),
-			Primary:     primary,
-			Fallback:    fallback,
-			MaxIter:     e.MaxIterations,
-			Runner: runtime.NewReactRunner(
-				s.svcs.Deps.Gateway, s.svcs.Deps.Executor,
-				s.svcs.Deps.Cfg.Agent.StepTimeout, s.svcs.Deps.Cfg.Agent.RunTimeout, 128000,
-			),
+			Name:           e.Name,
+			Description:    e.Description,
+			System:         e.SystemPrompt,
+			ToolsJSON:      string(e.Tools),
+			Primary:        primary,
+			Fallback:       fallback,
+			MaxIter:        e.MaxIterations,
+			Runner:         runner,
+			DangerousTools: s.dangerousTools(ctx, e.Tools),
 		})
 	}
-	return host.New(experts, s.hostRouteChat, s.hostDirectRunner()), nil
+	return host.New(experts, s.hostRouteChat, s.hostDirectRunner()).WithStreamLimits(s.svcs.Deps.Cfg.Agent.EventBuffer, s.svcs.Deps.Cfg.Agent.SendTimeout).WithRunTimeout(s.svcs.Deps.Cfg.Agent.RunTimeout), nil
 }
 
 // hostRouteChat Host 路由分类调用（注入 host 包）。
@@ -292,14 +290,24 @@ func (s *ChatService) hostRouteChat(ctx context.Context, primary, fallback *llm.
 }
 
 // hostDirectRunner 直答 Runner（零工具）。
+func (s *ChatService) newEinoRunner() (*runtime.EinoRunner, error) {
+	a := s.svcs.Deps.Cfg.Agent
+	return runtime.NewEinoRunner(s.svcs.Deps.Gateway, s.svcs.Deps.Executor, runtime.EinoConfig{
+		StepTimeout: a.StepTimeout, RunTimeout: a.RunTimeout, SendTimeout: a.SendTimeout,
+		InputTokenBudget: a.InputTokenBudget, EventBuffer: a.EventBuffer,
+		MaxOutputBytes: a.MaxToolOutputBytes, MaxModelOutputBytes: a.MaxModelOutputBytes, MaxConcurrentTools: a.MaxConcurrentTools,
+	})
+}
 func (s *ChatService) hostDirectRunner() host.DirectRunner {
-	runner := runtime.NewReactRunner(
-		s.svcs.Deps.Gateway, s.svcs.Deps.Executor,
-		s.svcs.Deps.Cfg.Agent.StepTimeout, s.svcs.Deps.Cfg.Agent.RunTimeout, 128000,
-	)
 	return func(ctx context.Context, in *runtime.RunInput) (<-chan agent.Event, error) {
-		in.ToolsJSON = "[]"
-		return runner.Run(ctx, in)
+		runner, err := s.newEinoRunner()
+		if err != nil {
+			return nil, err
+		}
+		input := *in
+		input.ToolsJSON = "[]"
+		input.DangerousTools = nil
+		return runner.Run(ctx, &input)
 	}
 }
 

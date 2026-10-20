@@ -2,6 +2,20 @@ package config
 
 import "testing"
 
+func TestAgentRuntimeLimitsDefaultAndRejectInvalid(t *testing.T) {
+	cfg := &Config{Env: "dev"}
+	if err := validate(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Agent.EventBuffer != 128 || cfg.Agent.InputTokenBudget != 128000 || cfg.Agent.MaxConcurrentTools != 4 {
+		t.Fatalf("runtime defaults missing: %+v", cfg.Agent)
+	}
+	cfg.Agent.EventBuffer = -1
+	if err := validate(cfg); err == nil {
+		t.Fatal("negative event buffer accepted")
+	}
+}
+
 func TestValidateProductionSecrets(t *testing.T) {
 	cfg := &Config{
 		Env:       "prod",

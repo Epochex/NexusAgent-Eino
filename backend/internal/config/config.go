@@ -102,10 +102,16 @@ type RAG struct {
 }
 
 type Agent struct {
-	MaxIterations      int           `mapstructure:"max_iterations"`
-	StepTimeout        time.Duration `mapstructure:"step_timeout"`
-	RunTimeout         time.Duration `mapstructure:"run_timeout"`
-	MemoryExtractEvery int           `mapstructure:"memory_extract_every"`
+	InputTokenBudget    int           `mapstructure:"input_token_budget"`
+	EventBuffer         int           `mapstructure:"event_buffer"`
+	SendTimeout         time.Duration `mapstructure:"send_timeout"`
+	MaxToolOutputBytes  int           `mapstructure:"max_tool_output_bytes"`
+	MaxModelOutputBytes int           `mapstructure:"max_model_output_bytes"`
+	MaxConcurrentTools  int           `mapstructure:"max_concurrent_tools"`
+	MaxIterations       int           `mapstructure:"max_iterations"`
+	StepTimeout         time.Duration `mapstructure:"step_timeout"`
+	RunTimeout          time.Duration `mapstructure:"run_timeout"`
+	MemoryExtractEvery  int           `mapstructure:"memory_extract_every"`
 }
 
 type Worker struct {
@@ -204,6 +210,40 @@ func Load(configDir string) (*Config, error) {
 }
 
 func validate(cfg *Config) error {
+	a := &cfg.Agent
+	if a.InputTokenBudget < 0 || a.EventBuffer < 0 || a.SendTimeout < 0 || a.MaxToolOutputBytes < 0 || a.MaxModelOutputBytes < 0 || a.MaxConcurrentTools < 0 || a.StepTimeout < 0 || a.RunTimeout < 0 || a.MaxIterations < 0 {
+		return fmt.Errorf("agent execution limits must not be negative")
+	}
+	if a.InputTokenBudget == 0 {
+		a.InputTokenBudget = 128000
+	}
+	if a.EventBuffer == 0 {
+		a.EventBuffer = 128
+	}
+	if a.SendTimeout == 0 {
+		a.SendTimeout = 2 * time.Second
+	}
+	if a.MaxToolOutputBytes == 0 {
+		a.MaxToolOutputBytes = 65536
+	}
+	if a.MaxModelOutputBytes == 0 {
+		a.MaxModelOutputBytes = 1 << 20
+	}
+	if a.MaxConcurrentTools == 0 {
+		a.MaxConcurrentTools = 4
+	}
+	if a.StepTimeout == 0 {
+		a.StepTimeout = 60 * time.Second
+	}
+	if a.RunTimeout == 0 {
+		a.RunTimeout = 300 * time.Second
+	}
+	if a.MaxIterations == 0 {
+		a.MaxIterations = 10
+	}
+	if a.MaxToolOutputBytes < 64 || a.MaxToolOutputBytes > 4<<20 || a.MaxModelOutputBytes < 64 || a.MaxModelOutputBytes > 4<<20 || a.EventBuffer > 4096 || a.MaxConcurrentTools > 32 {
+		return fmt.Errorf("agent buffers, output or tool concurrency limits exceed supported bounds")
+	}
 	if cfg.Env != "prod" && cfg.Env != "production" {
 		return nil
 	}

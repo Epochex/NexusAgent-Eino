@@ -14,9 +14,9 @@ import (
 
 // PlanStep 计划中的一个子任务。
 type PlanStep struct {
-	ID          string `json:"id"`           // step-1, step-2...
-	Description string `json:"description"`  // 子任务描述
-	DependsOn   []string `json:"depends_on"` // 依赖的前置步骤 ID
+	ID          string   `json:"id"`          // step-1, step-2...
+	Description string   `json:"description"` // 子任务描述
+	DependsOn   []string `json:"depends_on"`  // 依赖的前置步骤 ID
 }
 
 // Plan 完整计划。
@@ -34,13 +34,13 @@ const plannerPrompt = `你是任务规划器。把用户目标拆解为可执行
 输出格式：{"goal":"...","steps":[{"id":"step-1","description":"...","depends_on":[]}]}`
 
 // MakePlan 生成计划（非流式调用，取 JSON）。
-func (r *ReactRunner) MakePlan(ctx context.Context, in *RunInput, goal string) (*Plan, error) {
+func (r *EinoRunner) MakePlan(ctx context.Context, in *RunInput, goal string) (*Plan, error) {
 	msgs := append([]llm.Message{{
 		Role: llm.RoleSystem, Content: plannerPrompt,
 	}}, llm.Message{Role: llm.RoleUser, Content: goal})
 
 	resp, _, err := r.gateway.Chat(ctx, in.Primary, in.Fallback, &llm.ChatRequest{
-		Messages:  msgs,
+		Messages:    msgs,
 		Temperature: 0.2, // 规划要稳定
 	})
 	if err != nil {
@@ -59,7 +59,7 @@ func (r *ReactRunner) MakePlan(ctx context.Context, in *RunInput, goal string) (
 }
 
 // Replan 执行失败后的重规划（最多一次，td.md §8.3）。
-func (r *ReactRunner) Replan(ctx context.Context, in *RunInput, plan *Plan, failedStepID, reason string) (*Plan, error) {
+func (r *EinoRunner) Replan(ctx context.Context, in *RunInput, plan *Plan, failedStepID, reason string) (*Plan, error) {
 	msgs := []llm.Message{
 		{Role: llm.RoleSystem, Content: plannerPrompt},
 		{Role: llm.RoleUser, Content: strings.Join([]string{

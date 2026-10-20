@@ -65,6 +65,12 @@ rag:
   batch_embed: 64
 
 agent:
+  input_token_budget: 128000
+  event_buffer: 128
+  send_timeout: 2s
+  max_tool_output_bytes: 65536
+  max_model_output_bytes: 1048576
+  max_concurrent_tools: 4
   max_iterations: 10
   step_timeout: 60s
   run_timeout: 5m

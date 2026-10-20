@@ -1,38 +1,44 @@
 // Package host Host-Expert 多智能体协作（td.md §8.3.2，Ep 11）。
 //
 // 职责分工：
-//   Host（路由者）：理解意图 → 选择最合适的 Expert → 委派 → 聚合转述
-//   Expert（执行者）：具备专属 system prompt / 工具集 / 模型配置的 ReAct Agent
+//
+//	Host（路由者）：理解意图 → 选择最合适的 Expert → 委派 → 聚合转述
+//	Expert（执行者）：具备专属 system prompt / 工具集 / 模型配置的 ReAct Agent
 //
 // 教学要点（与单 Agent 的本质区别）：
-//   ① 上下文隔离：每个 Expert 独立上下文，避免工具集互相干扰；
-//   ② 意图路由：Host 用"选择"而非"执行"，Token 更省、可维护性更强；
-//   ③ 事件透传：Expert 的事件流原样转发 + 补充 delegate/merge 标记，
-//      前端可完整展示"Host 委派 → Expert 干活 → Host 收口"全过程。
+//
+//	① 上下文隔离：每个 Expert 独立上下文，避免工具集互相干扰；
+//	② 意图路由：Host 用"选择"而非"执行"，Token 更省、可维护性更强；
+//	③ 事件透传：Expert 的事件流原样转发 + 补充 delegate/merge 标记，
+//	   前端可完整展示"Host 委派 → Expert 干活 → Host 收口"全过程。
 package host
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/agent"
+	"github.com/chengpeng-cp/nexus-agent/internal/agent/runtime"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
-	"github.com/chengpeng-cp/nexus-agent/internal/agent/runtime"
 )
 
 // Expert 一个专家 Agent 的配置（由 service 层从 agents 表组装）。
 type Expert struct {
-	Name        string               // 显示名
-	Description string               // 能力描述（路由依据，写给 Host 看）
-	System      string               // 专属 system prompt
-	ToolsJSON   string               // agents.tools JSONB
-	Primary     *llm.ModelDescriptor // 主模型
-	Fallback    *llm.ModelDescriptor // 备模型
-	MaxIter     int
-	Runner      runtime.Runner       // 每个 Expert 独立运行器
+	Name           string               // 显示名
+	Description    string               // 能力描述（路由依据，写给 Host 看）
+	System         string               // 专属 system prompt
+	ToolsJSON      string               // agents.tools JSONB
+	Primary        *llm.ModelDescriptor // 主模型
+	Fallback       *llm.ModelDescriptor // 备模型
+	MaxIter        int
+	Runner         runtime.Runner // 每个 Expert 独立运行器
+	DangerousTools map[string]bool
 }
 
 // RouterChat 路由分类调用：Host 用主模型做一次"选人"非流式调用。
@@ -46,74 +52,171 @@ type HostRouter struct {
 	experts      []Expert
 	chat         RouterChat   // 路由调用（service 注入，避免 host 直依赖 gateway 装配）
 	directRunner DirectRunner // 直答 Runner
+	buffer       int
+	sendTimeout  time.Duration
+	runTimeout   time.Duration
 }
 
 // New 构造。
 func New(experts []Expert, chat RouterChat, direct DirectRunner) *HostRouter {
-	return &HostRouter{experts: experts, chat: chat, directRunner: direct}
+	return &HostRouter{experts: experts, chat: chat, directRunner: direct, buffer: 128, sendTimeout: 2 * time.Second, runTimeout: 300 * time.Second}
 }
 
-// Run 实现 runtime.Runner：路由 → 委派 → 聚合。
+func (h *HostRouter) WithRunTimeout(timeout time.Duration) *HostRouter {
+	next := *h
+	if timeout > 0 {
+		next.runTimeout = timeout
+	}
+	return &next
+}
+
+func (h *HostRouter) WithStreamLimits(buffer int, timeout time.Duration) *HostRouter {
+	next := *h
+	if buffer > 0 {
+		next.buffer = buffer
+	}
+	if timeout > 0 {
+		next.sendTimeout = timeout
+	}
+	return &next
+}
+
+// Run isolates caller input and owns cancellation for routing and the child run.
 func (h *HostRouter) Run(ctx context.Context, in *runtime.RunInput) (<-chan agent.Event, error) {
-	events := make(chan agent.Event, 128)
-	go h.loop(ctx, in, events)
+	if in == nil {
+		return nil, errcode.ErrInvalidParam
+	}
+	input := *in
+	input.Messages = append(input.Messages[:0:0], in.Messages...)
+	if input.RunID == "" {
+		input.RunID = rand.Text()
+	}
+	runCtx, cancel := context.WithTimeout(ctx, h.runTimeout)
+	events := make(chan agent.Event, h.buffer)
+	go func() {
+		defer close(events)
+		defer cancel()
+		var seq uint64
+		emit := func(ev agent.Event) bool {
+			sendCtx := runCtx
+			if (ev.Type == agent.TypeDone || ev.Type == agent.TypeError) && runCtx.Err() != nil {
+				var done context.CancelFunc
+				sendCtx, done = context.WithTimeout(context.WithoutCancel(runCtx), h.sendTimeout)
+				defer done()
+			}
+			timer := time.NewTimer(h.sendTimeout)
+			defer timer.Stop()
+			ev.RunID = input.RunID
+			ev.Seq = seq + 1
+			ev.At = time.Now().UTC()
+			select {
+			case events <- ev:
+				seq++
+				return true
+			case <-sendCtx.Done():
+				return false
+			case <-timer.C:
+				cancel()
+				return false
+			}
+		}
+		h.loop(runCtx, &input, emit)
+	}()
 	return events, nil
 }
 
-// loop Host 主流程。
-func (h *HostRouter) loop(ctx context.Context, in *runtime.RunInput, events chan<- agent.Event) {
-	defer close(events)
-
+func (h *HostRouter) loop(ctx context.Context, in *runtime.RunInput, emit func(agent.Event) bool) {
 	question := lastUserMessage(in.Messages)
 	if question == "" {
-		send(events, agent.EvtError(errcode.ErrInvalidParam.Code, "empty question"))
+		emit(agent.EvtError(errcode.ErrInvalidParam.Code, "empty question"))
 		return
 	}
-
-	// ① 意图路由：让 Host 模型从专家清单中选人
 	expert, err := h.route(ctx, in, question)
 	if err != nil {
-		send(events, agent.EvtError(errcode.From(err).Code, errcode.From(err).Message))
+		if errors.Is(err, context.DeadlineExceeded) {
+			emit(agent.EvtError(errcode.ErrModelTimeout.Code, "Host 路由超时"))
+		} else if errors.Is(err, context.Canceled) {
+			emit(agent.EvtDone("canceled"))
+		} else {
+			emit(agent.EvtError(errcode.From(err).Code, errcode.From(err).Message))
+		}
 		return
 	}
+	var child <-chan agent.Event
+	input := *in
+	merge := false
+	expertName := "host"
 	if expert == nil {
-		// 无匹配专家：Host 直接回答（无工具的普通对话）
-		in.ToolsJSON = "[]"
-		h.forwardDirect(ctx, in, events)
-		return
+		input.ToolsJSON = "[]"
+		input.DangerousTools = nil
+		if h.directRunner == nil {
+			emit(agent.EvtError(errcode.ErrNotImplement.Code, "host direct runner not configured"))
+			return
+		}
+		if !emit(agent.EvtAgentEvent("delegate", "host", "host 直答")) {
+			return
+		}
+		child, err = h.directRunner(ctx, &input)
+	} else {
+		expertName = expert.Name
+		input.AgentName = expert.Name
+		input.ToolsJSON = expert.ToolsJSON
+		input.DangerousTools = expert.DangerousTools
+		input.Primary, input.Fallback = expert.Primary, expert.Fallback
+		input.Messages = buildExpertMessages(expert.System, in.Messages)
+		if expert.MaxIter > 0 {
+			input.MaxIterations = expert.MaxIter
+		}
+		if !emit(agent.EvtAgentEvent("delegate", expert.Name, expert.Description)) || !emit(agent.Evt(agent.TypeMeta, map[string]any{"expert": expert.Name})) {
+			return
+		}
+		if expert.Runner == nil {
+			emit(agent.EvtError(errcode.ErrNotImplement.Code, "expert runner not configured"))
+			return
+		}
+		child, err = expert.Runner.Run(ctx, &input)
+		merge = true
 	}
-
-	// ② 委派事件 + 决策链
-	send(events, agent.EvtAgentEvent("delegate", expert.Name, expert.Description))
-	send(events, agent.Evt(agent.TypeMeta, map[string]any{"expert": expert.Name}))
-
-	// ③ 组装 Expert 输入：专家 system 前置 + 原 user 消息
-	expertInput := *in
-	expertInput.AgentName = expert.Name
-	expertInput.ToolsJSON = expert.ToolsJSON
-	expertInput.Primary = expert.Primary
-	expertInput.Fallback = expert.Fallback
-	if expert.MaxIter > 0 {
-		expertInput.MaxIterations = expert.MaxIter
-	}
-	expertInput.Messages = buildExpertMessages(expert.System, in.Messages)
-
-	// ④ 执行并透传事件
-	expertEvents, err := expert.Runner.Run(ctx, &expertInput)
 	if err != nil {
-		send(events, agent.EvtError(errcode.From(err).Code, errcode.From(err).Message))
+		emit(agent.EvtError(errcode.From(err).Code, errcode.From(err).Message))
 		return
 	}
 	var final strings.Builder
-	for ev := range expertEvents {
-		if ev.Type == agent.TypeDelta {
-			final.WriteString(str(ev.Data["content"]))
+	for {
+		select {
+		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				emit(agent.EvtError(errcode.ErrModelTimeout.Code, "Host 运行超时"))
+			} else {
+				emit(agent.EvtDone("canceled"))
+			}
+			return
+		case ev, ok := <-child:
+			if !ok {
+				emit(agent.EvtError(errcode.ErrInternal.Code, "expert stream ended without terminal"))
+				return
+			}
+			if ev.Type == agent.TypeError {
+				emit(ev)
+				return
+			}
+			if ev.Type == agent.TypeDone {
+				if merge && ev.Data["finish_reason"] != "canceled" {
+					if !emit(agent.EvtAgentEvent("merge", expertName, truncateRunes(final.String(), 120))) {
+						return
+					}
+				}
+				emit(ev)
+				return
+			}
+			if ev.Type == agent.TypeDelta {
+				final.WriteString(str(ev.Data["content"]))
+			}
+			if !emit(ev) {
+				return
+			}
 		}
-		send(events, ev)
 	}
-
-	// ⑤ 聚合收口
-	send(events, agent.EvtAgentEvent("merge", expert.Name, truncateRunes(final.String(), 120)))
 }
 
 // route 意图路由（LLM 分类）。
@@ -150,23 +253,6 @@ func (h *HostRouter) chatForRoute(ctx context.Context, in *runtime.RunInput, pro
 		return nil, nil, errcode.ErrNotImplement.WithMsg("host router chat function not configured")
 	}
 	return h.chat(ctx, in.Primary, in.Fallback, prompt)
-}
-
-// forwardDirect Host 直接回答模式（无专家匹配，零工具）。
-func (h *HostRouter) forwardDirect(ctx context.Context, in *runtime.RunInput, events chan<- agent.Event) {
-	if h.directRunner == nil {
-		send(events, agent.EvtError(errcode.ErrNotImplement.Code, "host direct runner not configured"))
-		return
-	}
-	send(events, agent.EvtAgentEvent("delegate", "host", "host 直答"))
-	evts, err := h.directRunner(ctx, in)
-	if err != nil {
-		send(events, agent.EvtError(errcode.From(err).Code, errcode.From(err).Message))
-		return
-	}
-	for ev := range evts {
-		send(events, ev)
-	}
 }
 
 // buildExpertMessages 专家上下文组装：专属 system + 最近对话。
@@ -214,14 +300,6 @@ func parseRouteIndex(content string, max int) int {
 		}
 	}
 	return 0
-}
-
-// send 安全发送事件。
-func send(events chan<- agent.Event, e agent.Event) {
-	select {
-	case events <- e:
-	default:
-	}
 }
 
 func str(v any) string {

@@ -316,3 +316,12 @@ func (m *runMiddleware) WrapInvokableToolCall(_ context.Context, next adk.Invoka
 		return output, err
 	}, nil
 }
+
+func parseArgsForTrace(step *observability.TraceStep, args string) error {
+	var values map[string]any
+	if err := json.Unmarshal([]byte(args), &values); err != nil {
+		return err
+	}
+	step.Args = values
+	return nil
+}
