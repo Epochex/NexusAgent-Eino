@@ -2,11 +2,13 @@
 
 基于 [chengpeng-cp/nexus-agent](https://github.com/chengpeng-cp/nexus-agent) 的 Go + Eino 生产工程化改造。保留完整平台功能，重点推进可靠执行、审批恢复、工具权限、数据一致性与可验证的性能。
 
-**当前交付：P0/P1，Hertz + Eino ADK 执行内核。** 普通 Agent、Host 专家和直答已统一到 Eino v0.9.22；保留 `agent/naive` 教学版。YAML 工作流仍使用原执行器，持久恢复与整个平台的生产容量验收按后续阶段推进。
+**当前实现：P0/P1 执行内核与 P2 持久工作流。** 普通 Agent、Host 专家和直答统一到 Eino ADK v0.9.22，YAML 工作流编译为实际 Eino Graph；保留 `agent/naive` 教学版。PostgreSQL 管理运行、审批、checkpoint、事件和 outbox，独立 Worker 执行；数据集成与整个平台的容量验收按 P3/P4 推进，真实模型效果尚未验收。
 
 - [生产化设计与分阶段验收](docs/superpowers/specs/2026-10-20-nexus-agent-eino-design.md)
 - [上游来源与改造归属](UPSTREAM.md)
 - [首阶段验证、微基准与边界](docs/research/2026-10-20-p1-validation.md)
+- [持久工作流验证与故障实验](docs/research/2026-10-20-p2-validation.md)
+- [运行、审批、恢复与部署](docs/research/workflow-runtime-runbook.md)
 
 目标架构：Hertz API + Eino ADK/Graph + PostgreSQL 运行与审批状态 + Redis Streams Worker，沿用 Milvus、MinIO、OpenTelemetry 与 Prometheus。优先完成执行语义与故障恢复，再以真实测试推进吞吐和资源效率。
 
@@ -17,6 +19,8 @@
 - 上下文预算、32 次单步工具调用上限、默认 4 个并发工具、有界事件缓冲和输出限制。
 - 慢消费者取消、SSE 断连回收；成功/失败/中断分别落库，提交消息后才发送成功终态，收尾写库上限 3 秒。
 - 真实 Hertz HTTP、PostgreSQL 事务阻塞与失败测试、Linux race、CLI 会话和错误协议回归。
+- 工作流 HTTP 202 提交、请求幂等键、不可变发布快照、审批精确恢复、取消、未知外部操作核对、事件重放；连续/并行/子图审批及浏览器主流程已验证。
+- 实际 Worker 进程在模型调用中被杀后恢复；已返回的文件写入在结果提交前被杀后进入人工核查，不盲目重放。Redis 网络中断时 PG 仍推进，通知恢复后补发。
 
 本地 HTTP 模型桩下，4 CPU 配额的 Linux 容器微基准中位数：文本流程约 0.33 ms/次，工具往返约 0.96 ms/次。完整环境、分配量与测试范围见验证报告；这些数据描述执行内核开销，实际模型调用和全平台容量另行评测。
 

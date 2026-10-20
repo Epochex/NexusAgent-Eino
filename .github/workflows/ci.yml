@@ -16,6 +16,15 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:7.2.4
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
       postgres:
         image: postgres:16-alpine
         env:
@@ -42,6 +51,7 @@ jobs:
       - run: go test -race -tags=integration ./internal/service ./internal/execution ./internal/api -count=1 -timeout 180s
         env:
           NX_TEST_DATABASE_DSN: postgres://postgres@localhost:5432/nexus_eino_test?sslmode=disable
+          NX_TEST_REDIS_ADDR: localhost:6379
       - run: go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate
   frontend:
     runs-on: ubuntu-latest

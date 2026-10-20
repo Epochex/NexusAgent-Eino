@@ -1,6 +1,6 @@
 # NexusAgent-Eino 生产工程化设计
 
-日期：2026-10-20。状态：用户已确认采用；本文是总体目标设计，实际实现与验证范围见首阶段验证报告。
+日期：2026-10-20。状态：用户已确认采用并持续实施；本文是总体目标设计，实际实现与验证范围见 P1/P2 验证报告。
 
 ## 1. 目标、来源与判断依据
 
@@ -8,7 +8,7 @@
 
 基线来自 https://github.com/chengpeng-cp/nexus-agent ，提交 `5c7b81ee35492e35bca61881f061cafb3c65b363`。公开源码当前使用 Hertz 与自研执行循环；README 宣称的 Eino 尚未进入 go.mod 或生产调用链。已有产品内容能够支持 Eino；需要补齐的是执行语义、数据一致性、隔离与验证。
 
-本次新仓库是 https://github.com/Epochex/NexusAgent-Eino 。保留上游历史和作者归属；新增提交明确标示本项目改造。当前审查为静态审查，未完成编译、集成测试或性能测量。
+本次新仓库是 https://github.com/Epochex/NexusAgent-Eino 。保留上游历史和作者归属；新增提交明确标示本项目改造。上面的上游判断来自初始静态审查；当前改造已通过 P1/P2 所记录的编译、真实基础设施和执行故障验证，不能将其扩展为 P3/P4 或实际线上容量结论。
 
 ## 2. 方案选择
 
@@ -131,7 +131,7 @@ Go 检查覆盖 server/worker/cli 编译、go vet、相关单测、全包测试�
 
 ## 10. 当前检查点与参考资料
 
-当前只完成源码评估和设计，尚未执行上述阶段。本轮检查确认本机 PATH 没有 Go；Docker CLI 存在，但 `docker info` 因 Docker Desktop Linux Engine 管道不存在而失败。P0 必须解决并记录，当前不能编译或运行依赖真实基础设施的测试，不能假定测试通过。
+初始环境缺少 PATH 中的 Go 且 Docker Engine 未运行；P0 已安装并校验 Go 1.26.0，启动独立测试依赖。P1 的 ADK 内核、P2 的 Graph 持久工作流已有实现与分层证据。P3 数据和集成、P4 规模与发布仍按各自计划推进；真实模型服务暂未配置，模型正确性和费用验收未执行。详情见 [P1 验证](../../research/2026-10-20-p1-validation.md)、[P2 验证](../../research/2026-10-20-p2-validation.md)。
 
 - [上游仓库](https://github.com/chengpeng-cp/nexus-agent)
 - [Eino v0.9.22](https://github.com/cloudwego/eino/releases/tag/v0.9.22)
