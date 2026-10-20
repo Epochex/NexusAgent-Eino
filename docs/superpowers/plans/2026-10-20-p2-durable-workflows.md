@@ -32,7 +32,7 @@
 
 **Files:** create `backend/migrations/004_durable_execution.{up,down}.sql`, `backend/internal/execution/{types.go,store.go,checkpoint.go,store_integration_test.go}`.
 
-**Interfaces:** `NewStore(*gorm.DB)*Store`; `Store.Enqueue(ctx,ownerID,workflowID,definition,input)(*Run,error)`; `Claim(ctx,worker,lease)(*Run,error)`; `Renew(ctx,*Run,lease)error`; `Finish(ctx,*Run,status,output,error)error`; `Get(ctx,ownerID,id)(*Run,error)`; `Decide(ctx,ownerID,runID,interruptID,hash,approved)error`; `CheckpointStore` implements `compose.CheckPointStore` with fenced writes.
+**Interfaces:** `NewStore(*gorm.DB)*Store`; `Store.Enqueue(context.Context,int64,int64,json.RawMessage,json.RawMessage,time.Time)(*Run,error)`; `Claim(ctx,worker,lease)(*Run,error)`; `Renew(ctx,*Run,lease)error`; `Finish(ctx,*Run,status,output,error)error`; `Get(ctx,ownerID,id)(*Run,error)`; `Decide(ctx,ownerID,runID,interruptID,hash,approved)error`; `CheckpointStore` implements `compose.CheckPointStore` with fenced writes. Enqueue's explicit deadline bounds the whole run, including approval waiting; default is chosen by service.
 
 - [ ] Write `TestExecutionClaimFencing`, `TestExecutionApprovalCAS`, `TestExecutionTransactionEvents`, `TestCheckpointVersionAndLease` against isolated real PG schemas; assert old leases cannot renew/finish/checkpoint, foreign owner cannot query/approve, one decision/outbox survives concurrent duplicates, terminal cannot regress.
 - [ ] Run `go test -tags=integration ./internal/execution -count=1 -timeout 90s`; expected RED missing types/behavior.

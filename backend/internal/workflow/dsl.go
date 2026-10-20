@@ -31,6 +31,8 @@ package workflow
 
 import (
 	"fmt"
+	"io"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -50,20 +52,20 @@ type DSL struct {
 
 // Node 工作流节点。
 type Node struct {
-	Key       string         `yaml:"key" json:"key"`             // 节点唯一键
-	Type      string         `yaml:"type" json:"type"`           // llm/tool/kb/condition/parallel/human/subflow
-	Prompt    string         `yaml:"prompt" json:"prompt"`       // llm：提示词模板（{{var}} 插值）
-	Model     string         `yaml:"model" json:"model"`         // llm：模型别名（空用默认）
-	KbID      int64          `yaml:"kb_id" json:"kb_id"`         // kb：知识库
-	Query     string         `yaml:"query" json:"query"`         // kb：检索词模板
-	ToolCode  string         `yaml:"tool_code" json:"tool_code"` // tool：工具 code
-	Args      map[string]any `yaml:"args" json:"args"`           // tool：参数（值支持 {{var}} 模板）
-	Expr      string         `yaml:"expr" json:"expr"`           // condition：布尔表达式（对 state 求值）
-	Then      string         `yaml:"then" json:"then"`           // condition：为真走 then
-	Else      string         `yaml:"else" json:"else"`           // condition：为假走 else
-	Branches  []string       `yaml:"branches" json:"branches"`   // parallel：并行分支节点 key
-	Workflow  int64          `yaml:"workflow" json:"workflow"`   // subflow：子工作流 ID
-	TimeoutS  int            `yaml:"timeout_s" json:"timeout_s"` // 节点超时（秒）
+	Key      string         `yaml:"key" json:"key"`             // 节点唯一键
+	Type     string         `yaml:"type" json:"type"`           // llm/tool/kb/condition/parallel/human/subflow
+	Prompt   string         `yaml:"prompt" json:"prompt"`       // llm：提示词模板（{{var}} 插值）
+	Model    string         `yaml:"model" json:"model"`         // llm：模型别名（空用默认）
+	KbID     int64          `yaml:"kb_id" json:"kb_id"`         // kb：知识库
+	Query    string         `yaml:"query" json:"query"`         // kb：检索词模板
+	ToolCode string         `yaml:"tool_code" json:"tool_code"` // tool：工具 code
+	Args     map[string]any `yaml:"args" json:"args"`           // tool：参数（值支持 {{var}} 模板）
+	Expr     string         `yaml:"expr" json:"expr"`           // condition：布尔表达式（对 state 求值）
+	Then     string         `yaml:"then" json:"then"`           // condition：为真走 then
+	Else     string         `yaml:"else" json:"else"`           // condition：为假走 else
+	Branches []string       `yaml:"branches" json:"branches"`   // parallel：并行分支节点 key
+	Workflow int64          `yaml:"workflow" json:"workflow"`   // subflow：子工作流 ID
+	TimeoutS int            `yaml:"timeout_s" json:"timeout_s"` // 节点超时（秒）
 }
 
 // Edge 边（from/to 为节点 key；condition 节点用 label 区分支路）。
@@ -85,6 +87,14 @@ func (l *EdgeList) UnmarshalYAML(value *yaml.Node) error {
 	// 结构化形态：元素是映射
 	if value.Kind == yaml.SequenceNode && len(value.Content) > 0 &&
 		value.Content[0].Kind == yaml.MappingNode {
+		for _, mapping := range value.Content {
+			for i := 0; i+1 < len(mapping.Content); i += 2 {
+				key := mapping.Content[i].Value
+				if key != "from" && key != "to" && key != "label" {
+					return fmt.Errorf("unknown edge field %s", key)
+				}
+			}
+		}
 		var es []Edge
 		if err := value.Decode(&es); err != nil {
 			return err
@@ -108,8 +118,16 @@ func (l *EdgeList) UnmarshalYAML(value *yaml.Node) error {
 // ParseDSL 解析 YAML 文本。
 func ParseDSL(text string) (*DSL, error) {
 	var d DSL
-	if err := yaml.Unmarshal([]byte(text), &d); err != nil {
+	if len(text) > 1<<20 {
+		return nil, errcode.ErrWorkflowDSL.WithMsg("DSL exceeds 1 MiB")
+	}
+	decoder := yaml.NewDecoder(strings.NewReader(text))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&d); err != nil {
 		return nil, errcode.ErrWorkflowDSL.WithCause(fmt.Errorf("yaml: %w", err))
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return nil, errcode.ErrWorkflowDSL.WithMsg("exactly one YAML document required")
 	}
 	if err := d.Validate(); err != nil {
 		return nil, err
@@ -122,7 +140,7 @@ func (d *DSL) Validate() error {
 	if d.Name == "" {
 		return errcode.ErrWorkflowDSL.WithCause(fmt.Errorf("name is required"))
 	}
-	if len(d.Nodes) == 0 {
+	if len(d.Nodes) == 0 || len(d.Nodes) > 128 {
 		return errcode.ErrWorkflowDSL.WithCause(fmt.Errorf("at least one node"))
 	}
 
@@ -132,6 +150,12 @@ func (d *DSL) Validate() error {
 		if n.Key == "" {
 			return errcode.ErrWorkflowDSL.WithCause(fmt.Errorf("node[%d] key required", i))
 		}
+		if len(n.Key) > 64 || strings.HasPrefix(n.Key, "__") || strings.ContainsAny(n.Key, "/.:; \t\n{}") {
+			return errcode.ErrWorkflowDSL.WithMsg("invalid/reserved node key %q", n.Key)
+		}
+		if n.TimeoutS < 0 || n.TimeoutS > 300 {
+			return errcode.ErrWorkflowDSL.WithMsg("node timeout must be 0..300 seconds")
+		}
 		if keys[n.Key] {
 			return errcode.ErrWorkflowDSL.WithCause(fmt.Errorf("duplicate node key: %s", n.Key))
 		}
@@ -140,20 +164,120 @@ func (d *DSL) Validate() error {
 			return errcode.ErrWorkflowDSL.WithCause(fmt.Errorf("node %s: unknown type %q", n.Key, n.Type))
 		}
 	}
+	owned := map[string]string{}
+	for _, n := range d.Nodes {
+		if n.Type == "parallel" && (len(n.Branches) == 0 || len(n.Branches) > 32) {
+			return errcode.ErrWorkflowDSL.WithMsg("parallel requires 1..32 branches")
+		}
+		for _, child := range n.Branches {
+			if !keys[child] || owned[child] != "" {
+				return errcode.ErrWorkflowDSL.WithMsg("invalid or multiply owned branch %q", child)
+			}
+			owned[child] = n.Key
+		}
+		for _, target := range []string{n.Then, n.Else} {
+			if target != "" && !keys[target] {
+				return errcode.ErrWorkflowDSL.WithMsg("unknown branch target %q", target)
+			}
+		}
+		if n.Type == "subflow" && n.Workflow <= 0 {
+			return errcode.ErrWorkflowDSL.WithMsg("subworkflow ID required")
+		}
+		if n.Type == "tool" && n.ToolCode == "" {
+			return errcode.ErrWorkflowDSL.WithMsg("tool code required")
+		}
+		if n.Type == "kb" && n.KbID <= 0 {
+			return errcode.ErrWorkflowDSL.WithMsg("knowledge base ID required")
+		}
+	}
 
 	// 边省略 → 线性连接（教学最常见形态）
 	if len(d.Edges) == 0 && len(d.Nodes) > 1 {
-		for i := 0; i+1 < len(d.Nodes); i++ {
-			d.Edges = append(d.Edges, Edge{From: d.Nodes[i].Key, To: d.Nodes[i+1].Key})
+		var roots []string
+		for _, n := range d.Nodes {
+			if owned[n.Key] == "" {
+				roots = append(roots, n.Key)
+			}
+		}
+		for i := 0; i+1 < len(roots); i++ {
+			d.Edges = append(d.Edges, Edge{From: roots[i], To: roots[i+1]})
 		}
 	}
 	for _, e := range d.Edges {
 		if !keys[e.From] || !keys[e.To] {
 			return errcode.ErrWorkflowDSL.WithCause(fmt.Errorf("edge %s->%s references unknown node", e.From, e.To))
 		}
+		if owned[e.From] != "" || owned[e.To] != "" {
+			return errcode.ErrWorkflowDSL.WithMsg("parallel branch nodes cannot also be root edges")
+		}
+		if e.Label != "" && e.Label != "then" && e.Label != "else" {
+			return errcode.ErrWorkflowDSL.WithMsg("invalid edge label")
+		}
+		if e.Label != "" {
+			for i := range d.Nodes {
+				if d.Nodes[i].Key == e.From {
+					if d.Nodes[i].Type != "condition" {
+						return errcode.ErrWorkflowDSL.WithMsg("labeled edge requires condition")
+					}
+					if e.Label == "then" {
+						if d.Nodes[i].Then != "" && d.Nodes[i].Then != e.To {
+							return errcode.ErrWorkflowDSL.WithMsg("conflicting then edge")
+						}
+						d.Nodes[i].Then = e.To
+					} else {
+						if d.Nodes[i].Else != "" && d.Nodes[i].Else != e.To {
+							return errcode.ErrWorkflowDSL.WithMsg("conflicting else edge")
+						}
+						d.Nodes[i].Else = e.To
+					}
+				}
+			}
+		}
+	}
+	counts := map[string]int{}
+	for _, edge := range d.Edges {
+		counts[edge.From]++
+	}
+	for _, n := range d.Nodes {
+		if counts[n.Key] > 1 && n.Type != "condition" {
+			return errcode.ErrWorkflowDSL.WithMsg("multiple successors require a condition/parallel node")
+		}
+	}
+	if d.OutKey != "" && !keys[d.OutKey] {
+		return errcode.ErrWorkflowDSL.WithMsg("unknown output node")
 	}
 	if err := d.checkCycle(); err != nil {
 		return err
+	}
+	adj := map[string][]string{}
+	for _, edge := range d.Edges {
+		adj[edge.From] = append(adj[edge.From], edge.To)
+	}
+	for _, node := range d.Nodes {
+		adj[node.Key] = append(adj[node.Key], node.Branches...)
+		if node.Then != "" {
+			adj[node.Key] = append(adj[node.Key], node.Then)
+		}
+		if node.Else != "" {
+			adj[node.Key] = append(adj[node.Key], node.Else)
+		}
+	}
+	seen := map[string]bool{}
+	var visit func(string)
+	visit = func(key string) {
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		for _, next := range adj[key] {
+			visit(next)
+		}
+	}
+	visit(d.StartKey())
+	for _, node := range d.Nodes {
+		if !seen[node.Key] {
+			return errcode.ErrWorkflowDSL.WithMsg("unreachable node %q", node.Key)
+		}
 	}
 	return nil
 }
@@ -166,6 +290,9 @@ func (d *DSL) checkCycle() error {
 	}
 	for i := range d.Nodes {
 		n := &d.Nodes[i]
+		if n.Type == "parallel" {
+			adj[n.Key] = append(adj[n.Key], n.Branches...)
+		}
 		if n.Type == "condition" {
 			if n.Then != "" {
 				adj[n.Key] = append(adj[n.Key], n.Then)
@@ -236,7 +363,18 @@ func (d *DSL) StartKey() string {
 	if len(d.Edges) > 0 {
 		return d.Edges[0].From
 	}
-	return d.Nodes[0].Key
+	owned := map[string]bool{}
+	for _, n := range d.Nodes {
+		for _, branch := range n.Branches {
+			owned[branch] = true
+		}
+	}
+	for _, n := range d.Nodes {
+		if !owned[n.Key] {
+			return n.Key
+		}
+	}
+	return ""
 }
 
 // OutKeyOrDefault 输出节点。
@@ -260,11 +398,30 @@ func RenderTemplate(tpl string, state map[string]any) string {
 	if !strings.Contains(tpl, "{{") {
 		return tpl
 	}
-	out := tpl
-	for k, v := range state {
-		out = strings.ReplaceAll(out, "{{"+k+"}}", toStringVal(v))
+	return templatePattern.ReplaceAllStringFunc(tpl, func(match string) string {
+		if value, ok := lookupTemplate(strings.TrimSpace(match[2:len(match)-2]), state); ok {
+			return toStringVal(value)
+		}
+		return match
+	})
+}
+
+var templatePattern = regexp.MustCompile(`\{\{\s*[^{}]+\s*\}\}`)
+
+func lookupTemplate(path string, state map[string]any) (any, bool) {
+	var current any = state
+	for _, segment := range strings.Split(path, ".") {
+		if mapping, ok := current.(map[string]any); ok {
+			value, exists := mapping[segment]
+			if !exists {
+				return nil, false
+			}
+			current = value
+		} else if segment != "result" {
+			return nil, false
+		}
 	}
-	return out
+	return current, true
 }
 
 // toStringVal 状态值转字符串（嵌套结构 JSON 化）。

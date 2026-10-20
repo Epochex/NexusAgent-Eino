@@ -1,0 +1,77 @@
+//go:build integration
+
+package execution
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+)
+
+func TestOperationUnknownNotReplayed(t *testing.T) {
+	s, db, owner, wf := fixture(t)
+	run := enqueue(t, s, owner, wf)
+	run = claim(t, s, "first")
+	op, cached, err := s.BeginOperation(context.Background(), run, "root/write", "tool", "args-hash", "manual")
+	if err != nil || cached {
+		t.Fatalf("cannot record operation intent: %v", err)
+	}
+	db.Exec(`UPDATE workflow_runs SET lease_until=NOW()-INTERVAL '1 second' WHERE id=?`, run.ID)
+	fresh := claim(t, s, "after-kill")
+	if _, _, err = s.BeginOperation(context.Background(), fresh, "root/write", "tool", "args-hash", "manual"); !errors.Is(err, ErrUnknownOperation) {
+		t.Fatalf("unknown external write would replay: %v", err)
+	}
+	if err = s.CompleteOperation(context.Background(), run, op, "late result", nil); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("stale operation committed: %v", err)
+	}
+	if err = s.Finish(context.Background(), fresh, NeedsAttention, nil, "external outcome unknown"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.ResolveOperation(context.Background(), owner+1, run.ID, op.ID, "args-hash", `"confirmed"`, "remote record checked"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("foreign operator resolved write")
+	}
+	if err = s.ResolveOperation(context.Background(), owner, run.ID, op.ID, "changed", `"confirmed"`, "remote record checked"); !errors.Is(err, ErrConflict) {
+		t.Fatal("changed operation resolved")
+	}
+	if err = s.ResolveOperation(context.Background(), owner, run.ID, op.ID, "args-hash", `"confirmed"`, "remote record checked"); err != nil {
+		t.Fatal(err)
+	}
+	resumed := claim(t, s, "resolved")
+	done, cached, err := s.BeginOperation(context.Background(), resumed, "root/write", "tool", "args-hash", "manual")
+	if err != nil || !cached || string(done.Output) != `"confirmed"` {
+		t.Fatalf("confirmed output not reused: %+v %v", done, err)
+	}
+}
+
+func TestOperationSafeReplayAndCommittedReuse(t *testing.T) {
+	s, db, owner, wf := fixture(t)
+	run := enqueue(t, s, owner, wf)
+	run = claim(t, s, "first")
+	first, _, err := s.BeginOperation(context.Background(), run, "root/read", "llm", "hash", "readonly")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Exec(`UPDATE workflow_runs SET lease_until=NOW()-INTERVAL '1 second' WHERE id=?`, run.ID)
+	fresh := claim(t, s, "replacement")
+	retry, cached, err := s.BeginOperation(context.Background(), fresh, "root/read", "llm", "hash", "readonly")
+	if err != nil || cached || retry.ID != first.ID || retry.Attempt != 2 {
+		t.Fatalf("safe logical operation identity changed: %+v %v", retry, err)
+	}
+	if err = s.CompleteOperation(context.Background(), fresh, retry, map[string]any{"result": "saved"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	done, cached, err := s.BeginOperation(context.Background(), fresh, "root/read", "llm", "hash", "readonly")
+	if err != nil || !cached || done.Attempt != 2 {
+		t.Fatalf("completed step replayed: %+v %v", done, err)
+	}
+	if _, _, err = s.BeginOperation(context.Background(), fresh, "root/read", "llm", "different", "readonly"); !errors.Is(err, ErrConflict) {
+		t.Fatal("path reused with different arguments")
+	}
+	if err = s.Retry(context.Background(), fresh, time.Minute, "retry later"); err != nil {
+		t.Fatal(err)
+	}
+	if early, err := s.Claim(context.Background(), "too-early", time.Minute); err != nil || early != nil {
+		t.Fatal("backoff occupied ready work")
+	}
+}

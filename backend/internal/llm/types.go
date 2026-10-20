@@ -31,10 +31,11 @@ type ToolCall struct {
 
 // ToolDef 工具定义（传给模型的功能描述，JSON Schema）。
 type ToolDef struct {
-	Dangerous   bool           `json:"-"` // authoritative execution metadata, never sent to the model
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Parameters  map[string]any `json:"parameters"` // JSON Schema
+	Dangerous    bool           `json:"-"` // authoritative execution metadata, never sent to the model
+	ReplayPolicy string         `json:"-"` // control-plane policy, never chosen by the model
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	Parameters   map[string]any `json:"parameters"` // JSON Schema
 }
 
 // ChatRequest 单次对话请求。

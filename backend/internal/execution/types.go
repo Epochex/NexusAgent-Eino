@@ -83,5 +83,5 @@ type Event struct {
 
 func (Event) TableName() string { return "execution_events" }
 func terminal(s string) bool {
-	return s == Succeeded || s == Failed || s == Canceled || s == NeedsAttention
+	return s == Succeeded || s == Failed || s == Canceled
 }

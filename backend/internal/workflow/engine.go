@@ -47,6 +47,12 @@ type Deps struct {
 
 	// SubRunner 子工作流递归执行（service 注入防循环依赖）。
 	SubRunner SubRunner
+
+	// LookupWorkflow resolves only definitions frozen into a durable Run.
+	LookupWorkflow func(context.Context, int64) (*DSL, error)
+	// ExecuteNode is supplied by the durable operation ledger; nil uses the
+	// normal gateway/tool/RAG leaf implementation. Never called for human nodes.
+	ExecuteNode func(context.Context, string, *Node, map[string]any) (any, error)
 }
 
 // Engine 工作流引擎。

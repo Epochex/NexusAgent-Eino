@@ -71,10 +71,7 @@ func RegisterKBSearch(r Registry, fn KBSearchFunc) {
 			return "", fmt.Errorf("kb_id must be a number")
 		}
 		query, _ := args["query"].(string)
-		topK := 5
-		if v, ok := args["top_k"].(float64); ok && int(v) > 0 {
-			topK = int(v)
-		}
+		topK := boundedInt(args["top_k"], 5, 100)
 		if query == "" {
 			return "", fmt.Errorf("query is required")
 		}

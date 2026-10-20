@@ -13,6 +13,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -105,10 +107,11 @@ func (e *ProdExecutor) ListContext(ctx context.Context, agentToolsJSON string) (
 			return nil, fmt.Errorf("invalid schema for tool %s: %w", t.Code, jsonErr)
 		}
 		defs = append(defs, llm.ToolDef{
-			Name:        t.Code,
-			Description: t.Description,
-			Parameters:  params,
-			Dangerous:   t.IsDangerous,
+			Name:         t.Code,
+			Description:  t.Description,
+			Parameters:   params,
+			Dangerous:    t.IsDangerous,
+			ReplayPolicy: t.ReplayPolicy,
 		})
 	}
 	for _, binding := range bindings {
@@ -167,8 +170,16 @@ func (e *ProdExecutor) Invoke(ctx context.Context, agentToolsJSON, name, argsJSO
 
 	// ④ 参数解析（失败时也回传给模型修正）
 	var args map[string]any
-	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil && argsJSON != "" {
+	decoder := json.NewDecoder(strings.NewReader(argsJSON))
+	decoder.UseNumber()
+	if err := decoder.Decode(&args); err != nil && argsJSON != "" {
 		res.Output = fmt.Sprintf(`{"error":"invalid tool args json: %v"}`, err)
+		res.Status = "error"
+		res.Elapsed = time.Since(start).Milliseconds()
+		return res
+	}
+	if argsJSON != "" && decoder.Decode(new(any)) != io.EOF {
+		res.Output = `{"error":"exactly one JSON object required"}`
 		res.Status = "error"
 		res.Elapsed = time.Since(start).Milliseconds()
 		return res

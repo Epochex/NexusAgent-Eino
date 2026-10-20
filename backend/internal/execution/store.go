@@ -132,28 +132,34 @@ func lockLease(tx *gorm.DB, run *Run) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrLeaseLost
 	}
-	if err == nil && (row.DefinitionHash != run.DefinitionHash || row.EngineVersion != run.EngineVersion || row.GraphSchema != run.GraphSchema || run.EngineVersion != EngineVersion || run.GraphSchema != GraphSchema) {
+	if err == nil && (row.DefinitionHash != run.DefinitionHash || row.EngineVersion != run.EngineVersion || row.GraphSchema != run.GraphSchema) {
 		return ErrVersionMismatch
 	}
 	return err
 }
 
 func (s *Store) Finish(ctx context.Context, run *Run, status string, output json.RawMessage, message string) error {
-	if !terminal(status) {
+	if !terminal(status) && status != NeedsAttention {
 		return ErrInvalidInput
 	}
 	out, err := object(output, 4<<20)
 	if err != nil {
 		return err
 	}
-	if len(message) > 512 {
-		message = message[:512]
-	}
+	message = boundedError(message)
 	return s.transaction(ctx, func(tx *gorm.DB) error {
 		if err := lockLease(tx, run); err != nil {
 			return err
 		}
-		if err := tx.Model(&Run{}).Where("id=?", run.ID).Updates(map[string]any{"status": status, "output": out, "error": message, "finished_at": gorm.Expr("NOW()"), "lease_owner": "", "lease_until": nil, "pending_ids": datatypes.JSON(`[]`)}).Error; err != nil {
+		var finished any = gorm.Expr("NOW()")
+		pendingIDs := datatypes.JSON(`[]`)
+		if status == NeedsAttention {
+			finished = nil
+			// A later fault may occur after approval but before the next Eino
+			// checkpoint. Keep the approved resume target for reconciliation.
+			pendingIDs = run.PendingIDs
+		}
+		if err := tx.Model(&Run{}).Where("id=?", run.ID).Updates(map[string]any{"status": status, "output": out, "error": message, "finished_at": finished, "lease_owner": "", "lease_until": nil, "pending_ids": pendingIDs}).Error; err != nil {
 			return err
 		}
 		return appendEvent(tx, run.ID, status, map[string]any{"error": message})

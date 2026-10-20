@@ -60,6 +60,7 @@ type Tool struct {
 	DefaultConfig datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"default_config"`
 	TimeoutMs     int            `gorm:"default:30000" json:"timeout_ms"`
 	IsDangerous   bool           `json:"is_dangerous"` // HITL 审批依据
+	ReplayPolicy  string         `gorm:"size:16;default:manual" json:"replay_policy"`
 	Status        int16          `json:"status"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`

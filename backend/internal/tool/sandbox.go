@@ -19,11 +19,11 @@ import (
 
 // SandboxConfig 沙箱配置。
 type SandboxConfig struct {
-	Image     string        // nexus/sandbox:latest
-	Memory    string        // 512m
-	CPUs      string        // "1"
-	Timeout   time.Duration // 30s
-	PoolSize  int
+	Image    string        // nexus/sandbox:latest
+	Memory   string        // 512m
+	CPUs     string        // "1"
+	Timeout  time.Duration // 30s
+	PoolSize int
 }
 
 // Sandbox Docker 沙箱执行器。
@@ -81,7 +81,7 @@ func (s *Sandbox) Run(ctx context.Context, language, code string) (*ExecResult, 
 			Env:        []string{"GOCACHE=/tmp/gocache", "GOFLAGS=-mod=mod"},
 		},
 		&container.HostConfig{
-			NetworkMode: "none",               // 无网络：最关键的隔离手段
+			NetworkMode: "none", // 无网络：最关键的隔离手段
 			Resources: container.Resources{
 				Memory:    512 * 1024 * 1024, // 512m
 				NanoCPUs:  1e9,               // 1 CPU

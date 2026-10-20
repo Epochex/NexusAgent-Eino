@@ -106,7 +106,7 @@ func (t *boundTool) InvokableRun(ctx context.Context, args string, _ ...einotool
 	if current == nil {
 		return toolObservation("tool_unavailable", "tool is no longer bound"), nil
 	}
-	if t.dangerous || current.Dangerous {
+	if (t.dangerous || current.Dangerous) && !toolApproved(ctx, t.definition.Name, args) {
 		return toolObservation("approval_required", "sensitive tool requires persistent approval"), nil
 	}
 	raw, _ := json.Marshal(current.Parameters)

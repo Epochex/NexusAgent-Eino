@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/chengpeng-cp/nexus-agent/internal/pkg/callmeta"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 )
 
@@ -153,6 +154,11 @@ func (c *Client) call(ctx context.Context, method string, params any, out any) (
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
+	}
+	if method == "tools/call" {
+		if id := callmeta.OperationID(ctx); id != "" {
+			req.Header.Set("Idempotency-Key", id)
+		}
 	}
 	if c.sessionID != "" {
 		req.Header.Set("Mcp-Session-Id", c.sessionID)

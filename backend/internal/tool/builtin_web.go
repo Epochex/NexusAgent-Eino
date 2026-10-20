@@ -40,14 +40,11 @@ func runWebSearch(ctx context.Context, cfg SearchConfig, args map[string]any) (s
 	if query == "" {
 		return "", fmt.Errorf("query is required")
 	}
-	count := 5
-	if v, ok := args["count"].(float64); ok && int(v) > 0 && int(v) <= 20 {
-		count = int(v)
-	}
+	count := boundedInt(args["count"], 5, 20)
 
 	params := url.Values{
-		"q":     {query},
-		"format": {"json"},
+		"q":        {query},
+		"format":   {"json"},
 		"language": {"zh-CN"},
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,

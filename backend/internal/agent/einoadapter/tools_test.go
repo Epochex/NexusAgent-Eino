@@ -2,6 +2,7 @@ package einoadapter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync/atomic"
@@ -28,6 +29,18 @@ func (r *toolRepo) GetByCode(ctx context.Context, code string) (*model.Tool, err
 		}
 	}
 	return nil, errors.New("missing tool")
+}
+
+func TestBoundToolPreservesIntegerArguments(t *testing.T) {
+	exec, repo := toolFixture(t, false, func(_ context.Context, args map[string]any, _ string) (string, error) {
+		raw, err := json.Marshal(args)
+		return string(raw), err
+	})
+	repo.rows[0].Parameters = []byte(`{"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}`)
+	out, err := buildTool(t, exec, nil, time.Second).InvokableRun(context.Background(), `{"id":9007199254740993}`)
+	if err != nil || !strings.Contains(out, "9007199254740993") {
+		t.Fatalf("schema-valid integer changed before handler: %s %v", out, err)
+	}
 }
 func (r *toolRepo) ListByCodes(ctx context.Context, codes []string) ([]model.Tool, error) {
 	if err := ctx.Err(); err != nil {
@@ -132,6 +145,26 @@ func TestToolDangerousFailsClosed(t *testing.T) {
 				t.Fatalf("dangerous call bypassed policy: %s %v", out, err)
 			}
 		})
+	}
+}
+
+func TestPersistentToolApprovalBindsExactArguments(t *testing.T) {
+	var calls atomic.Int32
+	exec, _ := toolFixture(t, true, func(context.Context, map[string]any, string) (string, error) { calls.Add(1); return "written", nil })
+	bound := buildTool(t, exec, nil, time.Second)
+	ctx := WithToolApproval(context.Background(), "search", `{"q":"approved"}`)
+	for _, args := range []string{`{"q":"changed"}`, `{"q":"approved","extra":true}`} {
+		out, _ := bound.InvokableRun(ctx, args)
+		if out == "written" {
+			t.Fatal("approval expanded to different arguments")
+		}
+	}
+	if calls.Load() != 0 {
+		t.Fatal("unapproved handler invoked")
+	}
+	out, err := bound.InvokableRun(ctx, `{ "q" : "approved" }`)
+	if err != nil || out != "written" || calls.Load() != 1 {
+		t.Fatalf("exact persisted approval unusable: %q %v", out, err)
 	}
 }
 

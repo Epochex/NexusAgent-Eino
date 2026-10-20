@@ -41,6 +41,9 @@ func (c *CheckpointStore) Get(ctx context.Context, id string) ([]byte, bool, err
 	return row.Payload, true, nil
 }
 func (c *CheckpointStore) Set(ctx context.Context, id string, payload []byte) error {
+	if c.run.EngineVersion != EngineVersion || c.run.GraphSchema != GraphSchema {
+		return ErrVersionMismatch
+	}
 	if len(id) > 512 || len(payload) > 16<<20 {
 		return ErrInvalidInput
 	}

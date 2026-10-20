@@ -39,7 +39,7 @@ jobs:
           cache-dependency-path: backend/go.sum
       - run: go vet ./...
       - run: go test -race ./... -timeout 180s
-      - run: go test -race -tags=integration ./internal/service -run TestChat -count=1 -timeout 120s
+      - run: go test -race -tags=integration ./internal/service ./internal/execution -count=1 -timeout 180s
         env:
           NX_TEST_DATABASE_DSN: postgres://postgres@localhost:5432/nexus_eino_test?sslmode=disable
       - run: go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate
