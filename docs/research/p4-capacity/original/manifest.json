@@ -1,0 +1,13 @@
+{
+  "campaign_id": "37210ba9",
+  "source_revision": "d8925c0eb5dfc863644d93d163fa2e441f61bb8f",
+  "driver_hash": "BA6A2DC318DBA667A2B632F09D2476CB0B92BB627DB2351F5802DF15897387C9",
+  "app_server_hash": "02CB9C3F64678A712E82A81CDB8B7A576A60761B60A5FB3FBB8DF3FF7ED67276",
+  "app_worker_hash": "E1524D6BB590F633FAC775035BE5B526F6545463ED535E67D425810360D0B594",
+  "primary_mix": "80% durable LLM-MCP-LLM / 20% Eino ADK Chat-MCP-final SSE",
+  "sse": "Fixed subscriber slots; Chat temporarily replaces one idle subscription; workflow subscriptions return to waiting fixtures after completion. Reconnect gaps are included in sampled actual count.",
+  "model_delay_ms": 250,
+  "tool_delay_ms": 100,
+  "platform": "server 2 CPU/4GiB + worker 2 CPU/4GiB; peer, driver and all infrastructure external",
+  "source_dirty": false
+}

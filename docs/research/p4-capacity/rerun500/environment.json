@@ -1,0 +1,136 @@
+{
+  "observed_utc": "2026-10-20T16:26:35.9944246Z",
+  "host_cpu": "13th Gen Intel(R) Core(TM) i5-13400F",
+  "host_logical_cpus": 16,
+  "host_memory_kib": 33389760,
+  "host_windows_version": "10.0.19045",
+  "docker": {
+    "version": "29.2.1",
+    "kernel": "6.18.54.1-microsoft-standard-WSL2",
+    "os": "Docker Desktop (containerized)",
+    "logical_cpus": 16,
+    "memory_bytes": 16684834816,
+    "storage_driver": "overlayfs",
+    "cgroup": "2"
+  },
+  "topology": [
+    {
+      "name": "/nexus-eino-capacity-server-1",
+      "image": "sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84",
+      "user": "65532:65532",
+      "memory_bytes": 4294967296,
+      "nano_cpus": 2000000000,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 4294967296,
+      "read_only": true
+    },
+    {
+      "name": "/nexus-eino-capacity-worker-1",
+      "image": "sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84",
+      "user": "65532:65532",
+      "memory_bytes": 4294967296,
+      "nano_cpus": 2000000000,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 4294967296,
+      "read_only": true
+    },
+    {
+      "name": "/nexus-eino-capacity-peer-1",
+      "image": "sha256:fb612b7831d53a89cbc0aaa7855b69ad7b0caf603715860cf538df854d047b84",
+      "user": "65532:65532",
+      "memory_bytes": 536870912,
+      "nano_cpus": 1000000000,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 536870912,
+      "read_only": true
+    },
+    {
+      "name": "/nexus-eino-acceptance-postgres-1",
+      "image": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
+      "user": "",
+      "memory_bytes": 536870912,
+      "nano_cpus": 0,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 1073741824,
+      "read_only": false
+    },
+    {
+      "name": "/nexus-eino-acceptance-redis-1",
+      "image": "sha256:5a93f6b2e391b78e8bd3f9e7e1e1e06aeb5295043b4703fb88392835cec924a0",
+      "user": "",
+      "memory_bytes": 268435456,
+      "nano_cpus": 0,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 536870912,
+      "read_only": false
+    },
+    {
+      "name": "/nexus-eino-acceptance-milvus-1",
+      "image": "sha256:fe39aa0fa006be4825a177b6b41393465deece910351c33a58170444265c63d8",
+      "user": "",
+      "memory_bytes": 4294967296,
+      "nano_cpus": 2000000000,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 8589934592,
+      "read_only": false
+    },
+    {
+      "name": "/nexus-eino-acceptance-minio-1",
+      "image": "sha256:2136d593beacf4461187035eca949fe49abd589d5079735025c711ca58fee0c8",
+      "user": "0:0",
+      "memory_bytes": 536870912,
+      "nano_cpus": 0,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 1073741824,
+      "read_only": false
+    },
+    {
+      "name": "/nexus-eino-acceptance-docparser-1",
+      "image": "sha256:af025a1e7aab59e950b8a3d574119cb5de9c3a08f975c3edb2b0c755f3235262",
+      "user": "65532:65532",
+      "memory_bytes": 536870912,
+      "nano_cpus": 1000000000,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 536870912,
+      "read_only": true
+    },
+    {
+      "name": "/nexus-eino-acceptance-etcd-1",
+      "image": "sha256:42106a001d1be7fd22e48830071ceae0fe760ff2c5df8c76c0e3b586d8a1f0fc",
+      "user": "0",
+      "memory_bytes": 268435456,
+      "nano_cpus": 0,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 536870912,
+      "read_only": false
+    },
+    {
+      "name": "/nexus-eino-acceptance-milvus-minio-1",
+      "image": "sha256:2136d593beacf4461187035eca949fe49abd589d5079735025c711ca58fee0c8",
+      "user": "0:0",
+      "memory_bytes": 536870912,
+      "nano_cpus": 0,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "memory_swap": 1073741824,
+      "read_only": false
+    }
+  ],
+  "host_disks": {
+    "media": "SSD",
+    "bus": "NVMe",
+    "size_bytes": 2048408248320
+  },
+  "network": "Separate containers on one Docker Desktop WSL2 VM, Docker bridge/internal parser network; no physical multi-host or WAN latency measurement",
+  "storage": "Docker named volumes for data; Windows C NTFS bind mount for immutable application binaries. VHDX physical placement not verified.",
+  "co_resident": "Existing gamebuildlab containers remain running; CPU quotas are upper bounds, not exclusive CPU reservations. No local builds/full tests during the final measured campaign."
+}

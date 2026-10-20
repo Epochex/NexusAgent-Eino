@@ -1,0 +1,2348 @@
+[
+  {
+    "name": "grid-s500-c32-r1",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c32-r1",
+      "SSE": 500,
+      "Slots": 32,
+      "Rate": 1,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T17:58:28.154996Z",
+    "finished": "2026-10-20T17:59:02.610252Z",
+    "arrivals": {
+      "target": 30,
+      "scheduled": 30,
+      "not_scheduled": 0,
+      "attempted": 30,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 30,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 1.0334
+    },
+    "actual_wire": 30,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "received": 30,
+    "completed": 30,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 24
+    },
+    "chat_states": {
+      "done": 6
+    },
+    "http_outcomes": {
+      "chat_accepted": 6,
+      "chat_done": 6,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 24
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 6,
+        "p50_ms": 672.2294,
+        "p95_ms": 704.5605,
+        "p99_ms": 704.5605,
+        "max_ms": 704.5605
+      },
+      "chat_first_token": {
+        "count": 6,
+        "p50_ms": 648.8382,
+        "p95_ms": 683.5639,
+        "p99_ms": 683.5639,
+        "max_ms": 683.5639
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 11.9798,
+        "p95_ms": 14.3095,
+        "p99_ms": 14.3095,
+        "max_ms": 14.3095
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 8.3759,
+        "p95_ms": 9.6539,
+        "p99_ms": 9.6539,
+        "max_ms": 9.6539
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 5.3853,
+        "p95_ms": 11.2339,
+        "p99_ms": 11.9267,
+        "max_ms": 11.9267
+      },
+      "wire_schedule_lag": {
+        "count": 30,
+        "p50_ms": 0.6142,
+        "p95_ms": 1.3924,
+        "p99_ms": 1.6983,
+        "max_ms": 1.6983
+      },
+      "workflow_first_result": {
+        "count": 24,
+        "p50_ms": 521.5628,
+        "p95_ms": 538.0975,
+        "p99_ms": 542.9574,
+        "max_ms": 542.9574
+      },
+      "workflow_submit": {
+        "count": 24,
+        "p50_ms": 17.8976,
+        "p95_ms": 34.0018,
+        "p99_ms": 38.7332,
+        "max_ms": 38.7332
+      }
+    },
+    "queue": {
+      "count": 24,
+      "p50_ms": 140.582,
+      "p95_ms": 151.997,
+      "p99_ms": 158.124,
+      "max_ms": 158.124
+    },
+    "execution": {
+      "count": 24,
+      "p50_ms": 676.175,
+      "p95_ms": 685.466,
+      "p99_ms": 687.179,
+      "max_ms": 687.179
+    },
+    "workflow_end_to_end": {
+      "count": 24,
+      "p50_ms": 815.761,
+      "p95_ms": 834.667,
+      "p99_ms": 842.336,
+      "max_ms": 842.336
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 554,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 500,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.4207,
+      "nexus-eino-capacity-worker-1": 0.0713,
+      "nexus-eino-capacity-peer-1": 0.004,
+      "nexus-eino-acceptance-postgres-1": 0.6042000000000001,
+      "nexus-eino-acceptance-redis-1": 0.0323,
+      "nexus-eino-acceptance-milvus-1": 0.0525,
+      "nexus-eino-acceptance-minio-1": 0.0005,
+      "nexus-eino-acceptance-docparser-1": 0.0191,
+      "nexus-eino-acceptance-etcd-1": 0.009899999999999999,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0027
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 64.52,
+      "nexus-eino-capacity-worker-1": 26.31,
+      "nexus-eino-capacity-peer-1": 20.31,
+      "nexus-eino-acceptance-postgres-1": 399.3,
+      "nexus-eino-acceptance-redis-1": 37.81,
+      "nexus-eino-acceptance-milvus-1": 238.3,
+      "nexus-eino-acceptance-minio-1": 87.11,
+      "nexus-eino-acceptance-docparser-1": 6.898,
+      "nexus-eino-acceptance-etcd-1": 30.72,
+      "nexus-eino-acceptance-milvus-minio-1": 209.9
+    },
+    "peak_outbox": 0,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c32-r10",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c32-r10",
+      "SSE": 500,
+      "Slots": 32,
+      "Rate": 10,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T17:59:53.5333829Z",
+    "finished": "2026-10-20T18:00:28.3408061Z",
+    "arrivals": {
+      "target": 300,
+      "scheduled": 300,
+      "not_scheduled": 0,
+      "attempted": 300,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 300,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 1.2393
+    },
+    "actual_wire": 300,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+    ],
+    "received": 300,
+    "completed": 300,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 240
+    },
+    "chat_states": {
+      "done": 60
+    },
+    "http_outcomes": {
+      "chat_accepted": 60,
+      "chat_done": 60,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 240
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 60,
+        "p50_ms": 681.138,
+        "p95_ms": 727.8557,
+        "p99_ms": 860.0796,
+        "max_ms": 860.0796
+      },
+      "chat_first_token": {
+        "count": 60,
+        "p50_ms": 657.0228,
+        "p95_ms": 704.9597,
+        "p99_ms": 835.2013,
+        "max_ms": 835.2013
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 16.7207,
+        "p95_ms": 17.3452,
+        "p99_ms": 17.3452,
+        "max_ms": 17.3452
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 11.2032,
+        "p95_ms": 14.575,
+        "p99_ms": 14.575,
+        "max_ms": 14.575
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 7.1725,
+        "p95_ms": 23.5142,
+        "p99_ms": 25.9992,
+        "max_ms": 25.9992
+      },
+      "wire_schedule_lag": {
+        "count": 300,
+        "p50_ms": 0.55,
+        "p95_ms": 1.236,
+        "p99_ms": 1.8281,
+        "max_ms": 1.8692
+      },
+      "workflow_first_result": {
+        "count": 240,
+        "p50_ms": 519.3283,
+        "p95_ms": 546.0314,
+        "p99_ms": 573.8759,
+        "max_ms": 583.8546
+      },
+      "workflow_submit": {
+        "count": 240,
+        "p50_ms": 15.7848,
+        "p95_ms": 39.204,
+        "p99_ms": 68.6069,
+        "max_ms": 72.8291
+      }
+    },
+    "queue": {
+      "count": 240,
+      "p50_ms": 49.719,
+      "p95_ms": 161.588,
+      "p99_ms": 171.061,
+      "max_ms": 171.854
+    },
+    "execution": {
+      "count": 240,
+      "p50_ms": 673.2,
+      "p95_ms": 703.089,
+      "p99_ms": 744.766,
+      "max_ms": 765.646
+    },
+    "workflow_end_to_end": {
+      "count": 240,
+      "p50_ms": 729.689,
+      "p95_ms": 837.762,
+      "p99_ms": 858.634,
+      "max_ms": 869.726
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 1037,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 500,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.45299999999999996,
+      "nexus-eino-capacity-worker-1": 0.2854,
+      "nexus-eino-capacity-peer-1": 0.0409,
+      "nexus-eino-acceptance-postgres-1": 0.685,
+      "nexus-eino-acceptance-redis-1": 0.033,
+      "nexus-eino-acceptance-milvus-1": 0.0484,
+      "nexus-eino-acceptance-minio-1": 0.0058,
+      "nexus-eino-acceptance-docparser-1": 0.0242,
+      "nexus-eino-acceptance-etcd-1": 0.0118,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0013
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 65.8,
+      "nexus-eino-capacity-worker-1": 27.63,
+      "nexus-eino-capacity-peer-1": 23.41,
+      "nexus-eino-acceptance-postgres-1": 365.1,
+      "nexus-eino-acceptance-redis-1": 35.3,
+      "nexus-eino-acceptance-milvus-1": 238.3,
+      "nexus-eino-acceptance-minio-1": 87.18,
+      "nexus-eino-acceptance-docparser-1": 4.668,
+      "nexus-eino-acceptance-etcd-1": 30.46,
+      "nexus-eino-acceptance-milvus-minio-1": 209.9
+    },
+    "peak_outbox": 27,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c32-r20",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c32-r20",
+      "SSE": 500,
+      "Slots": 32,
+      "Rate": 20,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T18:00:36.1197115Z",
+    "finished": "2026-10-20T18:01:11.8244225Z",
+    "arrivals": {
+      "target": 600,
+      "scheduled": 600,
+      "not_scheduled": 0,
+      "attempted": 600,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 600,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 6.3059
+    },
+    "actual_wire": 600,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "received": 600,
+    "completed": 600,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 480
+    },
+    "chat_states": {
+      "done": 120
+    },
+    "http_outcomes": {
+      "chat_accepted": 120,
+      "chat_done": 120,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 480
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 120,
+        "p50_ms": 691.7541,
+        "p95_ms": 879.6811,
+        "p99_ms": 1222.2671,
+        "max_ms": 1315.2673
+      },
+      "chat_first_token": {
+        "count": 120,
+        "p50_ms": 664.362,
+        "p95_ms": 828.8978,
+        "p99_ms": 1152.8513,
+        "max_ms": 1275.271
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 12.0009,
+        "p95_ms": 42.9984,
+        "p99_ms": 42.9984,
+        "max_ms": 42.9984
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 9.9998,
+        "p95_ms": 35.9989,
+        "p99_ms": 35.9989,
+        "max_ms": 35.9989
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 6.4242,
+        "p95_ms": 61.0018,
+        "p99_ms": 70.9422,
+        "max_ms": 70.9422
+      },
+      "wire_schedule_lag": {
+        "count": 600,
+        "p50_ms": 0.612,
+        "p95_ms": 1.6569,
+        "p99_ms": 2.8335,
+        "max_ms": 6.3059
+      },
+      "workflow_first_result": {
+        "count": 480,
+        "p50_ms": 520.6388,
+        "p95_ms": 689.7375,
+        "p99_ms": 1093.747,
+        "max_ms": 1167.2665
+      },
+      "workflow_submit": {
+        "count": 480,
+        "p50_ms": 17.3834,
+        "p95_ms": 182.8671,
+        "p99_ms": 587.2749,
+        "max_ms": 641.8541
+      }
+    },
+    "queue": {
+      "count": 480,
+      "p50_ms": 31.464,
+      "p95_ms": 95.601,
+      "p99_ms": 137.498,
+      "max_ms": 183.659
+    },
+    "execution": {
+      "count": 480,
+      "p50_ms": 686.662,
+      "p95_ms": 807.551,
+      "p99_ms": 1044.336,
+      "max_ms": 1210.748
+    },
+    "workflow_end_to_end": {
+      "count": 480,
+      "p50_ms": 725.8,
+      "p95_ms": 868.336,
+      "p99_ms": 1129.757,
+      "max_ms": 1244.082
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 1580,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 497,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 498.5,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.9095,
+      "nexus-eino-capacity-worker-1": 0.9103,
+      "nexus-eino-capacity-peer-1": 0.1549,
+      "nexus-eino-acceptance-postgres-1": 5.2425,
+      "nexus-eino-acceptance-redis-1": 0.105,
+      "nexus-eino-acceptance-milvus-1": 0.0705,
+      "nexus-eino-acceptance-minio-1": 0.0341,
+      "nexus-eino-acceptance-docparser-1": 0.027999999999999997,
+      "nexus-eino-acceptance-etcd-1": 0.0087,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0012
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 68.15,
+      "nexus-eino-capacity-worker-1": 28.88,
+      "nexus-eino-capacity-peer-1": 23.23,
+      "nexus-eino-acceptance-postgres-1": 393.0,
+      "nexus-eino-acceptance-redis-1": 35.27,
+      "nexus-eino-acceptance-milvus-1": 239.2,
+      "nexus-eino-acceptance-minio-1": 86.81,
+      "nexus-eino-acceptance-docparser-1": 2.918,
+      "nexus-eino-acceptance-etcd-1": 29.97,
+      "nexus-eino-acceptance-milvus-minio-1": 209.7
+    },
+    "peak_outbox": 65,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c32-r5",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c32-r5",
+      "SSE": 500,
+      "Slots": 32,
+      "Rate": 5,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T17:59:10.0011557Z",
+    "finished": "2026-10-20T17:59:45.5432193Z",
+    "arrivals": {
+      "target": 150,
+      "scheduled": 150,
+      "not_scheduled": 0,
+      "attempted": 150,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 150,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 1.4046
+    },
+    "actual_wire": 150,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5
+    ],
+    "received": 150,
+    "completed": 150,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 120
+    },
+    "chat_states": {
+      "done": 30
+    },
+    "http_outcomes": {
+      "chat_accepted": 30,
+      "chat_done": 30,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 120
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 30,
+        "p50_ms": 676.0966,
+        "p95_ms": 689.0173,
+        "p99_ms": 732.1043,
+        "max_ms": 732.1043
+      },
+      "chat_first_token": {
+        "count": 30,
+        "p50_ms": 655.4979,
+        "p95_ms": 669.9931,
+        "p99_ms": 683.2931,
+        "max_ms": 683.2931
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 12.2984,
+        "p95_ms": 14.999,
+        "p99_ms": 14.999,
+        "max_ms": 14.999
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 8.9907,
+        "p95_ms": 11.9992,
+        "p99_ms": 11.9992,
+        "max_ms": 11.9992
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 5.9639,
+        "p95_ms": 15.3617,
+        "p99_ms": 48.0056,
+        "max_ms": 48.0056
+      },
+      "wire_schedule_lag": {
+        "count": 150,
+        "p50_ms": 0.6979,
+        "p95_ms": 1.6067,
+        "p99_ms": 4.1281,
+        "max_ms": 9.2765
+      },
+      "workflow_first_result": {
+        "count": 120,
+        "p50_ms": 517.7764,
+        "p95_ms": 535.4286,
+        "p99_ms": 560.7284,
+        "max_ms": 584.6139
+      },
+      "workflow_submit": {
+        "count": 120,
+        "p50_ms": 14.9896,
+        "p95_ms": 32.1025,
+        "p99_ms": 56.5064,
+        "max_ms": 79.2965
+      }
+    },
+    "queue": {
+      "count": 120,
+      "p50_ms": 101.803,
+      "p95_ms": 105.203,
+      "p99_ms": 105.702,
+      "max_ms": 105.912
+    },
+    "execution": {
+      "count": 120,
+      "p50_ms": 673.594,
+      "p95_ms": 708.544,
+      "p99_ms": 747.837,
+      "max_ms": 749.773
+    },
+    "workflow_end_to_end": {
+      "count": 120,
+      "p50_ms": 773.525,
+      "p95_ms": 804.487,
+      "p99_ms": 835.953,
+      "max_ms": 848.849
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 769,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 500,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.5074000000000001,
+      "nexus-eino-capacity-worker-1": 0.27690000000000003,
+      "nexus-eino-capacity-peer-1": 0.0256,
+      "nexus-eino-acceptance-postgres-1": 1.1376,
+      "nexus-eino-acceptance-redis-1": 0.0322,
+      "nexus-eino-acceptance-milvus-1": 0.0644,
+      "nexus-eino-acceptance-minio-1": 0.0006,
+      "nexus-eino-acceptance-docparser-1": 0.0252,
+      "nexus-eino-acceptance-etcd-1": 0.0073,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0004
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 65.39,
+      "nexus-eino-capacity-worker-1": 27.01,
+      "nexus-eino-capacity-peer-1": 23.09,
+      "nexus-eino-acceptance-postgres-1": 346.9,
+      "nexus-eino-acceptance-redis-1": 35.98,
+      "nexus-eino-acceptance-milvus-1": 238.3,
+      "nexus-eino-acceptance-minio-1": 86.91,
+      "nexus-eino-acceptance-docparser-1": 4.09,
+      "nexus-eino-acceptance-etcd-1": 29.97,
+      "nexus-eino-acceptance-milvus-minio-1": 209.7
+    },
+    "peak_outbox": 16,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c64-r1",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c64-r1",
+      "SSE": 500,
+      "Slots": 64,
+      "Rate": 1,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T18:01:20.1485802Z",
+    "finished": "2026-10-20T18:01:54.8244556Z",
+    "arrivals": {
+      "target": 30,
+      "scheduled": 30,
+      "not_scheduled": 0,
+      "attempted": 30,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 30,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 1.0467
+    },
+    "actual_wire": 30,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "received": 30,
+    "completed": 30,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 24
+    },
+    "chat_states": {
+      "done": 6
+    },
+    "http_outcomes": {
+      "chat_accepted": 6,
+      "chat_done": 6,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 24
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 6,
+        "p50_ms": 668.5319,
+        "p95_ms": 687.8779,
+        "p99_ms": 687.8779,
+        "max_ms": 687.8779
+      },
+      "chat_first_token": {
+        "count": 6,
+        "p50_ms": 649.7736,
+        "p95_ms": 671.5748,
+        "p99_ms": 671.5748,
+        "max_ms": 671.5748
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 11.2451,
+        "p95_ms": 14.9026,
+        "p99_ms": 14.9026,
+        "max_ms": 14.9026
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 8.1706,
+        "p95_ms": 14.2514,
+        "p99_ms": 14.2514,
+        "max_ms": 14.2514
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 5.0003,
+        "p95_ms": 11.2832,
+        "p99_ms": 12.0025,
+        "max_ms": 12.0025
+      },
+      "wire_schedule_lag": {
+        "count": 30,
+        "p50_ms": 0.5137,
+        "p95_ms": 1.0643,
+        "p99_ms": 1.8192,
+        "max_ms": 1.8192
+      },
+      "workflow_first_result": {
+        "count": 24,
+        "p50_ms": 518.9614,
+        "p95_ms": 531.8376,
+        "p99_ms": 540.2202,
+        "max_ms": 540.2202
+      },
+      "workflow_submit": {
+        "count": 24,
+        "p50_ms": 14.5128,
+        "p95_ms": 29.009,
+        "p99_ms": 36.7108,
+        "max_ms": 36.7108
+      }
+    },
+    "queue": {
+      "count": 24,
+      "p50_ms": 149.55,
+      "p95_ms": 158.879,
+      "p99_ms": 159.248,
+      "max_ms": 159.248
+    },
+    "execution": {
+      "count": 24,
+      "p50_ms": 673.095,
+      "p95_ms": 716.039,
+      "p99_ms": 761.37,
+      "max_ms": 761.37
+    },
+    "workflow_end_to_end": {
+      "count": 24,
+      "p50_ms": 822.689,
+      "p95_ms": 875.287,
+      "p99_ms": 900.632,
+      "max_ms": 900.632
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 554,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 500,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.47869999999999996,
+      "nexus-eino-capacity-worker-1": 0.06849999999999999,
+      "nexus-eino-capacity-peer-1": 0.004,
+      "nexus-eino-acceptance-postgres-1": 1.2146,
+      "nexus-eino-acceptance-redis-1": 0.0256,
+      "nexus-eino-acceptance-milvus-1": 0.0542,
+      "nexus-eino-acceptance-minio-1": 0.0006,
+      "nexus-eino-acceptance-docparser-1": 0.019799999999999998,
+      "nexus-eino-acceptance-etcd-1": 0.008199999999999999,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0008
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 65.35,
+      "nexus-eino-capacity-worker-1": 26.75,
+      "nexus-eino-capacity-peer-1": 21.53,
+      "nexus-eino-acceptance-postgres-1": 386.7,
+      "nexus-eino-acceptance-redis-1": 36.04,
+      "nexus-eino-acceptance-milvus-1": 238.9,
+      "nexus-eino-acceptance-minio-1": 86.81,
+      "nexus-eino-acceptance-docparser-1": 5.918,
+      "nexus-eino-acceptance-etcd-1": 30.47,
+      "nexus-eino-acceptance-milvus-minio-1": 209.7
+    },
+    "peak_outbox": 0,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c64-r10",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c64-r10",
+      "SSE": 500,
+      "Slots": 64,
+      "Rate": 10,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T18:02:47.5176052Z",
+    "finished": "2026-10-20T18:03:23.6793909Z",
+    "arrivals": {
+      "target": 300,
+      "scheduled": 300,
+      "not_scheduled": 0,
+      "attempted": 300,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 300,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 5.557
+    },
+    "actual_wire": 300,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+    ],
+    "received": 300,
+    "completed": 300,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 240
+    },
+    "chat_states": {
+      "done": 60
+    },
+    "http_outcomes": {
+      "chat_accepted": 60,
+      "chat_done": 60,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 240
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 60,
+        "p50_ms": 681.9141,
+        "p95_ms": 847.3839,
+        "p99_ms": 1123.0407,
+        "max_ms": 1123.0407
+      },
+      "chat_first_token": {
+        "count": 60,
+        "p50_ms": 658.4793,
+        "p95_ms": 786.5311,
+        "p99_ms": 1060.5228,
+        "max_ms": 1060.5228
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 14.9934,
+        "p95_ms": 17.9969,
+        "p99_ms": 17.9969,
+        "max_ms": 17.9969
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 11.9989,
+        "p95_ms": 13.0005,
+        "p99_ms": 13.0005,
+        "max_ms": 13.0005
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 5.4541,
+        "p95_ms": 12.7395,
+        "p99_ms": 19.4326,
+        "max_ms": 19.4326
+      },
+      "wire_schedule_lag": {
+        "count": 300,
+        "p50_ms": 0.511,
+        "p95_ms": 1.3452,
+        "p99_ms": 1.9361,
+        "max_ms": 5.557
+      },
+      "workflow_first_result": {
+        "count": 240,
+        "p50_ms": 517.5196,
+        "p95_ms": 552.5993,
+        "p99_ms": 624.3909,
+        "max_ms": 768.3608
+      },
+      "workflow_submit": {
+        "count": 240,
+        "p50_ms": 14.4906,
+        "p95_ms": 45.677,
+        "p99_ms": 115.552,
+        "max_ms": 261.9091
+      }
+    },
+    "queue": {
+      "count": 240,
+      "p50_ms": 56.77,
+      "p95_ms": 166.593,
+      "p99_ms": 178.451,
+      "max_ms": 178.562
+    },
+    "execution": {
+      "count": 240,
+      "p50_ms": 673.932,
+      "p95_ms": 740.797,
+      "p99_ms": 837.625,
+      "max_ms": 992.346
+    },
+    "workflow_end_to_end": {
+      "count": 240,
+      "p50_ms": 737.558,
+      "p95_ms": 857.004,
+      "p99_ms": 916.538,
+      "max_ms": 1074.599
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 1039,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 499,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.4808,
+      "nexus-eino-capacity-worker-1": 0.2916,
+      "nexus-eino-capacity-peer-1": 0.039599999999999996,
+      "nexus-eino-acceptance-postgres-1": 0.8842,
+      "nexus-eino-acceptance-redis-1": 0.0288,
+      "nexus-eino-acceptance-milvus-1": 0.0675,
+      "nexus-eino-acceptance-minio-1": 0.0262,
+      "nexus-eino-acceptance-docparser-1": 0.0204,
+      "nexus-eino-acceptance-etcd-1": 0.01,
+      "nexus-eino-acceptance-milvus-minio-1": 0.032
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 66.66,
+      "nexus-eino-capacity-worker-1": 27.8,
+      "nexus-eino-capacity-peer-1": 23.56,
+      "nexus-eino-acceptance-postgres-1": 417.0,
+      "nexus-eino-acceptance-redis-1": 35.46,
+      "nexus-eino-acceptance-milvus-1": 238.7,
+      "nexus-eino-acceptance-minio-1": 87.84,
+      "nexus-eino-acceptance-docparser-1": 3.426,
+      "nexus-eino-acceptance-etcd-1": 30.48,
+      "nexus-eino-acceptance-milvus-minio-1": 210.2
+    },
+    "peak_outbox": 33,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c64-r20",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c64-r20",
+      "SSE": 500,
+      "Slots": 64,
+      "Rate": 20,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T18:03:32.7950935Z",
+    "finished": "2026-10-20T18:04:08.8910714Z",
+    "arrivals": {
+      "target": 600,
+      "scheduled": 600,
+      "not_scheduled": 0,
+      "attempted": 600,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 600,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 5.1521
+    },
+    "actual_wire": 600,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "received": 600,
+    "completed": 600,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 480
+    },
+    "chat_states": {
+      "done": 120
+    },
+    "http_outcomes": {
+      "chat_accepted": 120,
+      "chat_done": 120,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 480
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 120,
+        "p50_ms": 682.33,
+        "p95_ms": 745.5135,
+        "p99_ms": 1149.9463,
+        "max_ms": 1343.6653
+      },
+      "chat_first_token": {
+        "count": 120,
+        "p50_ms": 657.2401,
+        "p95_ms": 698.5997,
+        "p99_ms": 862.9831,
+        "max_ms": 1220.3397
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 17.046,
+        "p95_ms": 18.4175,
+        "p99_ms": 18.4175,
+        "max_ms": 18.4175
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 11.1297,
+        "p95_ms": 11.9244,
+        "p99_ms": 11.9244,
+        "max_ms": 11.9244
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 6.9349,
+        "p95_ms": 15.5298,
+        "p99_ms": 17.0004,
+        "max_ms": 17.0004
+      },
+      "wire_schedule_lag": {
+        "count": 600,
+        "p50_ms": 0.6455,
+        "p95_ms": 1.4232,
+        "p99_ms": 2.4407,
+        "max_ms": 6.5385
+      },
+      "workflow_first_result": {
+        "count": 480,
+        "p50_ms": 519.3874,
+        "p95_ms": 545.2621,
+        "p99_ms": 599.821,
+        "max_ms": 650.9839
+      },
+      "workflow_submit": {
+        "count": 480,
+        "p50_ms": 16.0848,
+        "p95_ms": 36.9732,
+        "p99_ms": 93.4549,
+        "max_ms": 123.2759
+      }
+    },
+    "queue": {
+      "count": 480,
+      "p50_ms": 36.807,
+      "p95_ms": 97.863,
+      "p99_ms": 138.535,
+      "max_ms": 173.452
+    },
+    "execution": {
+      "count": 480,
+      "p50_ms": 684.074,
+      "p95_ms": 727.026,
+      "p99_ms": 927.892,
+      "max_ms": 1046.85
+    },
+    "workflow_end_to_end": {
+      "count": 480,
+      "p50_ms": 724.59,
+      "p95_ms": 799.316,
+      "p99_ms": 950.619,
+      "max_ms": 1158.789
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 1578,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 499,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 499.0,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 1.0569,
+      "nexus-eino-capacity-worker-1": 0.5782,
+      "nexus-eino-capacity-peer-1": 0.0819,
+      "nexus-eino-acceptance-postgres-1": 5.4458,
+      "nexus-eino-acceptance-redis-1": 0.09480000000000001,
+      "nexus-eino-acceptance-milvus-1": 0.19039999999999999,
+      "nexus-eino-acceptance-minio-1": 0.0855,
+      "nexus-eino-acceptance-docparser-1": 0.1398,
+      "nexus-eino-acceptance-etcd-1": 0.036699999999999997,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0436
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 67.07,
+      "nexus-eino-capacity-worker-1": 28.79,
+      "nexus-eino-capacity-peer-1": 23.32,
+      "nexus-eino-acceptance-postgres-1": 377.3,
+      "nexus-eino-acceptance-redis-1": 34.36,
+      "nexus-eino-acceptance-milvus-1": 239.1,
+      "nexus-eino-acceptance-minio-1": 88.44,
+      "nexus-eino-acceptance-docparser-1": 3.242,
+      "nexus-eino-acceptance-etcd-1": 30.23,
+      "nexus-eino-acceptance-milvus-minio-1": 210.2
+    },
+    "peak_outbox": 70,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c64-r5",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c64-r5",
+      "SSE": 500,
+      "Slots": 64,
+      "Rate": 5,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T18:02:03.6533366Z",
+    "finished": "2026-10-20T18:02:38.8597712Z",
+    "arrivals": {
+      "target": 150,
+      "scheduled": 150,
+      "not_scheduled": 0,
+      "attempted": 150,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 150,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 1.9149
+    },
+    "actual_wire": 150,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5
+    ],
+    "received": 150,
+    "completed": 150,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 120
+    },
+    "chat_states": {
+      "done": 30
+    },
+    "http_outcomes": {
+      "chat_accepted": 30,
+      "chat_done": 30,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 120
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 30,
+        "p50_ms": 677.5719,
+        "p95_ms": 760.2367,
+        "p99_ms": 1158.4067,
+        "max_ms": 1158.4067
+      },
+      "chat_first_token": {
+        "count": 30,
+        "p50_ms": 651.981,
+        "p95_ms": 724.2132,
+        "p99_ms": 1104.4101,
+        "max_ms": 1104.4101
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 17.9992,
+        "p95_ms": 22.1317,
+        "p99_ms": 22.1317,
+        "max_ms": 22.1317
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 13.6304,
+        "p95_ms": 18.0002,
+        "p99_ms": 18.0002,
+        "max_ms": 18.0002
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 5.4535,
+        "p95_ms": 19.9986,
+        "p99_ms": 102.8182,
+        "max_ms": 102.8182
+      },
+      "wire_schedule_lag": {
+        "count": 150,
+        "p50_ms": 0.6651,
+        "p95_ms": 1.2547,
+        "p99_ms": 2.5455,
+        "max_ms": 3.9192
+      },
+      "workflow_first_result": {
+        "count": 120,
+        "p50_ms": 518.7966,
+        "p95_ms": 579.6109,
+        "p99_ms": 655.4111,
+        "max_ms": 706.4071
+      },
+      "workflow_submit": {
+        "count": 120,
+        "p50_ms": 15.7256,
+        "p95_ms": 45.4085,
+        "p99_ms": 142.5494,
+        "max_ms": 200.7249
+      }
+    },
+    "queue": {
+      "count": 120,
+      "p50_ms": 41.228,
+      "p95_ms": 43.851,
+      "p99_ms": 114.519,
+      "max_ms": 116.578
+    },
+    "execution": {
+      "count": 120,
+      "p50_ms": 678.537,
+      "p95_ms": 747.085,
+      "p99_ms": 941.555,
+      "max_ms": 971.732
+    },
+    "workflow_end_to_end": {
+      "count": 120,
+      "p50_ms": 717.502,
+      "p95_ms": 785.582,
+      "p99_ms": 979.26,
+      "max_ms": 994.643
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 768,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 500,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.49570000000000003,
+      "nexus-eino-capacity-worker-1": 0.1634,
+      "nexus-eino-capacity-peer-1": 0.0203,
+      "nexus-eino-acceptance-postgres-1": 0.4302,
+      "nexus-eino-acceptance-redis-1": 0.0374,
+      "nexus-eino-acceptance-milvus-1": 0.0404,
+      "nexus-eino-acceptance-minio-1": 0.0013,
+      "nexus-eino-acceptance-docparser-1": 0.0229,
+      "nexus-eino-acceptance-etcd-1": 0.0069,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0004
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 66.36,
+      "nexus-eino-capacity-worker-1": 27.15,
+      "nexus-eino-capacity-peer-1": 23.27,
+      "nexus-eino-acceptance-postgres-1": 392.0,
+      "nexus-eino-acceptance-redis-1": 35.67,
+      "nexus-eino-acceptance-milvus-1": 238.7,
+      "nexus-eino-acceptance-minio-1": 87.39,
+      "nexus-eino-acceptance-docparser-1": 4.305,
+      "nexus-eino-acceptance-etcd-1": 30.22,
+      "nexus-eino-acceptance-milvus-minio-1": 209.9
+    },
+    "peak_outbox": 15,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c8-r1",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c8-r1",
+      "SSE": 500,
+      "Slots": 8,
+      "Rate": 1,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T17:55:22.251552Z",
+    "finished": "2026-10-20T17:55:56.8830141Z",
+    "arrivals": {
+      "target": 30,
+      "scheduled": 30,
+      "not_scheduled": 0,
+      "attempted": 30,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 30,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 1.8077
+    },
+    "actual_wire": 30,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "received": 30,
+    "completed": 30,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 24
+    },
+    "chat_states": {
+      "done": 6
+    },
+    "http_outcomes": {
+      "chat_accepted": 6,
+      "chat_done": 6,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 24
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 6,
+        "p50_ms": 684.3074,
+        "p95_ms": 736.8599,
+        "p99_ms": 736.8599,
+        "max_ms": 736.8599
+      },
+      "chat_first_token": {
+        "count": 6,
+        "p50_ms": 662.3287,
+        "p95_ms": 712.8582,
+        "p99_ms": 712.8582,
+        "max_ms": 712.8582
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 16.7315,
+        "p95_ms": 21.9996,
+        "p99_ms": 21.9996,
+        "max_ms": 21.9996
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 10.0733,
+        "p95_ms": 17.5891,
+        "p99_ms": 17.5891,
+        "max_ms": 17.5891
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 5.3884,
+        "p95_ms": 16.0003,
+        "p99_ms": 18.0705,
+        "max_ms": 18.0705
+      },
+      "wire_schedule_lag": {
+        "count": 30,
+        "p50_ms": 0.9016,
+        "p95_ms": 2.0206,
+        "p99_ms": 2.8098,
+        "max_ms": 2.8098
+      },
+      "workflow_first_result": {
+        "count": 24,
+        "p50_ms": 528.9595,
+        "p95_ms": 534.6155,
+        "p99_ms": 542.7815,
+        "max_ms": 542.7815
+      },
+      "workflow_submit": {
+        "count": 24,
+        "p50_ms": 24.7739,
+        "p95_ms": 31.6564,
+        "p99_ms": 38.4232,
+        "max_ms": 38.4232
+      }
+    },
+    "queue": {
+      "count": 24,
+      "p50_ms": 57.207,
+      "p95_ms": 68.032,
+      "p99_ms": 71.012,
+      "max_ms": 71.012
+    },
+    "execution": {
+      "count": 24,
+      "p50_ms": 691.545,
+      "p95_ms": 779.07,
+      "p99_ms": 810.869,
+      "max_ms": 810.869
+    },
+    "workflow_end_to_end": {
+      "count": 24,
+      "p50_ms": 753.266,
+      "p95_ms": 833.545,
+      "p99_ms": 868.076,
+      "max_ms": 868.076
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 554,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 500,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500.0,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.40850000000000003,
+      "nexus-eino-capacity-worker-1": 0.1069,
+      "nexus-eino-capacity-peer-1": 0.0074,
+      "nexus-eino-acceptance-postgres-1": 0.3983,
+      "nexus-eino-acceptance-redis-1": 0.025099999999999997,
+      "nexus-eino-acceptance-milvus-1": 0.0764,
+      "nexus-eino-acceptance-minio-1": 0.0009,
+      "nexus-eino-acceptance-docparser-1": 0.0207,
+      "nexus-eino-acceptance-etcd-1": 0.0078000000000000005,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0008
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 64.44,
+      "nexus-eino-capacity-worker-1": 26.08,
+      "nexus-eino-capacity-peer-1": 19.43,
+      "nexus-eino-acceptance-postgres-1": 376.1,
+      "nexus-eino-acceptance-redis-1": 38.93,
+      "nexus-eino-acceptance-milvus-1": 238.3,
+      "nexus-eino-acceptance-minio-1": 86.99,
+      "nexus-eino-acceptance-docparser-1": 4.906,
+      "nexus-eino-acceptance-etcd-1": 31.2,
+      "nexus-eino-acceptance-milvus-minio-1": 209.9
+    },
+    "peak_outbox": 0,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c8-r10",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c8-r10",
+      "SSE": 500,
+      "Slots": 8,
+      "Rate": 10,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T17:56:48.7928821Z",
+    "finished": "2026-10-20T17:57:24.4431143Z",
+    "arrivals": {
+      "target": 300,
+      "scheduled": 300,
+      "not_scheduled": 0,
+      "attempted": 300,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 300,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 1.9655
+    },
+    "actual_wire": 300,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+    ],
+    "received": 288,
+    "completed": 288,
+    "rejected": 12,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 240
+    },
+    "chat_states": {
+      "done": 48
+    },
+    "http_outcomes": {
+      "chat_accepted": 48,
+      "chat_done": 48,
+      "chat_rejected": 12,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 240
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 48,
+        "p50_ms": 676.3041,
+        "p95_ms": 870.4625,
+        "p99_ms": 1058.3131,
+        "max_ms": 1058.3131
+      },
+      "chat_first_token": {
+        "count": 48,
+        "p50_ms": 654.7849,
+        "p95_ms": 839.8628,
+        "p99_ms": 1011.3102,
+        "max_ms": 1011.3102
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 15.2434,
+        "p95_ms": 16.1641,
+        "p99_ms": 16.1641,
+        "max_ms": 16.1641
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 10.2586,
+        "p95_ms": 12.34,
+        "p99_ms": 12.34,
+        "max_ms": 12.34
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 8.002,
+        "p95_ms": 29.0037,
+        "p99_ms": 59.4764,
+        "max_ms": 59.4764
+      },
+      "wire_schedule_lag": {
+        "count": 300,
+        "p50_ms": 0.5814,
+        "p95_ms": 1.3051,
+        "p99_ms": 2.0271,
+        "max_ms": 4.4371
+      },
+      "workflow_first_result": {
+        "count": 240,
+        "p50_ms": 519.7764,
+        "p95_ms": 595.0039,
+        "p99_ms": 1100.4626,
+        "max_ms": 1214.8305
+      },
+      "workflow_submit": {
+        "count": 240,
+        "p50_ms": 16.3273,
+        "p95_ms": 59.9748,
+        "p99_ms": 171.0912,
+        "max_ms": 246.4781
+      }
+    },
+    "queue": {
+      "count": 240,
+      "p50_ms": 24.357,
+      "p95_ms": 153.522,
+      "p99_ms": 382.477,
+      "max_ms": 494.215
+    },
+    "execution": {
+      "count": 240,
+      "p50_ms": 679.95,
+      "p95_ms": 731.467,
+      "p99_ms": 878.409,
+      "max_ms": 972.326
+    },
+    "workflow_end_to_end": {
+      "count": 240,
+      "p50_ms": 717.63,
+      "p95_ms": 906.1,
+      "p99_ms": 1099.668,
+      "max_ms": 1181.189
+    },
+    "original_passed": false,
+    "reconciled_passed": false,
+    "sse_opened": 1037,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [
+      "admission rejected offered traffic; this stage does not sustain the full offered rate"
+    ],
+    "observation_errors": 0,
+    "actual_sse_load_min": 500,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500.0,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.5769,
+      "nexus-eino-capacity-worker-1": 0.3627,
+      "nexus-eino-capacity-peer-1": 0.0436,
+      "nexus-eino-acceptance-postgres-1": 1.1682,
+      "nexus-eino-acceptance-redis-1": 0.0325,
+      "nexus-eino-acceptance-milvus-1": 0.06559999999999999,
+      "nexus-eino-acceptance-minio-1": 0.0016,
+      "nexus-eino-acceptance-docparser-1": 0.045599999999999995,
+      "nexus-eino-acceptance-etcd-1": 0.0086,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0009
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 66.48,
+      "nexus-eino-capacity-worker-1": 27.17,
+      "nexus-eino-capacity-peer-1": 22.46,
+      "nexus-eino-acceptance-postgres-1": 387.6,
+      "nexus-eino-acceptance-redis-1": 35.95,
+      "nexus-eino-acceptance-milvus-1": 238.4,
+      "nexus-eino-acceptance-minio-1": 87.07,
+      "nexus-eino-acceptance-docparser-1": 3.848,
+      "nexus-eino-acceptance-etcd-1": 29.73,
+      "nexus-eino-acceptance-milvus-minio-1": 209.7
+    },
+    "peak_outbox": 33,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c8-r20",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c8-r20",
+      "SSE": 500,
+      "Slots": 8,
+      "Rate": 20,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T17:57:32.5380903Z",
+    "finished": "2026-10-20T17:58:20.0821141Z",
+    "arrivals": {
+      "target": 600,
+      "scheduled": 600,
+      "not_scheduled": 0,
+      "attempted": 600,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 600,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 7.1353
+    },
+    "actual_wire": 600,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "received": 489,
+    "completed": 489,
+    "rejected": 111,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 480
+    },
+    "chat_states": {
+      "done": 9
+    },
+    "http_outcomes": {
+      "chat_accepted": 9,
+      "chat_done": 9,
+      "chat_rejected": 111,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 480
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 9,
+        "p50_ms": 693.1188,
+        "p95_ms": 799.0185,
+        "p99_ms": 799.0185,
+        "max_ms": 799.0185
+      },
+      "chat_first_token": {
+        "count": 9,
+        "p50_ms": 666.4923,
+        "p95_ms": 772.8283,
+        "p99_ms": 772.8283,
+        "max_ms": 772.8283
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 13.0961,
+        "p95_ms": 23.9696,
+        "p99_ms": 23.9696,
+        "max_ms": 23.9696
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 10.5959,
+        "p95_ms": 14.6911,
+        "p99_ms": 14.6911,
+        "max_ms": 14.6911
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 5.3048,
+        "p95_ms": 10.6509,
+        "p99_ms": 12.9963,
+        "max_ms": 12.9963
+      },
+      "wire_schedule_lag": {
+        "count": 600,
+        "p50_ms": 0.633,
+        "p95_ms": 1.7115,
+        "p99_ms": 2.8336,
+        "max_ms": 7.1353
+      },
+      "workflow_first_result": {
+        "count": 480,
+        "p50_ms": 7013.0606,
+        "p95_ms": 12087.3165,
+        "p99_ms": 13030.7279,
+        "max_ms": 13516.394
+      },
+      "workflow_submit": {
+        "count": 480,
+        "p50_ms": 15.0139,
+        "p95_ms": 48.9414,
+        "p99_ms": 118.825,
+        "max_ms": 175.8679
+      }
+    },
+    "queue": {
+      "count": 480,
+      "p50_ms": 6235.538,
+      "p95_ms": 11576.96,
+      "p99_ms": 12327.15,
+      "max_ms": 12892.065
+    },
+    "execution": {
+      "count": 480,
+      "p50_ms": 675.771,
+      "p95_ms": 721.854,
+      "p99_ms": 759.664,
+      "max_ms": 803.848
+    },
+    "workflow_end_to_end": {
+      "count": 480,
+      "p50_ms": 6916.741,
+      "p95_ms": 12273.465,
+      "p99_ms": 13009.676,
+      "max_ms": 13573.169
+    },
+    "original_passed": false,
+    "reconciled_passed": false,
+    "sse_opened": 1580,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [
+      "admission rejected offered traffic; this stage does not sustain the full offered rate"
+    ],
+    "observation_errors": 0,
+    "actual_sse_load_min": 499,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.5684,
+      "nexus-eino-capacity-worker-1": 0.43,
+      "nexus-eino-capacity-peer-1": 0.0748,
+      "nexus-eino-acceptance-postgres-1": 2.9249,
+      "nexus-eino-acceptance-redis-1": 0.084,
+      "nexus-eino-acceptance-milvus-1": 0.0687,
+      "nexus-eino-acceptance-minio-1": 0.0308,
+      "nexus-eino-acceptance-docparser-1": 0.054400000000000004,
+      "nexus-eino-acceptance-etcd-1": 0.0104,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0155
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 66.14,
+      "nexus-eino-capacity-worker-1": 27.95,
+      "nexus-eino-capacity-peer-1": 23.25,
+      "nexus-eino-acceptance-postgres-1": 452.0,
+      "nexus-eino-acceptance-redis-1": 35.64,
+      "nexus-eino-acceptance-milvus-1": 238.4,
+      "nexus-eino-acceptance-minio-1": 88.11,
+      "nexus-eino-acceptance-docparser-1": 4.508,
+      "nexus-eino-acceptance-etcd-1": 30.47,
+      "nexus-eino-acceptance-milvus-minio-1": 210.4
+    },
+    "peak_outbox": 42,
+    "idle": {}
+  },
+  {
+    "name": "grid-s500-c8-r5",
+    "config": {
+      "name": "f11d1fe7-grid-s500-c8-r5",
+      "SSE": 500,
+      "Slots": 8,
+      "Rate": 5,
+      "Duration": 30000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T17:56:05.9052916Z",
+    "finished": "2026-10-20T17:56:40.7562621Z",
+    "arrivals": {
+      "target": 150,
+      "scheduled": 150,
+      "not_scheduled": 0,
+      "attempted": 150,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 150,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 1.507
+    },
+    "actual_wire": 150,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5
+    ],
+    "received": 150,
+    "completed": 150,
+    "rejected": 0,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 120
+    },
+    "chat_states": {
+      "done": 30
+    },
+    "http_outcomes": {
+      "chat_accepted": 30,
+      "chat_done": 30,
+      "control_approve_ok": 2,
+      "control_cancel_ok": 2,
+      "control_query_ok": 29,
+      "workflow_accepted": 120
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 0,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 30,
+        "p50_ms": 669.6274,
+        "p95_ms": 755.1437,
+        "p99_ms": 879.411,
+        "max_ms": 879.411
+      },
+      "chat_first_token": {
+        "count": 30,
+        "p50_ms": 652.6776,
+        "p95_ms": 732.0308,
+        "p99_ms": 732.0751,
+        "max_ms": 732.0751
+      },
+      "control_approve": {
+        "count": 2,
+        "p50_ms": 12.0768,
+        "p95_ms": 13.9993,
+        "p99_ms": 13.9993,
+        "max_ms": 13.9993
+      },
+      "control_cancel": {
+        "count": 2,
+        "p50_ms": 11.417,
+        "p95_ms": 16.0015,
+        "p99_ms": 16.0015,
+        "max_ms": 16.0015
+      },
+      "control_query": {
+        "count": 29,
+        "p50_ms": 4.9998,
+        "p95_ms": 12.3899,
+        "p99_ms": 65.0003,
+        "max_ms": 65.0003
+      },
+      "wire_schedule_lag": {
+        "count": 150,
+        "p50_ms": 0.6004,
+        "p95_ms": 1.2437,
+        "p99_ms": 1.9549,
+        "max_ms": 2.2749
+      },
+      "workflow_first_result": {
+        "count": 120,
+        "p50_ms": 519.1298,
+        "p95_ms": 551.512,
+        "p99_ms": 615.2629,
+        "max_ms": 711.2269
+      },
+      "workflow_submit": {
+        "count": 120,
+        "p50_ms": 15.7142,
+        "p95_ms": 47.6293,
+        "p99_ms": 103.7321,
+        "max_ms": 194.2738
+      }
+    },
+    "queue": {
+      "count": 120,
+      "p50_ms": 8.508,
+      "p95_ms": 162.446,
+      "p99_ms": 204.071,
+      "max_ms": 204.8
+    },
+    "execution": {
+      "count": 120,
+      "p50_ms": 674.695,
+      "p95_ms": 710.081,
+      "p99_ms": 815.264,
+      "max_ms": 815.662
+    },
+    "workflow_end_to_end": {
+      "count": 120,
+      "p50_ms": 685.158,
+      "p95_ms": 877.547,
+      "p99_ms": 964.213,
+      "max_ms": 1006.911
+    },
+    "original_passed": true,
+    "reconciled_passed": true,
+    "sse_opened": 768,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [],
+    "observation_errors": 0,
+    "actual_sse_load_min": 500,
+    "actual_sse_load_max": 500,
+    "actual_sse_load_median": 500,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.4171,
+      "nexus-eino-capacity-worker-1": 0.2206,
+      "nexus-eino-capacity-peer-1": 0.024700000000000003,
+      "nexus-eino-acceptance-postgres-1": 0.6389,
+      "nexus-eino-acceptance-redis-1": 0.0245,
+      "nexus-eino-acceptance-milvus-1": 0.0446,
+      "nexus-eino-acceptance-minio-1": 0.0011,
+      "nexus-eino-acceptance-docparser-1": 0.021400000000000002,
+      "nexus-eino-acceptance-etcd-1": 0.0072,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0005
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 64.61,
+      "nexus-eino-capacity-worker-1": 26.86,
+      "nexus-eino-capacity-peer-1": 21.19,
+      "nexus-eino-acceptance-postgres-1": 388.0,
+      "nexus-eino-acceptance-redis-1": 37.0,
+      "nexus-eino-acceptance-milvus-1": 237.9,
+      "nexus-eino-acceptance-minio-1": 87.04,
+      "nexus-eino-acceptance-docparser-1": 3.621,
+      "nexus-eino-acceptance-etcd-1": 29.97,
+      "nexus-eino-acceptance-milvus-minio-1": 209.6
+    },
+    "peak_outbox": 15,
+    "idle": {}
+  }
+]

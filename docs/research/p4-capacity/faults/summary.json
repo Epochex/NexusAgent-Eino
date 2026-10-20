@@ -1,0 +1,231 @@
+[
+  {
+    "name": "worker-kill",
+    "config": {
+      "name": "15496351-worker-kill",
+      "SSE": 200,
+      "Slots": 32,
+      "Rate": 10,
+      "Duration": 60000000000,
+      "Idle": 0
+    },
+    "started": "2026-10-20T18:04:25.5082513Z",
+    "finished": "2026-10-20T18:05:28.1361464Z",
+    "arrivals": {
+      "target": 600,
+      "scheduled": 600,
+      "not_scheduled": 0,
+      "attempted": 600,
+      "skipped_client_busy": 0,
+      "skipped_scheduler_late": 0,
+      "callbacks_ok": 600,
+      "callback_errors": 0,
+      "max_schedule_lag_ms": 62.7769
+    },
+    "actual_wire": 600,
+    "wire_after_window": 0,
+    "wire_per_second": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      10
+    ],
+    "received": 594,
+    "completed": 594,
+    "rejected": 6,
+    "database_non_success": 0,
+    "workflow_states": {
+      "succeeded": 480
+    },
+    "chat_states": {
+      "done": 114
+    },
+    "http_outcomes": {
+      "chat_accepted": 114,
+      "chat_done": 114,
+      "chat_rejected": 6,
+      "control_approve_ok": 5,
+      "control_cancel_ok": 5,
+      "control_query_ok": 59,
+      "workflow_accepted": 480
+    },
+    "client_errors": 0,
+    "unacknowledged_workflows": 0,
+    "peer_mismatches": 5,
+    "latency": {
+      "chat_end_to_end": {
+        "count": 114,
+        "p50_ms": 684.784,
+        "p95_ms": 3554.2061,
+        "p99_ms": 3953.6378,
+        "max_ms": 4282.2552
+      },
+      "chat_first_token": {
+        "count": 114,
+        "p50_ms": 660.1214,
+        "p95_ms": 3190.5977,
+        "p99_ms": 3733.098,
+        "max_ms": 3862.6812
+      },
+      "control_approve": {
+        "count": 5,
+        "p50_ms": 15.4965,
+        "p95_ms": 59.8022,
+        "p99_ms": 59.8022,
+        "max_ms": 59.8022
+      },
+      "control_cancel": {
+        "count": 5,
+        "p50_ms": 12.8509,
+        "p95_ms": 73.3952,
+        "p99_ms": 73.3952,
+        "max_ms": 73.3952
+      },
+      "control_query": {
+        "count": 59,
+        "p50_ms": 6.4807,
+        "p95_ms": 128.6221,
+        "p99_ms": 193.2028,
+        "max_ms": 193.2028
+      },
+      "wire_schedule_lag": {
+        "count": 600,
+        "p50_ms": 0.7292,
+        "p95_ms": 17.0258,
+        "p99_ms": 47.2534,
+        "max_ms": 151.2047
+      },
+      "workflow_first_result": {
+        "count": 480,
+        "p50_ms": 523.5134,
+        "p95_ms": 5014.5048,
+        "p99_ms": 7025.722,
+        "max_ms": 15529.3145
+      },
+      "workflow_submit": {
+        "count": 480,
+        "p50_ms": 16.8284,
+        "p95_ms": 210.1436,
+        "p99_ms": 388.8696,
+        "max_ms": 457.6383
+      }
+    },
+    "queue": {
+      "count": 480,
+      "p50_ms": 75.547,
+      "p95_ms": 3875.5,
+      "p99_ms": 6004.976,
+      "max_ms": 6457.123
+    },
+    "execution": {
+      "count": 480,
+      "p50_ms": 690.554,
+      "p95_ms": 3433.56,
+      "p99_ms": 15419.957,
+      "max_ms": 15786.918
+    },
+    "workflow_end_to_end": {
+      "count": 480,
+      "p50_ms": 771.69,
+      "p95_ms": 5125.67,
+      "p99_ms": 15529.23,
+      "max_ms": 15853.473
+    },
+    "original_passed": false,
+    "reconciled_passed": false,
+    "sse_opened": 1277,
+    "sse_failures": 0,
+    "sse_setup_failures": 0,
+    "sse_failure_causes": {},
+    "gaps": [
+      "admission rejected offered traffic; this stage does not sustain the full offered rate",
+      "invalid/duplicate results or incorrect model/tool execution count"
+    ],
+    "observation_errors": 1,
+    "actual_sse_load_min": 198,
+    "actual_sse_load_max": 200,
+    "actual_sse_load_median": 200.0,
+    "peak_cpu_cores": {
+      "nexus-eino-capacity-server-1": 0.5082,
+      "nexus-eino-capacity-worker-1": 0.7239,
+      "nexus-eino-capacity-peer-1": 0.1426,
+      "nexus-eino-acceptance-postgres-1": 2.4628,
+      "nexus-eino-acceptance-redis-1": 0.0596,
+      "nexus-eino-acceptance-milvus-1": 0.1295,
+      "nexus-eino-acceptance-minio-1": 0.0273,
+      "nexus-eino-acceptance-docparser-1": 0.0621,
+      "nexus-eino-acceptance-etcd-1": 0.0191,
+      "nexus-eino-acceptance-milvus-minio-1": 0.0076
+    },
+    "peak_working_set_mib": {
+      "nexus-eino-capacity-server-1": 48.2,
+      "nexus-eino-capacity-worker-1": 28.53,
+      "nexus-eino-capacity-peer-1": 23.48,
+      "nexus-eino-acceptance-postgres-1": 404.2,
+      "nexus-eino-acceptance-redis-1": 35.07,
+      "nexus-eino-acceptance-milvus-1": 239.6,
+      "nexus-eino-acceptance-minio-1": 87.18,
+      "nexus-eino-acceptance-docparser-1": 4.238,
+      "nexus-eino-acceptance-etcd-1": 30.48,
+      "nexus-eino-acceptance-milvus-minio-1": 209.7
+    },
+    "peak_outbox": 67,
+    "idle": {}
+  }
+]

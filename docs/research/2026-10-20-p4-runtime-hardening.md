@@ -114,3 +114,5 @@ tmpfs; explicitly enabling execution only on the bounded temp mount fixed it.
 A second real test exposed log rotation losing fast stdout before attachment;
 attaching before container start fixed that failure. These are independent
 sandbox tests, not evidence for real model quality or platform throughput.
+
+Registered code execution was also verified against the real audit schema and Docker: trusted context owner, zero exit code, output and source hash are committed together. The test first exposed a nonexistent metadata column, then an unset owner and a GORM default converting exit 0 to -1. These were corrected; the combined load-driver/tool race gate passed in 4.920s/23.339s, including failed-audit rejection.
