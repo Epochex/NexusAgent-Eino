@@ -65,6 +65,6 @@ go test -race -tags=integration ./internal/service -run TestChat -count=1 -timeo
 go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate
 ```
 
-前端执行 `npm ci`、`npm run typecheck`、`npm run build`。GitHub CI 固定 Node 22、本地为 Node 24，远端实际结论在推送与运行后单独确认，不能用 workflow 文件存在代替运行成功。
+前端执行 `npm ci`、`npm run typecheck`、`npm run build`。GitHub CI 固定 Node 22、本地为 Node 24。[修复提交 bd75fe8 的实际 CI](https://github.com/Epochex/NexusAgent-Eino/actions/runs/39375939678) 已全部通过：frontend 15 秒、backend 1 分 23 秒；backend 包含 vet、全包 race、真实 PostgreSQL 集成和四入口构建。这是实际运行结论，不是以 workflow 文件存在代替验证。
 
 尚未验证真实模型正确率或外部工具副作用，未做整个平台的 RAG/MCP/A2A/记忆闭环验收；相关旧模块只完成本次构建兼容检查。并发审批、检查点、worker 租约、outbox、索引幂等、长期记忆一致性与全平台容量继续按总体设计交付。

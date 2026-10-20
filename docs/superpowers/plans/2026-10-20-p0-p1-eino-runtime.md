@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-20-nexus-agent-eino-design.md`，用户于 2026-10-20 确认采用。
 
+**执行记录（2026-10-20）：** 用户选择原生执行；Task 1–8 已实施。独立全分支审查的两项 Important 已以失败回归修复，最终本地矩阵及 [bd75fe8 远端 CI](https://github.com/Epochex/NexusAgent-Eino/actions/runs/39375939678) 通过。详见 [验证报告](../../research/2026-10-20-p1-validation.md) 与 [实施裁决](../../research/2026-10-20-p1-decisions.md)。闭环使用本地 HTTP 模型桩，前端只完成构建兼容；未把真实模型或 P2/P3/P4 全平台验收记作完成。
+
 ## Global Constraints
 
 - 保留 Agent、RAG、Host/Expert、YAML 工作流、HITL、MCP、A2A、记忆及观测能力；不另换订单等行业场景。
@@ -184,7 +186,7 @@
 
 - [x] **Step 1: 运行功能与兼容回归。** 普通 Agent 流式回答、一次工具调用闭环、Host 专家路由、模型失败、取消和敏感工具拒绝；通过真实 HTTP 使用既有前端/CLI 解析事件。RAG/记忆/工作流等未改造模块只记录实际兼容结果，不能把旧实现未完成的能力写成通过。
 - [x] **Step 2: 运行基准和生命周期验证。** `go test ./internal/agent/runtime -run '^$' -bench BenchmarkEino -benchmem -count=3`；取消/慢消费者用例重复100次并采集退出、连接、goroutine/堆趋势。若有实际新泄漏先修复再测；没有同口径旧基线不得写提升百分比。
-- [ ] **Step 3: 全阶段验证。** `go vet ./...`、`go test -race ./... -timeout 180s`、真实 PG 集成、四入口 build、前端 typecheck/build、`git diff --check`；检查 GitHub CI 的真实运行结论。Windows 无法跑 race 的环境以 Linux 实测补齐，不能只删除 race 参数。
+- [x] **Step 3: 全阶段验证。** `go vet ./...`、`go test -race ./... -timeout 180s`、真实 PG 集成、四入口 build、前端 typecheck/build、`git diff --check`；检查 GitHub CI 的真实运行结论。Windows 无法跑 race 的环境以 Linux 实测补齐，不能只删除 race 参数。
 - [x] **Step 4: 更新交付说明并提交。** README 明确 P1 已实现项、测试方式及 P2/P3/P4 未完成项；记录硬件、Go/Eino/数据库版本、命令和结果。提交 `test: validate Eino runtime lifecycle and compatibility`。
 - [x] **Step 5: 全分支审查和必要修复。** 依 verification-before-completion 与 requesting-code-review 流程，审查错误传播、授权边界、取消和资源退出。用户选择原生执行时最后使用一个独立审查者，选择子代理执行时按每任务独立审查。修复实际问题后只重跑受影响及必要全量检查，然后推送可验证结果。
 
