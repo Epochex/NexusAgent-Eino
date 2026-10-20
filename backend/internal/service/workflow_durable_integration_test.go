@@ -114,6 +114,45 @@ func workflowServiceFixture(t *testing.T) (*WorkflowService, *Services, int64) {
 	return service, services, user.ID
 }
 
+func TestWorkflowSupportsKeylessLocalModel(t *testing.T) {
+	s, services, owner := workflowServiceFixture(t)
+	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			t.Error("invented model credential")
+		}
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"keyless answer"},"finish_reason":"stop"}]}`)
+	}))
+	defer peer.Close()
+	provider := &model.ModelProvider{Code: "keyless", Name: "local", BaseURL: peer.URL, Status: 1}
+	if err := services.Repos.DB.Create(provider).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := services.Repos.DB.Create(&model.ModelConfig{ProviderID: provider.ID, Alias: "local", ModelName: "local", Type: model.ModelTypeChat, ContextWindow: 8192, MaxOutput: 1024, Status: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	services.Cfg.LLM.DefaultChat = "local"
+	services.Gateway = llm.NewGateway(&config.LLM{MaxConnsPerProvider: 2})
+	flow := &model.Workflow{Name: "keyless", CreatorID: owner, DSL: "name: keyless\nnodes: [{key: answer,type: llm,prompt: question}]"}
+	if err := s.Create(context.Background(), flow); err != nil {
+		t.Fatal(err)
+	}
+	run, err := s.Run(context.Background(), owner, &RunInput{WorkflowID: flow.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := execution.NewStore(services.Repos.DB).Claim(context.Background(), "keyless-test", time.Minute)
+	if err != nil || claimed == nil {
+		t.Fatal(err)
+	}
+	if err = s.Driver().Execute(context.Background(), claimed); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetWorkflowRun(context.Background(), owner, run.ID)
+	if err != nil || got.Status != execution.Succeeded {
+		t.Fatalf("local keyless provider rejected: %+v %v", got, err)
+	}
+}
+
 func TestWorkflowFreezesModelSettingsAndEncryptsSnapshot(t *testing.T) {
 	s, services, owner := workflowServiceFixture(t)
 	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

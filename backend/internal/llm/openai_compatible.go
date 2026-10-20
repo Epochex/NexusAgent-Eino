@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,6 +29,19 @@ type openaiCompatibleProvider struct {
 // A shared client reuses connections without lazy writes racing between runs.
 // Request contexts own deadlines and close in-flight response bodies on cancel.
 var providerHTTPClient = &http.Client{}
+
+var ErrResponseTooLarge = errors.New("provider response exceeds 4 MiB")
+
+func readBoundedResponse(reader io.Reader) ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(reader, (4<<20)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > 4<<20 {
+		return nil, ErrResponseTooLarge
+	}
+	return raw, nil
+}
 
 func (p *openaiCompatibleProvider) client() *http.Client {
 	if p.httpClient != nil {
@@ -180,7 +194,7 @@ func (p *openaiCompatibleProvider) Chat(ctx context.Context, desc *ModelDescript
 	}
 	defer httpResp.Body.Close()
 
-	raw, err := io.ReadAll(httpResp.Body)
+	raw, err := readBoundedResponse(httpResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -256,8 +270,11 @@ func (p *openaiCompatibleProvider) ChatStream(ctx context.Context, desc *ModelDe
 		return nil, classifyHTTPError(err)
 	}
 	if httpResp.StatusCode != http.StatusOK {
-		raw, _ := io.ReadAll(httpResp.Body)
+		raw, readErr := readBoundedResponse(httpResp.Body)
 		httpResp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
 		return nil, parseAPIError(httpResp.StatusCode, raw)
 	}
 
@@ -406,6 +423,9 @@ func (p *openaiCompatibleProvider) consumeStream(ctx context.Context, body io.Re
 // ---- Embedding ----
 
 func (p *openaiCompatibleProvider) Embed(ctx context.Context, desc *ModelDescriptor, texts []string) ([][]float32, error) {
+	if len(texts) == 0 || len(texts) > 256 {
+		return nil, fmt.Errorf("embedding input count must be 1..256")
+	}
 	payload, _ := json.Marshal(map[string]any{"model": desc.ModelName, "input": texts})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		strings.TrimRight(desc.BaseURL, "/")+"/embeddings", bytes.NewReader(payload))
@@ -422,7 +442,10 @@ func (p *openaiCompatibleProvider) Embed(ctx context.Context, desc *ModelDescrip
 		return nil, classifyHTTPError(err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, readErr := readBoundedResponse(resp.Body)
+	if readErr != nil {
+		return nil, readErr
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, parseAPIError(resp.StatusCode, raw)
 	}
@@ -437,7 +460,21 @@ func (p *openaiCompatibleProvider) Embed(ctx context.Context, desc *ModelDescrip
 		return nil, fmt.Errorf("decode embeddings: %w", err)
 	}
 	vectors := make([][]float32, len(texts))
+	if len(out.Data) != len(texts) {
+		return nil, fmt.Errorf("embedding response count mismatch")
+	}
+	seen := make([]bool, len(texts))
+	dimension := 0
 	for _, d := range out.Data {
+		if d.Index < 0 || d.Index >= len(texts) || seen[d.Index] || len(d.Embedding) == 0 {
+			return nil, fmt.Errorf("invalid embedding response index or vector")
+		}
+		if dimension == 0 {
+			dimension = len(d.Embedding)
+		} else if len(d.Embedding) != dimension {
+			return nil, fmt.Errorf("mixed embedding dimensions")
+		}
+		seen[d.Index] = true
 		vectors[d.Index] = d.Embedding
 	}
 	return vectors, nil
@@ -471,7 +508,10 @@ func (p *openaiCompatibleProvider) Rerank(ctx context.Context, desc *ModelDescri
 		return nil, classifyHTTPError(err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, readErr := readBoundedResponse(resp.Body)
+	if readErr != nil {
+		return nil, readErr
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, parseAPIError(resp.StatusCode, raw)
 	}
@@ -480,7 +520,12 @@ func (p *openaiCompatibleProvider) Rerank(ctx context.Context, desc *ModelDescri
 		return nil, fmt.Errorf("decode rerank: %w", err)
 	}
 	results := make([]RerankResult, 0, len(out.Results))
+	seen := map[int]bool{}
 	for _, r := range out.Results {
+		if r.Index < 0 || r.Index >= len(docs) || seen[r.Index] {
+			return nil, fmt.Errorf("invalid rerank result index")
+		}
+		seen[r.Index] = true
 		results = append(results, RerankResult{Index: r.Index, Score: r.RelevanceScore})
 	}
 	return results, nil
