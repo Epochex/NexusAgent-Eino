@@ -162,10 +162,7 @@ func (s *Store) ClaimSupported(ctx context.Context, worker string, lease time.Du
 			return err
 		}
 		if !live {
-			if err := tx.Model(&run).Updates(map[string]any{"status": Failed, "error": "run deadline exceeded", "generation": gorm.Expr("generation+1"), "finished_at": gorm.Expr("NOW()"), "lease_owner": "", "lease_until": nil}).Error; err != nil {
-				return err
-			}
-			return appendEvent(tx, run.ID, Failed, map[string]any{"error": "run deadline exceeded"})
+			return expireRun(tx, &run)
 		}
 		res := tx.Raw(`UPDATE workflow_runs SET status=?,generation=generation+1,lease_owner=?,lease_until=clock_timestamp()+(? * INTERVAL '1 millisecond'),started_at=COALESCE(started_at,NOW()) WHERE id=? RETURNING *`, Running, worker, lease.Milliseconds(), run.ID).Scan(&run)
 		if res.Error != nil {

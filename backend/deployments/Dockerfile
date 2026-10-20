@@ -16,6 +16,7 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 WORKDIR /app
 COPY --from=builder /out/app ./app
 COPY --chown=65532:65532 configs ./configs
+COPY --chown=65532:65532 migrations ./migrations
 COPY --from=builder --chown=65532:65532 /out/data ./data
 COPY --from=builder --chown=65532:65532 /out/tmp /tmp
 USER 65532:65532
