@@ -110,14 +110,21 @@ type MCPServer struct {
 
 // A2AAgent A2A 远程 Agent 注册表。
 type A2AAgent struct {
-	ID           int64          `gorm:"primaryKey" json:"id"`
-	Name         string         `gorm:"size:128" json:"name"`
-	BaseURL      string         `gorm:"size:512" json:"base_url"`
-	Card         datatypes.JSON `gorm:"type:jsonb" json:"card"` // Agent Card 快照
-	Status       string         `gorm:"size:20;default:unknown" json:"status"`
-	LastHealthAt *time.Time     `json:"last_health_at"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	Enabled              *bool          `gorm:"default:false" json:"enabled"`
+	ConfigVersion        int64          `gorm:"default:1" json:"config_version"`
+	EncryptedCredentials string         `json:"-"`
+	HeadersConfigured    bool           `gorm:"column:headers_present" json:"headers_configured"`
+	PinnedEndpoint       string         `json:"pinned_endpoint"`
+	CardHash             string         `json:"-"`
+	ArchivedAt           gorm.DeletedAt `json:"-"`
+	ID                   int64          `gorm:"primaryKey" json:"id"`
+	Name                 string         `gorm:"size:128" json:"name"`
+	BaseURL              string         `gorm:"size:512" json:"base_url"`
+	Card                 datatypes.JSON `gorm:"type:jsonb" json:"card"` // Agent Card 快照
+	Status               string         `gorm:"size:20;default:unknown" json:"status"`
+	LastHealthAt         *time.Time     `json:"last_health_at"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
 }
 
 // TableName 显式指定表名：GORM 默认命名会把 A2AAgent 复数化为 a2_a_agents（数字后强制分段），

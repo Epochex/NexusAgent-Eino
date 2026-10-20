@@ -24,10 +24,11 @@ var ErrOutboundTarget = errors.New("outbound target denied")
 // They never override the metadata/link-local denial. Request-controlled URLs
 // cannot grant themselves access to an internal origin.
 type OutboundPolicy struct {
-	PrivateOrigins   []string
-	MaxResponseBytes int64
-	Timeout          time.Duration
-	lookup           func(context.Context, string) ([]netip.Addr, error)
+	PrivateOrigins        []string
+	MaxResponseBytes      int64
+	Timeout               time.Duration
+	ResponseHeaderTimeout time.Duration
+	lookup                func(context.Context, string) ([]netip.Addr, error)
 }
 
 func OutboundOrigin(raw string) (string, error) {
@@ -229,13 +230,19 @@ func NewOutboundClient(policy OutboundPolicy) (*http.Client, error) {
 	if policy.Timeout < time.Millisecond || policy.Timeout > 2*time.Minute {
 		return nil, fmt.Errorf("invalid outbound timeout")
 	}
+	if policy.ResponseHeaderTimeout == 0 {
+		policy.ResponseHeaderTimeout = min(10*time.Second, policy.Timeout)
+	}
+	if policy.ResponseHeaderTimeout < time.Millisecond || policy.ResponseHeaderTimeout > policy.Timeout {
+		return nil, fmt.Errorf("invalid outbound response header timeout")
+	}
 	resolve := policy.lookup
 	if resolve == nil {
 		resolve = func(ctx context.Context, host string) ([]netip.Addr, error) {
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 		}
 	}
-	base := &http.Transport{MaxIdleConns: 64, MaxIdleConnsPerHost: 8, MaxConnsPerHost: 16, IdleConnTimeout: time.Minute, ResponseHeaderTimeout: 10 * time.Second, TLSHandshakeTimeout: 5 * time.Second}
+	base := &http.Transport{MaxIdleConns: 64, MaxIdleConnsPerHost: 8, MaxConnsPerHost: 16, IdleConnTimeout: time.Minute, ResponseHeaderTimeout: policy.ResponseHeaderTimeout, TLSHandshakeTimeout: 5 * time.Second}
 	base.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(address)
 		if err != nil {

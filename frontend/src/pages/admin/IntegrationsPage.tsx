@@ -16,11 +16,13 @@ import {
   listA2AAgents,
   listMCPServers,
   registerA2AAgent,
-  sendA2ATask,
+  updateA2AAgent,
+  syncA2AAgent,
   syncMCPServer,
   updateMCPServer,
   migrateMCPCredentials,
 } from '@/api/admin';
+import { A2ATasksModal } from './A2ATasksModal';
 import { MCPToolsModal } from './MCPToolsModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
@@ -35,7 +37,7 @@ import {
   StatusBadge,
   Textarea,
 } from '@/components/ui/primitives';
-import { relativeTime, truncate } from '@/lib/format';
+import { relativeTime } from '@/lib/format';
 import { staggerEnter } from '@/lib/gsap';
 import { errMsg } from '@/lib/request';
 import { toast } from '@/stores/ui';
@@ -64,8 +66,6 @@ function parseJson<T>(text: string, fallback: T): T | null {
   }
 }
 
-/** 结果输出统一截断，避免超长响应撑爆弹窗 */
-const clip = (s: string) => truncate(s, 2000);
 
 /* ---- 表单草稿类型 ---- */
 
@@ -90,6 +90,8 @@ const EMPTY_MCP: McpDraft = {
   headers: '{}',
 };
 
+const EMPTY_A2A = {base_url: '',name: '',headers: '{}',enabled: true,clearHeaders: false};
+
 export function IntegrationsPage() {
   /* ---- 列表数据与全局状态 ---- */
   const [servers, setServers] = useState<MCPServer[]>([]);
@@ -109,13 +111,11 @@ export function IntegrationsPage() {
 
   /* ---- A2A 注册 ---- */
   const [registerOpen, setRegisterOpen] = useState(false);
-  const [regDraft, setRegDraft] = useState({ base_url: '', name: '' });
+  const [regDraft, setRegDraft] = useState(EMPTY_A2A);
+  const [editingA2A,setEditingA2A] = useState<A2AAgent | null>(null);
 
   /* ---- A2A 委派任务 ---- */
   const [taskAgent, setTaskAgent] = useState<A2AAgent | null>(null);
-  const [taskText, setTaskText] = useState('');
-  const [taskResult, setTaskResult] = useState('');
-  const [taskRunning, setTaskRunning] = useState(false);
 
   /** 删除目标：kind 区分区块，label 用于确认文案 */
   const [delTarget, setDelTarget] = useState<{
@@ -259,27 +259,30 @@ export function IntegrationsPage() {
 
   /* ---- A2A：注册 / 健康检查 / 委派任务 ---- */
 
+  const openA2ACreate = () => {setEditingA2A(null);setRegDraft(EMPTY_A2A);setRegisterOpen(true);};
+  const openA2AEdit = (agent: A2AAgent) => {
+    setEditingA2A(agent);setRegDraft({base_url:agent.base_url,name:agent.name,headers:'{}',enabled:agent.enabled,clearHeaders:false});setRegisterOpen(true);
+  };
   const submitRegister = async () => {
-    if (!regDraft.base_url.trim()) {
-      toast.err('Base URL 为必填项');
-      return;
-    }
+    if (!regDraft.base_url.trim()) {toast.err('Agent 地址为必填项');return;}
+    const headers=parseJson<Record<string,string>>(regDraft.headers,{});
+    if(!headers || typeof headers!=='object' || Array.isArray(headers) || Object.values(headers).some(v => typeof v!=='string')){toast.err('鉴权头必须为字符串值的 JSON 对象');return;}
     setSaving(true);
     try {
-      // name 留空时不传，由后端注册时从 Agent Card 名片取
-      const payload: { base_url: string; name?: string } = { base_url: regDraft.base_url.trim() };
-      const name = regDraft.name.trim();
-      if (name) payload.name = name;
-      await registerA2AAgent(payload);
-      toast.ok('远程 Agent 已注册');
-      setRegisterOpen(false);
-      setRegDraft({ base_url: '', name: '' });
-      await load();
-    } catch (e) {
-      toast.err(errMsg(e));
-    } finally {
-      setSaving(false);
-    }
+      if(editingA2A){
+        await updateA2AAgent(editingA2A.id,{config_version:editingA2A.config_version,name:regDraft.name.trim(),base_url:regDraft.base_url.trim(),headers,enabled:regDraft.enabled,clear_headers:regDraft.clearHeaders});
+        toast.ok('Agent 配置已更新；目标或凭据变更后请同步名片并重新启用');
+      }else{
+        await registerA2AAgent({base_url:regDraft.base_url.trim(),name:regDraft.name.trim() || undefined,headers,enabled:regDraft.enabled});
+        toast.ok('远程 Agent 已注册');
+      }
+      setRegisterOpen(false);await load();
+    }catch(e){toast.err(errMsg(e));}finally{setSaving(false);}
+  };
+  const handleAgentSync = async (agent:A2AAgent) => {
+    setBusyId(agent.id);
+    try {await syncA2AAgent(agent.id);toast.ok('名片已同步，启停设置保持原值');await load();}
+    catch(e){toast.err(errMsg(e));}finally{setBusyId(null);}
   };
 
   const handleAgentHealth = async (a: A2AAgent) => {
@@ -292,29 +295,6 @@ export function IntegrationsPage() {
       toast.err(errMsg(e));
     } finally {
       setBusyId(null);
-    }
-  };
-
-  const openTask = (a: A2AAgent) => {
-    setTaskAgent(a);
-    setTaskText('');
-    setTaskResult('');
-  };
-
-  const submitTask = async () => {
-    if (!taskAgent) return;
-    if (!taskText.trim()) {
-      toast.err('请输入任务内容');
-      return;
-    }
-    setTaskRunning(true);
-    try {
-      const res = await sendA2ATask(taskAgent.id, taskText.trim());
-      setTaskResult(clip(JSON.stringify(res ?? null, null, 2)));
-    } catch (e) {
-      toast.err(errMsg(e));
-    } finally {
-      setTaskRunning(false);
     }
   };
 
@@ -449,13 +429,13 @@ export function IntegrationsPage() {
           <section className="panel overflow-hidden">
             <div className="flex items-center justify-between border-b border-smoke/60 px-4 py-3">
               <h2 className="section-title">A2A 远程 Agent</h2>
-              <Button onClick={() => setRegisterOpen(true)}>＋ 注册远程 Agent</Button>
+              <Button onClick={openA2ACreate}>＋ 注册远程 Agent</Button>
             </div>
             {agents.length === 0 ? (
               <EmptyState
                 title="暂无远程 Agent"
                 hint="注册 A2A 远程 Agent 后，可将任务委派给其协作完成"
-                action={<Button onClick={() => setRegisterOpen(true)}>注册远程 Agent</Button>}
+                action={<Button onClick={openA2ACreate}>注册远程 Agent</Button>}
               />
             ) : (
               <div className="overflow-x-auto">
@@ -473,7 +453,7 @@ export function IntegrationsPage() {
                   <tbody className="divide-y divide-smoke/40">
                     {agents.map((a) => (
                       <tr key={a.id} className="transition-colors hover:bg-graphite/40">
-                        <td className="px-4 py-2.5 text-bone">{a.name}</td>
+                        <td className="px-4 py-2.5 text-bone">{a.name}{!a.enabled && <span className="ml-2 text-ash">已停用</span>}</td>
                         <td className="px-4 py-2.5">
                           <span
                             className="block max-w-[220px] truncate font-mono text-xs text-fog"
@@ -512,11 +492,13 @@ export function IntegrationsPage() {
                             >
                               健康检查
                             </button>
+                            <button disabled={busyId===a.id} className="text-ash hover:text-lime disabled:opacity-40" onClick={() => void handleAgentSync(a)}>同步名片</button>
+                            <button className="text-ash hover:text-lime" onClick={() => openA2AEdit(a)}>编辑</button>
                             <button
                               className="text-ash transition-colors hover:text-lime"
-                              onClick={() => openTask(a)}
+                              onClick={() => setTaskAgent(a)}
                             >
-                              委派任务
+                              委派与记录
                             </button>
                             <button
                               className="text-ash transition-colors hover:text-coral"
@@ -604,7 +586,7 @@ export function IntegrationsPage() {
       {/* 注册远程 Agent */}
       <Modal
         open={registerOpen}
-        title="注册远程 Agent"
+        title={editingA2A ? '编辑远程 Agent' : '注册远程 Agent'}
         onClose={() => setRegisterOpen(false)}
         footer={
           <>
@@ -612,7 +594,7 @@ export function IntegrationsPage() {
               取消
             </Button>
             <Button loading={saving} onClick={() => void submitRegister()}>
-              注册
+              {editingA2A ? '保存' : '注册'}
             </Button>
           </>
         }
@@ -630,48 +612,23 @@ export function IntegrationsPage() {
             <label className="field-label">名称（可选）</label>
             <Input
               value={regDraft.name}
-              placeholder="留空则自动取名片名称；注册时会拉取 /.well-known/agent.json 验活"
+              placeholder="新建时留空取名片名称；支持当前 A2A JSON-RPC 协议"
               onChange={(e) => setRegDraft((d) => ({ ...d, name: e.target.value }))}
             />
           </div>
+
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={regDraft.enabled} onChange={e => setRegDraft(d => ({...d,enabled:e.target.checked}))} />启用远程 Agent</label>
+          <div>
+            <label className="field-label">鉴权头（JSON，留空保留已有凭据）</label>
+            <Textarea rows={3} className="font-mono" value={regDraft.headers} onChange={e => setRegDraft(d => ({...d,headers:e.target.value}))} />
+            <p className="mt-1 text-xs text-ash">{editingA2A?.headers_configured ? '已配置加密凭据；原文不回显。' : '凭据只会发送到已登记的 origin，不能放在 URL 中。'}</p>
+          </div>
+          {editingA2A && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={regDraft.clearHeaders} onChange={e => setRegDraft(d => ({...d,clearHeaders:e.target.checked}))} />明确清除已有鉴权头</label>}
+          <p className="text-xs text-ash">默认发现 /.well-known/agent-card.json，也可填写完整名片地址。旧配置或目标/凭据变更后，先同步名片，再手动启用。</p>
         </div>
       </Modal>
 
-      {/* A2A 委派任务 */}
-      <Modal
-        open={taskAgent !== null}
-        title={`委派任务 · ${taskAgent?.name ?? ''}`}
-        onClose={() => setTaskAgent(null)}
-        width="max-w-xl"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setTaskAgent(null)}>
-              关闭
-            </Button>
-            <Button loading={taskRunning} onClick={() => void submitTask()}>
-              发送任务
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div>
-            <label className="field-label">任务内容</label>
-            <Textarea
-              rows={4}
-              value={taskText}
-              placeholder="用自然语言描述要委派给该 Agent 的任务"
-              onChange={(e) => setTaskText(e.target.value)}
-            />
-          </div>
-          {taskResult && (
-            <div>
-              <label className="field-label">执行结果</label>
-              <pre className="code-block max-h-64 whitespace-pre-wrap">{taskResult}</pre>
-            </div>
-          )}
-        </div>
-      </Modal>
+      {taskAgent && <A2ATasksModal agent={taskAgent} onClose={() => setTaskAgent(null)} />}
 
       {/* 删除二次确认 */}
       <ConfirmDialog

@@ -46,27 +46,10 @@ func (s *MCPService) transaction(ctx context.Context, fn func(*gorm.DB) error) e
 	return s.svcs.Repos.DB.WithContext(ctx).Transaction(fn)
 }
 func (s *MCPService) actor(ctx context.Context) (*model.User, error) {
-	id, ok := security.UserIDFromContext(ctx)
-	if !ok || id < 1 {
-		return nil, errcode.ErrUnauthorized
-	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	actor, err := s.svcs.Repos.User.GetByID(ctx, id)
-	if err != nil || actor.Status != 1 {
-		return nil, errcode.ErrForbidden
-	}
-	return actor, nil
+	return s.svcs.activeUser(ctx)
 }
 func (s *MCPService) admin(ctx context.Context) (*model.User, error) {
-	actor, err := s.actor(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if actor.Role != "admin" {
-		return nil, errcode.ErrForbidden
-	}
-	return actor, nil
+	return s.svcs.activeAdmin(ctx)
 }
 func lockedMCP(tx *gorm.DB, id int64) (*model.MCPServer, error) {
 	var srv model.MCPServer

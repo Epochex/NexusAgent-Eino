@@ -104,7 +104,10 @@ mcp:
 
 a2a:
   enabled: true
-  port: "8082"          # 对外 A2A 端点（/.well-known/agent.json + /a2a）
+  port: "8082"          # 默认仅监听 loopback；名片路径 /.well-known/agent-card.json
+  bind_addr: ""        # 非空时覆盖端口，如 0.0.0.0:8082；RPC 必须认证
+  public_url: ""       # 生产环境必填，反向代理对外 origin；开发为空时使用监听地址
+  max_concurrency: 8
   name: NexusAgent
   desc: 通用智能体平台：ReAct / RAG / 多智能体协作
 

@@ -10,7 +10,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof" // Ep18 演示：导入即把 pprof handler 注册到 DefaultServeMux
 	"os"
@@ -23,7 +25,6 @@ import (
 	"github.com/cloudwego/hertz/pkg/network/standard"
 	"github.com/minio/minio-go/v7"
 
-	"github.com/chengpeng-cp/nexus-agent/internal/a2a"
 	"github.com/chengpeng-cp/nexus-agent/internal/api"
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/infra"
@@ -182,53 +183,79 @@ func run() error {
 	go func() { _ = http.ListenAndServe("localhost:6060", nil) }()
 
 	// ===== ⑬ A2A 对外端点（独立 net/http 端口，回调标准对话链路） =====
+	var closeA2A func(context.Context) error
+	var a2aFailure <-chan error
 	if cfg.A2A.Enabled {
-		startA2AServer(cfg, svcs)
+		closeA2A, a2aFailure, err = startA2AServer(ctx, cfg, svcs)
+		if err != nil {
+			return err
+		}
 	}
 
 	observability.LogInfo("nexus-agent server started", "port", cfg.HTTP.Port, "env", cfg.Env)
 
-	// Spin 必须调用：server.New 只做装配不监听端口，Spin 才真正 bind :port。
-	// 放在 goroutine 里，主 goroutine 负责等信号，两者都触发优雅关停。
-	go h.Spin()
-
 	// ===== ⑭ 优雅关停 =====
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	defer signal.Stop(quit)
+	// Run binds the listener without installing a second signal handler. The
+	// main goroutine owns shutdown of both HTTP servers and the Agent root.
+	httpFailure := make(chan error, 1)
+	go func() { httpFailure <- h.Run() }()
+	var serveErr error
+	select {
+	case <-quit:
+	case serveErr = <-a2aFailure:
+	case serveErr = <-httpFailure:
+	}
 	observability.LogInfo("shutting down...")
 
 	shutdownCtx, c := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
 	defer c()
 	cancel() // 通知后台 goroutine
-	h.Shutdown(shutdownCtx)
-	return nil
+	shutdownErr := h.Shutdown(shutdownCtx)
+	if closeA2A != nil {
+		shutdownErr = errors.Join(shutdownErr, closeA2A(shutdownCtx))
+	}
+	return errors.Join(serveErr, shutdownErr)
 }
 
 // startA2AServer 启动 A2A 对外端点。
-func startA2AServer(cfg *config.Config, svcs *service.Services) {
-	card := &a2a.AgentCard{
-		Name:        cfg.A2A.Name,
-		Description: cfg.A2A.Desc,
-		URL:         fmt.Sprintf("http://127.0.0.1:%s/a2a", cfg.A2A.Port),
-		Version:     "2.0.0",
-		Protocol:    "0.2.9",
-		Capabilities: struct {
-			Streaming bool `json:"streaming"`
-		}{Streaming: false},
-		Skills: []a2a.AgentSkill{{Name: "chat", Description: "通用对话与工具调用"}},
+func startA2AServer(root context.Context, cfg *config.Config, svcs *service.Services) (func(context.Context) error, <-chan error, error) {
+	address := cfg.A2A.BindAddr
+	if address == "" {
+		address = net.JoinHostPort("127.0.0.1", cfg.A2A.Port)
 	}
-	handler := func(ctx context.Context, text string) (string, error) {
-		return svcs.A2A.InvokeLocal(ctx, 0, text)
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("A2A bind: %w", err)
+	}
+	publicURL := cfg.A2A.PublicURL
+	if publicURL == "" {
+		if cfg.Env != "dev" && cfg.Env != "test" {
+			listener.Close()
+			return nil, nil, fmt.Errorf("A2A public_url is required outside development")
+		}
+		publicURL = "http://" + listener.Addr().String()
+	}
+	adapter, err := svcs.A2A.Inbound(root, publicURL)
+	if err != nil {
+		listener.Close()
+		return nil, nil, err
 	}
 	mux := http.NewServeMux()
-	a2a.NewServer(card, handler).RegisterRoutes(mux)
+	adapter.RegisterRoutes(mux)
+	server := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 135 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+	failures := make(chan error, 1)
 	go func() {
-		observability.LogInfo("a2a server listening", "port", cfg.A2A.Port)
-		if err := http.ListenAndServe(":"+cfg.A2A.Port, mux); err != nil {
-			observability.LogError("a2a server exited", "err", err.Error())
+		observability.LogInfo("a2a server listening", "address", listener.Addr().String())
+		err := server.Serve(listener)
+		if errors.Is(err, http.ErrServerClosed) {
+			return
 		}
+		failures <- fmt.Errorf("A2A server exited: %w", err)
 	}()
+	return func(ctx context.Context) error { return errors.Join(server.Shutdown(ctx), adapter.Close(ctx)) }, failures, nil
 }
 
 // kbSearchFunc 组装 kb_search 工具的检索回调。

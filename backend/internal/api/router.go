@@ -132,9 +132,14 @@ func Register(g *route.RouterGroup, h *Handler, jwt *security.JWTManager) {
 		// A2A
 		admin.GET("/a2a/agents", h.ListA2AAgents)
 		admin.POST("/a2a/agents", h.RegisterA2AAgent)
+		admin.PUT("/a2a/agents/:id", h.UpdateA2AAgent)
+		admin.POST("/a2a/agents/:id/sync", h.SyncA2AAgent)
 		admin.DELETE("/a2a/agents/:id", h.DeleteA2AAgent)
 		admin.POST("/a2a/agents/:id/health", h.CheckA2AAgent)
 		admin.POST("/a2a/agents/:id/tasks", h.SendA2ATask)
+		admin.GET("/a2a/agents/:id/tasks", h.ListA2ADelegations)
+		admin.GET("/a2a/tasks/:taskID", h.GetA2ADelegation)
+		admin.POST("/a2a/tasks/:taskID/cancel", h.CancelA2ADelegation)
 	}
 }
 

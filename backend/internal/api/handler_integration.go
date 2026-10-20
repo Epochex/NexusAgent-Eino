@@ -233,10 +233,7 @@ func (h *Handler) CheckA2AAgent(ctx context.Context, c *app.RequestContext) {
 	OK(c, map[string]any{"status": "connected"})
 }
 
-// SendA2ATaskReq 委派请求。
-type SendA2ATaskReq struct {
-	Text string `json:"text"`
-}
+type SendA2ATaskReq = service.A2ADelegateInput
 
 // SendA2ATask POST /api/v1/admin/a2a/agents/:id/tasks —— 委派任务给远程 Agent。
 func (h *Handler) SendA2ATask(ctx context.Context, c *app.RequestContext) {
@@ -250,10 +247,75 @@ func (h *Handler) SendA2ATask(ctx context.Context, c *app.RequestContext) {
 		Fail(c, err)
 		return
 	}
-	res, err := h.svcs.A2A.SendTask(ctx, id, req.Text)
+	res, err := h.svcs.A2A.Delegate(ctx, id, &req)
 	if err != nil {
 		Fail(c, err)
 		return
 	}
+	if res.State == "dispatching" || res.State == "submitted" || res.State == "working" || res.State == "unknown" {
+		c.JSON(202, envelope{Code: 0, Message: "accepted", Data: res})
+		return
+	}
 	OK(c, res)
+}
+
+func (h *Handler) UpdateA2AAgent(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	var input service.A2AUpdateInput
+	if err = c.BindAndValidate(&input); err != nil {
+		Fail(c, errcode.ErrInvalidParam)
+		return
+	}
+	result, err := h.svcs.A2A.Update(ctx, id, &input)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, result)
+}
+func (h *Handler) SyncA2AAgent(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	result, err := h.svcs.A2A.Sync(ctx, id)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, result)
+}
+func (h *Handler) GetA2ADelegation(ctx context.Context, c *app.RequestContext) {
+	result, err := h.svcs.A2A.Delegation(ctx, c.Param("taskID"), c.Query("refresh") == "true")
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, result)
+}
+func (h *Handler) CancelA2ADelegation(ctx context.Context, c *app.RequestContext) {
+	result, err := h.svcs.A2A.CancelDelegation(ctx, c.Param("taskID"))
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, result)
+}
+func (h *Handler) ListA2ADelegations(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	rows, total, err := h.svcs.A2A.Delegations(ctx, id, parsePagination(c))
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, map[string]any{"list": rows, "total": total})
 }

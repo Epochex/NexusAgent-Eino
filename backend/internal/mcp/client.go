@@ -55,6 +55,12 @@ func NewClient(endpoint string, headers map[string]string, options ...ClientOpti
 		}
 	}
 	c := &Client{baseURL: endpoint, gate: make(chan struct{}, 1), catalogGate: make(chan struct{}, 1)}
+	if cfg.policy.Timeout == 0 {
+		cfg.policy.Timeout = 30 * time.Second
+	}
+	if cfg.policy.ResponseHeaderTimeout == 0 {
+		cfg.policy.ResponseHeaderTimeout = min(cfg.policy.Timeout, 30*time.Second)
+	}
 	if err := cfg.policy.Validate(endpoint); err != nil {
 		c.setupErr = err
 		return c

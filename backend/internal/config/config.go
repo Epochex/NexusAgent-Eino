@@ -149,10 +149,13 @@ type MCP struct {
 
 // A2A 对外暴露端点配置（本平台作为被调用方）。
 type A2A struct {
-	Enabled bool   `mapstructure:"enabled"`
-	Port    string `mapstructure:"port"` // 独立端口（net/http，与 Hertz 分离）
-	Name    string `mapstructure:"name"`
-	Desc    string `mapstructure:"desc"`
+	BindAddr       string `mapstructure:"bind_addr"`
+	PublicURL      string `mapstructure:"public_url"`
+	MaxConcurrency int    `mapstructure:"max_concurrency"`
+	Enabled        bool   `mapstructure:"enabled"`
+	Port           string `mapstructure:"port"` // 独立端口（net/http，与 Hertz 分离）
+	Name           string `mapstructure:"name"`
+	Desc           string `mapstructure:"desc"`
 }
 
 type Search struct {

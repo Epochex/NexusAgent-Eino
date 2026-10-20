@@ -74,13 +74,30 @@ export interface MCPServer {
 
 /** A2A 远程 Agent（名片快照在 card 字段） */
 export interface A2AAgent {
+	 enabled: boolean;
+	 config_version: number;
+	 headers_configured: boolean;
+	 pinned_endpoint: string;
   id: number;
   name: string;
   base_url: string;
-  /** Agent Card（A2A 协议 /.well-known/agent.json） */
+  /** Agent Card（A2A 1.0 协议 /.well-known/agent-card.json） */
   card: Record<string, unknown> | null;
   status: string;
   last_health_at?: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export interface A2ATask {
+  id: string;
+  version: number;
+  task_id: string;
+  request_key: string;
+  state: string;
+  text: string;
+  error?: string;
+  can_refresh: boolean;
+  can_cancel: boolean;
   updated_at: string;
 }

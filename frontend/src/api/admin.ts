@@ -2,10 +2,11 @@
  * 管理接口（admin 角色）—— 对应 router.go admin 分组：
  * 模型供应商/模型配置、MCP Server、A2A 远程 Agent。
  */
-import { http } from '@/lib/request';
+import { http, request } from '@/lib/request';
 import type { Tool } from '@/types/agent';
 import type {
   A2AAgent,
+  A2ATask,
   MCPServer,
   ModelConfig,
   ModelProvider,
@@ -80,9 +81,14 @@ export const callMCPTool = (id: number, name: string, args: Record<string, unkno
 
 export const listA2AAgents = () => http.get<A2AAgent[]>('/admin/a2a/agents');
 
-/** 注册：先拉 /.well-known/agent.json 名片验活再入库（name 留空取名片） */
-export const registerA2AAgent = (req: { name?: string; base_url: string }) =>
+/** 当前协议名片校验与加密鉴权头配置。 */
+export const registerA2AAgent = (req: { name?: string; base_url: string; enabled?: boolean; headers?: Record<string,string> }) =>
   http.post<A2AAgent>('/admin/a2a/agents', req);
+
+export const updateA2AAgent = (id: number, req: {config_version: number; name?: string; base_url?: string; enabled?: boolean; headers?: Record<string,string>; clear_headers?: boolean}) =>
+  http.put<A2AAgent>(`/admin/a2a/agents/${id}`, req);
+
+export const syncA2AAgent = (id: number) => http.post<A2AAgent>(`/admin/a2a/agents/${id}/sync`);
 
 export const deleteA2AAgent = (id: number) =>
   http.delete(`/admin/a2a/agents/${id}`);
@@ -91,5 +97,13 @@ export const checkA2AAgent = (id: number) =>
   http.post<{ status: string }>(`/admin/a2a/agents/${id}/health`);
 
 /** 委派任务：{text} → 任务结果 */
-export const sendA2ATask = (id: number, text: string) =>
-  http.post<Record<string, unknown>>(`/admin/a2a/agents/${id}/tasks`, { text });
+export const sendA2ATask = (id: number, text: string, requestKey: string) =>
+  http.post<A2ATask>(`/admin/a2a/agents/${id}/tasks`, { text, request_key: requestKey, return_immediately: true });
+
+export const listA2ATasks = (id: number, page = 1) =>
+  http.get<{list:A2ATask[]; total:number}>(`/admin/a2a/agents/${id}/tasks`, {page, page_size:20});
+
+export const getA2ATask = (id: string, refresh = false, signal?: AbortSignal) =>
+  request<A2ATask>(`/admin/a2a/tasks/${encodeURIComponent(id)}`, {query:{refresh},signal});
+
+export const cancelA2ATask = (id: string) => http.post<A2ATask>(`/admin/a2a/tasks/${encodeURIComponent(id)}/cancel`);
