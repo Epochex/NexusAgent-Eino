@@ -71,6 +71,9 @@ jobs:
           cache-dependency-path: backend/go.sum
       - run: docker compose -f backend/deployments/docker-compose.acceptance.yaml up -d --wait --wait-timeout 180
       - run: |
+          # setup-go may miss the cache on a fresh runner; --mount requires an
+          # existing bind source even though Go itself creates it on first use.
+          mkdir -p "$(go env GOMODCACHE)"
           docker run --rm --network nexus-eino-acceptance_default --network nexus-eino-acceptance_parser --cpus=2 --memory=2g \
             --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory --env GIT_CONFIG_VALUE_0=/workspace \
             --env 'NX_TEST_DATABASE_DSN=postgres://postgres@postgres:5432/nexus_acceptance_test?sslmode=disable' \

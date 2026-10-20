@@ -21,6 +21,8 @@
 
 真实基础设施包耗时：execution 269.711s、service 208.076s、api 24.265s、repo 6.664s、ingestion 21.025s、vector 5.158s、memory 29.789s、tool 3.037s、a2a 7.686s、capacity 7.240s、loadtest 3.712s；隔离PDF loader 3.208s。包含固定100条检索、真实进程恢复、新增到期操作回归，未增加业务超时来通过检查。
 
+首次 main CI [39474013284](https://github.com/Epochex/NexusAgent-Eino/actions/runs/39474013284) 暴露冷启动 runner 的缓存前置条件：setup-go 未命中缓存时 `/home/runner/go/pkg/mod` 不存在，Docker bind mount 在任何基础设施测试启动前退出125。修复为挂载前显式创建 Go 模块缓存目录，未跳过测试或放宽阈值。实际CI日志为RED，准备后的空缓存双网络容器能启动Go1.26.0为本地GREEN；Windows Docker Desktop 自动创建缺失共享目录，不能用其旧行为冒充Linux失败复现。后续mainCI仍为必须通过的最终gate。
+
 主分支远端CI需以[实际Actions运行](https://github.com/Epochex/NexusAgent-Eino/actions?query=branch%3Amain)与提交SHA为准；本地通过不代替远端结果。
 
 独立原生代码执行 gate：`go vet ./cmd/loadtest ./internal/tool ./internal/model`；真实 PG 与 Docker 下 `go test -race -tags integration ./cmd/loadtest ./internal/tool -count=1 -timeout=120s` 通过（4.920s / 23.339s）。Linux CI 的无 Docker socket 测试容器不替代这层测试。
