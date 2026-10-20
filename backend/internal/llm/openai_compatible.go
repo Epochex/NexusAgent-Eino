@@ -134,6 +134,7 @@ func toOpenAIMsgs(msgs []Message) []openaiMsg {
 		case m.Role == RoleAssistant && len(m.ToolCalls) > 0:
 			// 有工具调用的 assistant 消息：content 允许为空
 			om.Content = m.Content
+			om.ReasoningContent = m.ReasoningContent
 			for _, tc := range m.ToolCalls {
 				om.ToolCalls = append(om.ToolCalls, openaiCall{
 					ID: tc.ID, Type: "function",

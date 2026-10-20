@@ -1,0 +1,265 @@
+{
+  "checks": {
+    "approval_false": {
+      "effect_verified": true,
+      "operations": [
+        {
+          "id": "01e5239b0d88696b6f43bf5d905dfc3e05cfba880d16cbdcb377566b192cf553",
+          "run_id": 2,
+          "path": "root/plan",
+          "kind": "llm",
+          "args_hash": "eecaee2dba7222f23ebc42b58f7e9c99d5b79682b3f6b3a09ae71c1197679143",
+          "replay_policy": "readonly",
+          "status": "succeeded",
+          "generation": 1,
+          "output": "READY",
+          "attempt": 1,
+          "started_at": "2026-10-21T02:49:48.231103+08:00",
+          "finished_at": "2026-10-21T02:49:49.241935+08:00"
+        }
+      ],
+      "run_id": 2,
+      "status": "canceled"
+    },
+    "approval_true": {
+      "effect_verified": true,
+      "operations": [
+        {
+          "id": "23e3ffc50f6b848496b8cca1564e91724e04b3b5732d8f8b04f99e23ec7ef1c7",
+          "run_id": 1,
+          "path": "root/plan",
+          "kind": "llm",
+          "args_hash": "5ba6ee5578f65ba3bea67e946362f4aeed60bdd979562a9f4534bf2b322580b8",
+          "replay_policy": "readonly",
+          "status": "succeeded",
+          "generation": 1,
+          "output": "READY",
+          "attempt": 1,
+          "started_at": "2026-10-21T02:49:46.109763+08:00",
+          "finished_at": "2026-10-21T02:49:47.119378+08:00"
+        },
+        {
+          "id": "81e86970b0985e6b06d5dad7808b029492c00a9b6678dfb7c3f0f40ae5afd08d",
+          "run_id": 1,
+          "path": "root/save",
+          "kind": "tool",
+          "args_hash": "2191863a6507d4f89878b854dc42d30ea0082e92212eb2a2067a59c8d21bbe1f",
+          "replay_policy": "manual",
+          "status": "succeeded",
+          "generation": 2,
+          "output": "{\"saved\":\"releases/release_TMWIU74KOV.txt\",\"bytes\":18}",
+          "attempt": 1,
+          "started_at": "2026-10-21T02:49:47.479897+08:00",
+          "finished_at": "2026-10-21T02:49:47.510142+08:00"
+        },
+        {
+          "id": "de194fb4641a8d6103c4ef85430773d967789aca22e6f384762756bddc706160",
+          "run_id": 1,
+          "path": "root/answer",
+          "kind": "llm",
+          "args_hash": "d7750e48d112360efac926c3e74cea44da2cc256acbc0b0a9d82d550138c35f4",
+          "replay_policy": "readonly",
+          "status": "succeeded",
+          "generation": 2,
+          "output": "ACTIVATE_OK release_TMWIU74KOV",
+          "attempt": 1,
+          "started_at": "2026-10-21T02:49:47.524028+08:00",
+          "finished_at": "2026-10-21T02:49:48.046994+08:00"
+        }
+      ],
+      "run_id": 1,
+      "status": "succeeded"
+    },
+    "cross_owner_denied_before_model": true,
+    "document": {
+      "chunks": 1,
+      "id": 1,
+      "ready_version": 1
+    },
+    "grounded_answer": {
+      "answer": "The rollback window is 17 minutes [1].",
+      "done": true,
+      "events": {
+        "delta": 11,
+        "done": 1,
+        "meta": 1,
+        "reasoning": 28,
+        "refs": 1,
+        "usage": 1
+      },
+      "first_content_ms": 917.2285,
+      "references": {
+        "items": [
+          {
+            "chunk_id": 1,
+            "document_id": 1,
+            "filename": "lantern-handbook.txt",
+            "page": 1,
+            "score": 0.032786883
+          }
+        ],
+        "run_id": "FHVYVSOIEZT266NXQDRTE6EATT",
+        "seq": 2,
+        "time": "2026-10-20T18:49:51.0918103Z"
+      },
+      "total_ms": 971.2267
+    },
+    "host_expert_mcp": {
+      "answer": "The deployment acceptance marker is LIVE_ALGOTMNIN5.",
+      "done": true,
+      "events": {
+        "agent_event": 2,
+        "delta": 14,
+        "done": 1,
+        "meta": 2,
+        "reasoning": 56,
+        "tool_call": 1,
+        "tool_result": 1,
+        "usage": 1
+      },
+      "first_content_ms": 2715.1043,
+      "references": null,
+      "total_ms": 2784.9297
+    },
+    "mcp_effects": 1,
+    "unanswerable": {
+      "answer": "NOT_PROVIDED [1]",
+      "done": true,
+      "events": {
+        "delta": 7,
+        "done": 1,
+        "meta": 1,
+        "reasoning": 59,
+        "refs": 1,
+        "usage": 1
+      },
+      "first_content_ms": 1291.0856,
+      "references": {
+        "items": [
+          {
+            "chunk_id": 1,
+            "document_id": 1,
+            "filename": "lantern-handbook.txt",
+            "page": 1,
+            "score": 0.032786883
+          }
+        ],
+        "run_id": "TTS4K57CSHLU5WMWRILKK7BND2",
+        "seq": 2,
+        "time": "2026-10-20T18:49:51.8890029Z"
+      },
+      "total_ms": 1358.0442
+    }
+  },
+  "embedding": "controlled 32D fixture; no real embedding quality claim",
+  "failed": false,
+  "max_output_tokens": 1024,
+  "max_requests": 24,
+  "peak_price_budget_cny": 0.8,
+  "requests": [
+    {
+      "fingerprint": "cec163f8ed5d01e5db27def9ff592fed314fe67fe6ca1bdc429d053bf1ead2da",
+      "status": 200,
+      "stream": false,
+      "prompt_tokens": 96,
+      "completion_tokens": 55,
+      "cache_hit_tokens": 0,
+      "reasoning_tokens": 53,
+      "finish_reason": "stop",
+      "first_content_ms": 0,
+      "total_ms": 1015.0248,
+      "peak_price_ceiling_cny": 0.000632
+    },
+    {
+      "fingerprint": "72fc5e80ce620fad4a78e23eb1d33a8da5ea4be4d5eab90b8f6c37e5e2d642c3",
+      "status": 200,
+      "stream": true,
+      "prompt_tokens": 321,
+      "completion_tokens": 45,
+      "cache_hit_tokens": 0,
+      "reasoning_tokens": 19,
+      "finish_reason": "tool_calls",
+      "first_content_ms": 0,
+      "total_ms": 700.4788,
+      "peak_price_ceiling_cny": 0.001002
+    },
+    {
+      "fingerprint": "35d30a7074e365251c1494520f1164db7e51e311eaf39bad7285d6a2795abc11",
+      "status": 200,
+      "stream": true,
+      "prompt_tokens": 387,
+      "completion_tokens": 52,
+      "cache_hit_tokens": 128,
+      "reasoning_tokens": 37,
+      "finish_reason": "stop",
+      "first_content_ms": 856.3651,
+      "total_ms": 900.1355,
+      "peak_price_ceiling_cny": 0.0011899999999999999
+    },
+    {
+      "fingerprint": "175fc3d41ecc89cb8c01b37e90582ebd2cc4dd2d47a7195dc737e585d078aa36",
+      "status": 200,
+      "stream": false,
+      "prompt_tokens": 44,
+      "completion_tokens": 40,
+      "cache_hit_tokens": 0,
+      "reasoning_tokens": 37,
+      "finish_reason": "stop",
+      "first_content_ms": 0,
+      "total_ms": 977.6352,
+      "peak_price_ceiling_cny": 0.00040800000000000005
+    },
+    {
+      "fingerprint": "12fd977667a8e10de13e1b5e7d660ca4fad339d6381c0a567041679539271917",
+      "status": 200,
+      "stream": false,
+      "prompt_tokens": 68,
+      "completion_tokens": 39,
+      "cache_hit_tokens": 0,
+      "reasoning_tokens": 28,
+      "finish_reason": "stop",
+      "first_content_ms": 0,
+      "total_ms": 494.062,
+      "peak_price_ceiling_cny": 0.000448
+    },
+    {
+      "fingerprint": "2341f89f28028db41fd5073e15c6ec88d05b7f7417cdb952713a8cdea44367e9",
+      "status": 200,
+      "stream": false,
+      "prompt_tokens": 47,
+      "completion_tokens": 58,
+      "cache_hit_tokens": 0,
+      "reasoning_tokens": 55,
+      "finish_reason": "stop",
+      "first_content_ms": 0,
+      "total_ms": 975.4426,
+      "peak_price_ceiling_cny": 0.000558
+    },
+    {
+      "fingerprint": "3d0418aff8785437687a4e29eb41f5f70ba264ecfea82b2bbe9c35166af549e3",
+      "status": 200,
+      "stream": true,
+      "prompt_tokens": 182,
+      "completion_tokens": 40,
+      "cache_hit_tokens": 0,
+      "reasoning_tokens": 28,
+      "finish_reason": "stop",
+      "first_content_ms": 374.5588,
+      "total_ms": 402.5593,
+      "peak_price_ceiling_cny": 0.000684
+    },
+    {
+      "fingerprint": "ed9d604fdce38d9c5a051644efe5cb238e0782275e37b9d137ce72d4d3b722f7",
+      "status": 200,
+      "stream": true,
+      "prompt_tokens": 182,
+      "completion_tokens": 67,
+      "cache_hit_tokens": 0,
+      "reasoning_tokens": 59,
+      "finish_reason": "stop",
+      "first_content_ms": 929.0489,
+      "total_ms": 946.7164,
+      "peak_price_ceiling_cny": 0.0009
+    }
+  ]
+}
