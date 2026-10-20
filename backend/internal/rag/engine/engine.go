@@ -13,6 +13,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"gorm.io/datatypes"
 
@@ -79,6 +80,9 @@ func (e *Engine) EnsureKBVectorCollection(ctx context.Context, collection string
 //	输入：已从对象存储下载并解析好的文档原文
 //	状态机：chunking → embedding → ready / failed（由调用方推进）
 func (e *Engine) IndexDocument(ctx context.Context, kb *model.KnowledgeBase, doc *model.Document, loaded *loader.LoadedDoc) error {
+	if kb == nil || doc == nil || loaded == nil || e.repo == nil || e.store == nil || e.gateway == nil || e.embedMdl == nil {
+		return fmt.Errorf("index dependencies/document are incomplete")
+	}
 	// ① 分块：按知识库自定义参数（无则用全局配置）
 	chunkSize, chunkOverlap := kb.ChunkSize, kb.ChunkOverlap
 	if chunkSize <= 0 {
@@ -87,24 +91,35 @@ func (e *Engine) IndexDocument(ctx context.Context, kb *model.KnowledgeBase, doc
 	if chunkOverlap <= 0 {
 		chunkOverlap = e.cfg.ChunkOverlap
 	}
+	if chunkSize < 64 || chunkSize > 4096 || chunkOverlap < 0 || chunkOverlap > chunkSize/2 {
+		return fmt.Errorf("chunk size must be 64..4096 with overlap at most half")
+	}
 	sp := splitter.New(chunkSize, chunkOverlap)
 
 	// ② 落库：分块先写入 PG（Milvus 主键 = chunk.ID，必须先有 ID）
 	// 页码等定位信息存 Meta JSONB（{"page":3}），引用时回显"第几页"
 	var chunks []model.DocumentChunk
 	for _, page := range loaded.Pages {
-		for _, c := range sp.Split(page.Content, page.Page) {
+		pageChunks, err := sp.SplitBounded(page.Content, page.Page, 10000-len(chunks))
+		if err != nil {
+			return err
+		}
+		for _, c := range pageChunks {
 			chunks = append(chunks, model.DocumentChunk{
 				KBID:       kb.ID,
 				DocumentID: doc.ID,
-				Seq:        c.Seq,
+				Seq:        len(chunks),
 				Content:    c.Content,
+				TokenCount: llm.EstimateTokens(c.Content),
 				Meta:       datatypes.JSON(fmt.Sprintf(`{"page":%d}`, c.Page)),
 			})
 		}
 	}
 	if len(chunks) == 0 {
 		return fmt.Errorf("document produced no chunks: %s", doc.Filename)
+	}
+	if len(chunks) > 10000 {
+		return fmt.Errorf("document exceeds 10000 chunks")
 	}
 	if err := e.repo.BatchCreate(ctx, chunks); err != nil {
 		return fmt.Errorf("save chunks: %w", err)
@@ -146,10 +161,22 @@ func (e *Engine) embedChunks(ctx context.Context, collection string, chunks []mo
 		if err != nil {
 			return err
 		}
+		if len(vecs) != len(batchChunks) {
+			return fmt.Errorf("embedding count %d differs from input %d", len(vecs), len(batchChunks))
+		}
+		for _, values := range vecs {
+			if len(values) != e.dim {
+				return fmt.Errorf("embedding dimension %d differs from collection %d", len(values), e.dim)
+			}
+			for _, value := range values {
+				if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+					return fmt.Errorf("embedding contains non-finite values")
+				}
+			}
+		}
 
 		records := make([]vector.Record, 0, len(batchChunks))
 		for j, c := range batchChunks {
-			c.TokenCount = llm.EstimateTokens(c.Content)
 			records = append(records, vector.Record{
 				ID:     c.ID,
 				Vector: vecs[j],

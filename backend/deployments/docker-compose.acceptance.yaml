@@ -1,0 +1,78 @@
+# Isolated acceptance infrastructure. Public test credentials, loopback only.
+# Keep this project's named volumes when investigating a failed validation.
+name: nexus-eino-acceptance
+services:
+  postgres:
+    image: postgres@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: nexus_acceptance_test
+    ports: ["127.0.0.1:55449:5432"]
+    volumes: [pg:/var/lib/postgresql/data]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nexus_acceptance_test"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  redis:
+    image: redis@sha256:5a93f6b2e391b78e8bd3f9e7e1e1e06aeb5295043b4703fb88392835cec924a0
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["127.0.0.1:56399:6379"]
+    volumes: [redis:/data]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:2136d593beacf4461187035eca949fe49abd589d5079735025c711ca58fee0c8
+    user: "0:0" # dedicated test volume; never a host-directory mount
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["127.0.0.1:59000:9000", "127.0.0.1:59001:9001"]
+    volumes: [objects:/data]
+    mem_limit: 512m
+  etcd:
+    image: quay.io/coreos/etcd@sha256:42106a001d1be7fd22e48830071ceae0fe760ff2c5df8c76c0e3b586d8a1f0fc
+    command: ["etcd", "--advertise-client-urls=http://etcd:2379", "--listen-client-urls=http://0.0.0.0:2379", "--data-dir=/etcd"]
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+    volumes: [etcd:/etcd]
+    mem_limit: 256m
+  milvus-minio:
+    image: cgr.dev/chainguard/minio@sha256:2136d593beacf4461187035eca949fe49abd589d5079735025c711ca58fee0c8
+    user: "0:0"
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes: [vectors-objects:/data]
+    mem_limit: 512m
+  milvus:
+    image: milvusdb/milvus@sha256:fe39aa0fa006be4825a177b6b41393465deece910351c33a58170444265c63d8
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    depends_on: [etcd, milvus-minio]
+    ports: ["127.0.0.1:59530:19530", "127.0.0.1:59091:9091"]
+    volumes: [vectors:/var/lib/milvus]
+    mem_limit: 4g
+    cpus: 2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+volumes:
+  pg:
+  redis:
+  objects:
+  etcd:
+  vectors-objects:
+  vectors:
