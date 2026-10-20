@@ -41,8 +41,10 @@ Agent 工具选择使用 46 个实际可用工具验证三页列表：第二页�
 
 ## 复现与尚未完成项
 
-Windows PowerShell 使用 `./scripts/verify-p3.ps1`，可传 `-ModuleCache <本机 Go 模块缓存目录>` 复用下载。脚本启动独立 Compose 依赖，在 4 CPU / 4 GiB Linux Go 容器执行 vet、全 unit race、真实数据/进程矩阵和四命令 build，再执行前端锁文件安装、typecheck/build。它不清理保留的验证资料或无关容器。脚本的自动化结果不包含人工浏览器或真实 LLM 验收。
+Windows PowerShell 使用 `./scripts/verify-p3.ps1`，可传 `-ModuleCache <本机 Go 模块缓存目录>` 复用下载。脚本启动独立 Compose 依赖，在 4 CPU / 4 GiB Linux Go 容器执行 vet、全 unit race、真实数据/进程矩阵和四命令 build，再执行前端锁文件安装、typecheck/build。`-Checks Backend` / `-Checks Frontend` 可单独复查。前端依赖重装前需停止此 checkout 的 Vite，脚本会提前检测 Windows 原生模块占用。它不清理保留的验证资料或无关容器。脚本的自动化结果不包含人工浏览器或真实 LLM 验收。
 
 本次身份/列表改动的完整 Linux vet、unit race、真实 PG/Redis/MinIO/Milvus integration+infrastructure race 与四命令 build 全部通过（4 CPU / 4 GiB，退出码 0）：execution 193.450 秒、service 187.852 秒、API 23.882 秒、repo 6.402 秒、ingestion 21.152 秒、vector 4.414 秒、long_term 25.706 秒、tool 3.060 秒、A2A 7.833 秒。前端 typecheck/build 通过；复现脚本本身另作最终门禁运行。
+
+一键脚本的实际运行中，后端完整矩阵再次通过（execution 198.750 秒、service 187.781 秒、API 22.470 秒）；随后 npm ci 被仍运行的 Vite 占用的 lightningcss 原生模块拒绝，错误为 Windows EPERM，并非测试通过或自动审批拒绝。停止本次验收的预览进程后，锁文件重装、typecheck/build 通过（337 modules、npm audit 报告 0 vulnerabilities）。未改动后端代码，只单独复查前端；新增提前占用检查及按检查项复查参数。该次失败日志保留，没有将失败的一键调用记成整体通过。
 
 P4 的共享全局/用户/提供方额度、上下文模型窗口、PDF 进程隔离、开放到达率压力实验、部署与回滚、全分支审阅仍需完成。当前不能据此宣称已满足 200 SSE / 32 slots / 10 runs/s、30 分钟的容量目标。
