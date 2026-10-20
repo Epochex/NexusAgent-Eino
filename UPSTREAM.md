@@ -6,4 +6,4 @@
 - 保留上游 Git 历史、作者和原有源码归属；本项目的工程化改造通过后续独立提交体现，不将上游能力表述为本项目原创。
 - 导入快照未包含 LICENSE 文件；本项目未为上游代码另外授予许可。
 
-当前尚未完成 Eino 迁移。原 README 中关于 Eino 生产版的描述来自上游；实际基线是 Hertz + 自研 ReAct/工作流。当前状态以本仓库 README 顶部说明和测试证据为准。
+导入基线的实际执行路径为 Hertz + 自研 ReAct/工作流。本仓库已将普通 Agent、Host/Expert 与直答接入 Eino ADK，并将 YAML 工作流编译为实际 Eino Graph；同时保留上游教学实现。改造范围、验证与仍未验收的边界，以本仓库 README 和 docs/research 的实际证据为准。

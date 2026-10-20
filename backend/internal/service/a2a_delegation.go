@@ -196,7 +196,7 @@ func (s *A2AService) Delegate(ctx context.Context, agentID int64, input *A2ADele
 			return errcode.ErrRateLimited.WithMsg("未完成的A2A委派已达容量上限")
 		}
 		if counts.History >= 10000 {
-			return errcode.ErrRateLimited.WithMsg("A2A委派历史达到保留上限，请先归档")
+			return errcode.ErrRateLimited.WithMsg("A2A委派记录已达10000条上限，请联系管理员；当前不支持自助归档，请保留请求键去重记录")
 		}
 		row = delegationRecord{ID: rand.Text(), OwnerID: actor.ID, AgentID: agentID, ConfigVersion: agent.ConfigVersion, Version: 1, RequestKey: input.RequestKey, InputHash: hash, Status: "dispatching", Snapshot: datatypes.JSON(frozen)}
 		record := map[string]any{"id": row.ID, "owner_id": row.OwnerID, "agent_id": row.AgentID, "config_version": row.ConfigVersion, "version": 1, "request_key": row.RequestKey, "input_hash": row.InputHash, "status": row.Status, "snapshot": row.Snapshot}

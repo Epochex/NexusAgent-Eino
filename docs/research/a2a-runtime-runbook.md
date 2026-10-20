@@ -48,3 +48,5 @@ submitted/working 不等于 completed；失败、取消、拒绝、input_require
 ## 验证入口
 
 `go test -race -tags integration ./internal/a2a ./internal/service ./internal/api -run TestA2A -count=1` 使用真实测试 PostgreSQL；实际 server 进程强杀/重启测试另需 integration+infrastructure、Redis、MinIO、Milvus。详见 [验收记录](2026-10-20-p3-a2a-validation.md)。可选 `NX_A2A_BROWSER=1` 启动仅 loopback 的短期浏览器测试夹具；夹具的公开测试密码与控制端点不会编译进生产服务。
+
+委派记录目前每用户最多 10000 条，达到后明确拒绝新的委派。当前无自助归档接口；这是总历史上限，并非仅限制进行中的任务。管理员调整保留/容量策略前须保留 request_key 与 input_hash 的去重证据，不能通过删除未知结果记录使同一请求重新发送。

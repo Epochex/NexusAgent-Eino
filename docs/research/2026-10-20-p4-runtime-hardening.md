@@ -84,3 +84,33 @@ resource-fault package after the other infrastructure packages to avoid faulting
 the parser while another package tests a valid document pipeline. Diagnostics
 can be enabled per process using `NX_OBSERVABILITY__DIAGNOSTICS_ADDR`; the
 capacity runner must keep those listeners private.
+
+## Profile-driven SSE event reads
+
+The original 200-subscriber experiment exceeded the control latency target.
+A 15-second actual server CPU profile placed 62.34% cumulative CPU in SSE's
+poll loop and 45.49% in full workflow detail loading; the 32-connection pool
+was saturated. The old path repeatedly loaded approvals/history/operations
+while merely checking event status. `ReadEventPage` now reads owner-scoped
+status, cursor retention boundary and a bounded event page in one PostgreSQL
+statement snapshot; idle caught-up readers skip event aggregation. SSE drains
+all pages before closing on a terminal cursor. Real PG tests assert one SQL
+statement, isolation, expired/future cursors and the complete terminal tail.
+The partial failing grid is retained; corrected capacity results are separate.
+
+## Optional code execution
+
+The upstream code executor ignored configured resource/pool settings and read
+all container logs before truncating them. It now enforces validated immutable
+images and resource limits, a real local pool, nonroot/readonly/no-network/
+capability restrictions, bounded streaming output, a container-side watchdog,
+and scoped cleanup. Production configuration requires a separate TLS Docker
+endpoint. [Deployment and independent tests](code-execution-runbook.md) explain
+which checks require an actual Docker control connection rather than CI's
+socket-free test container. Actual Python/shell/Go, kernel limits, large output,
+OOM/recovery, cancellation/concurrency, timeout and failed audit commits passed
+with race enabled in 18.504s. Initial Go execution failed on a non-executable
+tmpfs; explicitly enabling execution only on the bounded temp mount fixed it.
+A second real test exposed log rotation losing fast stdout before attachment;
+attaching before container start fixed that failure. These are independent
+sandbox tests, not evidence for real model quality or platform throughput.
