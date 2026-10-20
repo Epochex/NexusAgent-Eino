@@ -57,6 +57,11 @@ func TestStreamRejectsOversizedFrame(t *testing.T) {
 	requireStreamError(t, streamFixture(t, "data: "+strings.Repeat("x", 513*1024)+"\n\n"))
 }
 
+func TestStreamRejectsOversizedAggregate(t *testing.T) {
+	frame := "data: {\"choices\":[{\"delta\":{\"content\":\"" + strings.Repeat("x", 65536) + "\"}}]}\n\n"
+	requireStreamError(t, streamFixture(t, strings.Repeat(frame, 80)+"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"))
+}
+
 func TestStreamToolCallsByIndex(t *testing.T) {
 	events := streamFixture(t, `data: {"choices":[{"delta":{"tool_calls":[{"index":2,"id":"b","function":{"name":"second","arguments":"{\"b\":"}},{"index":0,"id":"a","function":{"name":"first","arguments":"{\"a\":"}}]}}]}
 

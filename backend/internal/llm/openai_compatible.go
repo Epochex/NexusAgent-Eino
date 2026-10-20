@@ -288,6 +288,7 @@ func (p *openaiCompatibleProvider) consumeStream(ctx context.Context, body io.Re
 	finish := ""
 	var usage *Usage
 	model := ""
+	bytesRead := 0
 
 	emit := func(ev StreamEvent) bool {
 		select {
@@ -304,6 +305,11 @@ func (p *openaiCompatibleProvider) consumeStream(ctx context.Context, body io.Re
 			continue // 忽略空行与注释行
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		bytesRead += len(data)
+		if bytesRead > 4<<20 {
+			emit(StreamEvent{Err: fmt.Errorf("model stream exceeds 4 MiB protocol limit")})
+			return
+		}
 		if data == "[DONE]" {
 			break
 		}

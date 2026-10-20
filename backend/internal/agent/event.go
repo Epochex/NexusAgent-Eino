@@ -4,6 +4,8 @@
 // （事件类型与 SSE 协议一一对应，见 td.md §6.4）。
 package agent
 
+import "time"
+
 // 事件类型常量（与 SSE event 名一致）。
 const (
 	TypeMeta       = "meta"        // 会话元信息
@@ -22,8 +24,11 @@ const (
 
 // Event 统一事件。Data 为 map[string]any（转写 SSE 时直接序列化）。
 type Event struct {
-	Type string
-	Data map[string]any
+	RunID string
+	Seq   uint64
+	At    time.Time
+	Type  string
+	Data  map[string]any
 }
 
 // Evt 快速构造。
