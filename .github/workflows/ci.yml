@@ -14,6 +14,19 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: nexus_eino_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d nexus_eino_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -25,6 +38,9 @@ jobs:
           cache-dependency-path: backend/go.sum
       - run: go vet ./...
       - run: go test -race ./... -timeout 180s
+      - run: go test -race -tags=integration ./internal/service -run TestChat -count=1 -timeout 120s
+        env:
+          NX_TEST_DATABASE_DSN: postgres://postgres@localhost:5432/nexus_eino_test?sslmode=disable
       - run: go build ./cmd/server ./cmd/worker ./cmd/cli ./cmd/migrate
   frontend:
     runs-on: ubuntu-latest

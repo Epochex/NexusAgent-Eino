@@ -14,9 +14,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"strings"
-	"time"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/agent"
 	"github.com/chengpeng-cp/nexus-agent/internal/agent/host"
@@ -57,6 +57,19 @@ type ChatInput struct {
 
 // Stream 执行一次对话，返回统一事件流（handler 层转 SSE）。
 func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (<-chan agent.Event, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	started := false
+	defer func() {
+		if !started {
+			cancel()
+		}
+	}()
+	if in == nil {
+		return nil, errcode.ErrInvalidParam
+	}
+	input := *in
+	in = &input
+
 	if strings.TrimSpace(in.Content) == "" {
 		return nil, errcode.ErrInvalidParam.WithMsg("消息不能为空")
 	}
@@ -93,6 +106,7 @@ func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (
 		return nil, err
 	}
 	runInput.Trace = observability.NewAgentTrace()
+	runInput.RunID = rand.Text()
 
 	// ⑤ 选择 Runner 并启动
 	runner, err := s.pickRunner(ctx, userID, ag)
@@ -105,8 +119,13 @@ func (s *ChatService) Stream(ctx context.Context, userID int64, in *ChatInput) (
 	}
 
 	// ⑥ 事件包装：meta 先行 → 转发 → 终态落库
-	out := make(chan agent.Event, 128)
-	go s.pump(ctx, session, ag, userMsg, refs, runInput.Trace, events, out)
+	buffer := s.svcs.Cfg.Agent.EventBuffer
+	if buffer <= 0 {
+		buffer = 128
+	}
+	out := make(chan agent.Event, buffer)
+	started = true
+	go s.pump(ctx, cancel, chatRun{ID: runInput.RunID, Session: session, Agent: ag, UserMessage: userMsg, Refs: refs, Trace: runInput.Trace}, events, out)
 	return out, nil
 }
 
@@ -155,6 +174,14 @@ func (s *ChatService) buildRunInput(ctx context.Context, session *model.Session,
 	primary, fallback, err := s.svcs.ResolveModel(ctx, ag.ModelConfigID, derefOrZero(ag.FallbackModelID))
 	if err != nil {
 		return nil, nil, err
+	}
+	// DefaultChat can return a shared cached descriptor when configuration reads
+	// fail. Apply per-agent sampling to a request copy, never to the cache.
+	primaryCopy := *primary
+	primary = &primaryCopy
+	if fallback != nil {
+		fallbackCopy := *fallback
+		fallback = &fallbackCopy
 	}
 	// Agent 级采样参数覆盖
 	primary.Temperature = ag.Temperature
@@ -311,105 +338,6 @@ func (s *ChatService) hostDirectRunner() host.DirectRunner {
 	}
 }
 
-// pump 事件泵：转发事件流，同时消费终态做持久化与统计。
-func (s *ChatService) pump(
-	ctx context.Context,
-	session *model.Session, ag *model.Agent, userMsg *model.Message,
-	refs []engine.Ref, trace *observability.AgentTraceCollector,
-	events <-chan agent.Event, out chan<- agent.Event,
-) {
-	defer close(out)
-	repo := s.svcs.Deps.Repos.Session
-
-	// meta 先行：前端立即拿到会话与引用信息
-	send(out, agent.Evt(agent.TypeMeta, map[string]any{
-		"session_id": session.ID, "agent": ag.Name, "message_id": userMsg.ID,
-	}))
-
-	var (
-		content, reasoning, model_ string
-		promptTk, completionTk     int
-		toolCalls                  []llm.ToolCall
-		terminal                   bool
-	)
-	for ev := range events {
-		switch ev.Type {
-		case agent.TypeDelta:
-			content += strVal(ev.Data["content"])
-		case agent.TypeReasoning:
-			reasoning += strVal(ev.Data["content"])
-		case agent.TypeToolCall:
-			toolCalls = append(toolCalls, llm.ToolCall{
-				ID: strVal(ev.Data["id"]), Name: strVal(ev.Data["name"]), ArgsJSON: strVal(ev.Data["args"]),
-			})
-		case agent.TypeUsage:
-			promptTk = intOf(ev.Data["prompt_tokens"])
-			completionTk = intOf(ev.Data["completion_tokens"])
-			model_ = strVal(ev.Data["model"])
-		}
-		if ev.Type == agent.TypeDone || ev.Type == agent.TypeError {
-			terminal = true
-		}
-		send(out, ev)
-	}
-	if !terminal {
-		// 上游异常退出：补一个 error 终态，保证 SSE 协议完整
-		send(out, agent.EvtError(errcode.ErrInternal.Code, "流异常中断"))
-	}
-
-	// 助手消息落库（含决策链 trace）
-	assistant := &model.Message{
-		SessionID:        session.ID,
-		Role:             llm.RoleAssistant,
-		Content:          content,
-		ReasoningContent: reasoning,
-		ModelName:        model_,
-		PromptTokens:     promptTk,
-		CompletionTokens: completionTk,
-		Status:           model.MsgStatusDone,
-	}
-	if toolJSON, err := json.Marshal(toolCalls); err == nil && len(toolCalls) > 0 {
-		assistant.ToolCalls = toolJSON
-	}
-	if len(refs) > 0 {
-		if refJSON, err := json.Marshal(refs); err == nil {
-			assistant.Refs = refJSON
-		}
-	}
-	if trace != nil {
-		if traceJSON, err := json.Marshal(trace.Snapshot()); err == nil {
-			assistant.Metadata = traceJSON // 决策链可视化数据源
-		}
-	}
-	if err := repo.CreateMessage(context.Background(), assistant); err != nil {
-		observability.LogWarn("persist assistant message failed", "session_id", session.ID, "error", err.Error())
-	}
-	_ = repo.UpdateSessionStats(context.Background(), session.ID, int64(promptTk+completionTk))
-
-	// 首轮对话自动改标题
-	_ = repo.RetitleSession(context.Background(), session.ID, truncateTitle(userMsg.Content))
-
-	// 用量明细（成本面板）
-	_ = s.svcs.Deps.Repos.Usage.CreateUsage(context.Background(), &model.UsageLog{
-		UserID: session.UserID, AgentID: ag.ID,
-		SessionID: &session.ID, MessageID: assistant.ID, Scene: model.SceneChat,
-		Model: model_, PromptTokens: promptTk, CompletionTokens: completionTk,
-	})
-
-	// 异步长期记忆抽取（每 N 条消息触发，失败静默 —— 记忆是增强不是依赖）
-	extractEvery := s.svcs.Deps.Cfg.Agent.MemoryExtractEvery
-	if ag.MemoryLongEnabled && s.memory != nil && extractEvery > 0 {
-		go func() {
-			bgCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-			defer cancel()
-			msgs, err := repo.ListMessages(bgCtx, session.ID, extractEvery)
-			if err == nil && len(msgs) > 0 {
-				_ = s.memory.ExtractAndStore(bgCtx, session.UserID, &ag.ID, historyToLLM(msgs))
-			}
-		}()
-	}
-}
-
 // dangerousTools 解析危险工具集合。
 func (s *ChatService) dangerousTools(ctx context.Context, toolsJSON []byte) map[string]bool {
 	bindings, err := toolParseBindings(string(toolsJSON))
@@ -469,13 +397,6 @@ func historyToLLM(list []model.Message) []llm.Message {
 }
 
 // ---- 小工具 ----
-
-func send(out chan<- agent.Event, e agent.Event) {
-	select {
-	case out <- e:
-	default:
-	}
-}
 
 func strVal(v any) string {
 	s, _ := v.(string)

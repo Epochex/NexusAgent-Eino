@@ -2,20 +2,25 @@
 package api
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/cloudwego/hertz/pkg/app"
 
+	"github.com/chengpeng-cp/nexus-agent/internal/agent"
 	"github.com/chengpeng-cp/nexus-agent/internal/service"
 )
 
 // Handler HTTP 处理器集合（持有全部业务服务）。
 type Handler struct {
 	svcs *service.Services
+	chat interface {
+		Stream(context.Context, int64, *service.ChatInput) (<-chan agent.Event, error)
+	}
 }
 
 // New 构造。
-func New(svcs *service.Services) *Handler { return &Handler{svcs: svcs} }
+func New(svcs *service.Services) *Handler { return &Handler{svcs: svcs, chat: svcs.Chat} }
 
 // pathID 解析路径参数 :id。
 func pathID(c *app.RequestContext) (int64, error) {

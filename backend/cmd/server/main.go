@@ -15,6 +15,7 @@ import (
 	_ "net/http/pprof" // Ep18 演示：导入即把 pprof handler 注册到 DefaultServeMux
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -163,6 +164,7 @@ func run() error {
 		server.WithReadTimeout(30*time.Second),
 		server.WithWriteTimeout(0), // SSE 长连接不超时
 		server.WithIdleTimeout(120*time.Second),
+		server.WithSenseClientDisconnection(runtime.GOOS != "windows"),
 	)
 	root := h.Group("/")
 	// Tracing 放最外层：根 span 覆盖整条中间件链与 handler

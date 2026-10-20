@@ -13,9 +13,12 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"runtime"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
 
+	"github.com/chengpeng-cp/nexus-agent/internal/agent"
 	"github.com/chengpeng-cp/nexus-agent/internal/service"
 )
 
@@ -36,13 +39,15 @@ func (h *Handler) Chat(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	events, err := h.svcs.Chat.Stream(ctx, userID(c), &service.ChatInput{
+	streamCtx, cancel := context.WithCancel(ctx)
+	events, err := h.chat.Stream(streamCtx, userID(c), &service.ChatInput{
 		SessionID:     req.SessionID,
 		AgentID:       req.AgentID,
 		Content:       req.Content,
 		ModelConfigID: req.ModelConfigID,
 	})
 	if err != nil {
+		cancel()
 		Fail(c, err)
 		return
 	}
@@ -62,14 +67,46 @@ func (h *Handler) Chat(ctx context.Context, c *app.RequestContext) {
 	streamSpan := TakeRootSpan(c)
 
 	go func() {
+		defer cancel()
 		defer pw.Close()
 		if streamSpan != nil {
 			defer streamSpan.End()
 		}
-		for ev := range events {
-			data, err := json.Marshal(ev.Data)
-			if err != nil {
+		heartbeat := 15 * time.Second
+		// Hertz connstate does not support Windows. A small comment write wakes
+		// the body writer to notice a closed socket even while the model is idle.
+		if runtime.GOOS == "windows" {
+			heartbeat = 250 * time.Millisecond
+		}
+		ticker := time.NewTicker(heartbeat)
+		defer ticker.Stop()
+		for {
+			var ev agent.Event
+			select {
+			case <-streamCtx.Done():
+				return
+			case <-ticker.C:
+				if _, err := io.WriteString(pw, ": keepalive\n\n"); err != nil {
+					return
+				}
 				continue
+			case next, ok := <-events:
+				if !ok {
+					return
+				}
+				ev = next
+			}
+			payload := make(map[string]any, len(ev.Data)+3)
+			for key, value := range ev.Data {
+				payload[key] = value
+			}
+			payload["run_id"] = ev.RunID
+			payload["seq"] = ev.Seq
+			payload["time"] = ev.At
+			data, err := json.Marshal(payload)
+			if err != nil {
+				_ = pw.CloseWithError(err)
+				return
 			}
 			if _, werr := writeSSE(pw, ev.Type, data); werr != nil {
 				return // 客户端断开

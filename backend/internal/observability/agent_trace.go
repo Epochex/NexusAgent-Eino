@@ -5,6 +5,7 @@
 package observability
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -22,23 +23,23 @@ const (
 
 // TraceStep 决策链单步。
 type TraceStep struct {
-	Seq      int            `json:"seq"`
-	Type     string         `json:"type"`              // 见 Event* 常量
-	Agent    string         `json:"agent"`             // 产生事件的 agent 名称
-	Content  string         `json:"content"`           // 思考内容/问题/计划
-	Tool     string         `json:"tool,omitempty"`    // 工具名
-	Args     map[string]any `json:"args,omitempty"`    // 工具参数
-	Result   string         `json:"result,omitempty"`  // 观察/结果摘要
-	Elapsed  int64          `json:"elapsed_ms"`        // 该步耗时
-	Status   string         `json:"status,omitempty"`  // ok/error/timeout
-	Time     time.Time      `json:"time"`
+	Seq     int            `json:"seq"`
+	Type    string         `json:"type"`             // 见 Event* 常量
+	Agent   string         `json:"agent"`            // 产生事件的 agent 名称
+	Content string         `json:"content"`          // 思考内容/问题/计划
+	Tool    string         `json:"tool,omitempty"`   // 工具名
+	Args    map[string]any `json:"args,omitempty"`   // 工具参数
+	Result  string         `json:"result,omitempty"` // 观察/结果摘要
+	Elapsed int64          `json:"elapsed_ms"`       // 该步耗时
+	Status  string         `json:"status,omitempty"` // ok/error/timeout
+	Time    time.Time      `json:"time"`
 }
 
 // AgentTraceCollector 决策链收集器（一次 Agent 运行一个实例）。
 type AgentTraceCollector struct {
-	mu       sync.Mutex
-	steps    []TraceStep
-	startAt  time.Time
+	mu      sync.Mutex
+	steps   []*TraceStep
+	startAt time.Time
 }
 
 // NewAgentTrace 创建收集器。
@@ -57,8 +58,20 @@ func (t *AgentTraceCollector) Add(typ, agentName, content string) *TraceStep {
 		Content: content,
 		Time:    time.Now(),
 	}
+	t.steps = append(t.steps, &step)
+	return &step
+}
+
+// AddTool owns argument parsing and writes all step fields under the collector
+// lock. Callers must not mutate returned steps outside the collector methods.
+func (t *AgentTraceCollector) AddTool(agentName, tool, args string) *TraceStep {
+	var params map[string]any
+	_ = json.Unmarshal([]byte(args), &params)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	step := &TraceStep{Seq: len(t.steps) + 1, Type: EventAction, Agent: agentName, Content: tool, Tool: tool, Args: params, Time: time.Now()}
 	t.steps = append(t.steps, step)
-	return &t.steps[len(t.steps)-1]
+	return step
 }
 
 // Done 步骤完成：补耗时与结果。
@@ -75,7 +88,15 @@ func (t *AgentTraceCollector) Snapshot() []TraceStep {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	out := make([]TraceStep, len(t.steps))
-	copy(out, t.steps)
+	for i, step := range t.steps {
+		out[i] = *step
+		if step.Args != nil {
+			raw, _ := json.Marshal(step.Args)
+			var args map[string]any
+			_ = json.Unmarshal(raw, &args)
+			out[i].Args = args
+		}
+	}
 	return out
 }
 

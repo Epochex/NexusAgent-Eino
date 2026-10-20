@@ -99,7 +99,7 @@ func (r *EinoRunner) Run(ctx context.Context, in *RunInput) (<-chan agent.Event,
 	}
 	runCtx, cancel := context.WithTimeout(ctx, r.cfg.RunTimeout)
 	sink := newEventSink(r.cfg.EventBuffer, r.cfg.SendTimeout, input.RunID, cancel)
-	middleware := &runMiddleware{sink: sink, budget: r.cfg.InputTokenBudget, slots: make(chan struct{}, r.cfg.MaxConcurrentTools), trace: input.Trace}
+	middleware := &runMiddleware{sink: sink, budget: r.cfg.InputTokenBudget, slots: make(chan struct{}, r.cfg.MaxConcurrentTools), trace: input.Trace, agentName: input.AgentName}
 	a, err := adk.NewChatModelAgent(runCtx, &adk.ChatModelAgentConfig{Name: input.AgentName, Model: model, MaxIterations: input.MaxIterations, ToolsConfig: adk.ToolsConfig{ToolsNodeConfig: compose.ToolsNodeConfig{Tools: tools}}, Handlers: []adk.ChatModelAgentMiddleware{middleware}})
 	if err != nil {
 		cancel()
@@ -248,11 +248,12 @@ func (r *EinoRunner) loopEino(ctx context.Context, cancel context.CancelFunc, in
 
 type runMiddleware struct {
 	adk.BaseChatModelAgentMiddleware
-	sink   *eventSink
-	budget int
-	slots  chan struct{}
-	steps  atomic.Int64
-	trace  *observability.AgentTraceCollector
+	sink      *eventSink
+	budget    int
+	slots     chan struct{}
+	steps     atomic.Int64
+	trace     *observability.AgentTraceCollector
+	agentName string
 }
 
 func (m *runMiddleware) BeforeModelRewriteState(ctx context.Context, state *adk.ChatModelAgentState, _ *adk.ModelContext) (context.Context, *adk.ChatModelAgentState, error) {
@@ -305,9 +306,7 @@ func (m *runMiddleware) WrapInvokableToolCall(_ context.Context, next adk.Invoka
 			status = "denied"
 		}
 		if m.trace != nil {
-			step := m.trace.Add(observability.EventAction, "", name)
-			step.Tool = name
-			_ = parseArgsForTrace(step, args)
+			step := m.trace.AddTool(m.agentName, name, args)
 			m.trace.Done(step, output, status)
 		}
 		if sendErr := m.sink.Send(ctx, agent.EvtToolResult(id, output, time.Since(start).Milliseconds(), status)); sendErr != nil {
@@ -315,13 +314,4 @@ func (m *runMiddleware) WrapInvokableToolCall(_ context.Context, next adk.Invoka
 		}
 		return output, err
 	}, nil
-}
-
-func parseArgsForTrace(step *observability.TraceStep, args string) error {
-	var values map[string]any
-	if err := json.Unmarshal([]byte(args), &values); err != nil {
-		return err
-	}
-	step.Args = values
-	return nil
 }

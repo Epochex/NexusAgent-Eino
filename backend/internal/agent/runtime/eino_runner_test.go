@@ -14,6 +14,7 @@ import (
 	"github.com/chengpeng-cp/nexus-agent/internal/agent"
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
+	"github.com/chengpeng-cp/nexus-agent/internal/observability"
 	"github.com/chengpeng-cp/nexus-agent/internal/testutil/llmstub"
 	"github.com/chengpeng-cp/nexus-agent/internal/tool"
 )
@@ -106,6 +107,7 @@ func TestEinoRunnerReActRoundTrip(t *testing.T) {
 		}
 		answer(w, "result 42")
 	}, runtimeTools{}, 4)
+	in.Trace = observability.NewAgentTrace()
 	before := append([]llm.Message(nil), in.Messages...)
 	events := collect(t, r, in)
 	terminal(t, events, agent.TypeDone)
@@ -130,6 +132,10 @@ func TestEinoRunnerReActRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, in.Messages) {
 		t.Fatal("runner mutated caller messages")
+	}
+	steps := in.Trace.Snapshot()
+	if len(steps) < 2 || steps[0].Agent != "test" || steps[0].Tool != "calculate" || steps[0].Result != "42" {
+		t.Fatalf("tool trace lost identity/result: %+v", steps)
 	}
 }
 
