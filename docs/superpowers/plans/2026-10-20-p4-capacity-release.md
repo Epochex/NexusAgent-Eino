@@ -32,9 +32,9 @@
 
 **Interfaces:** shared lease Acquire/Renew/Release scoped global/owner/provider; atomic claim combines ready work and capacity, bounded queue and expiry; control APIs remain responsive.
 
-- [ ] Write real multi-process PG tests exceeding global/user/provider limits, expired owner, approval wait and queue overload; RED.
-- [ ] Implement transactional shared quotas and fair ready claims, explicit overload/backoff/deadline; bounded version graph cache only if profile supports it.
-- [ ] Run competing worker processes and resource recovery tests; GREEN and commit.
+- [x] Write real multi-process PG tests exceeding global/user/provider limits, expired owner, approval wait and queue overload; RED.
+- [x] Implement transactional shared quotas and fair ready claims, explicit overload/backoff/deadline; bounded version graph cache only if profile supports it.
+- [x] Run competing worker processes and resource recovery tests; GREEN and commit (`3cfb6d3`; full Linux gate passed).
 
 ### Task 2: Open-load and failure experiments
 

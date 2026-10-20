@@ -23,8 +23,20 @@ HTTP peer calls. All 18 runs completed, peak actual concurrency was four, and
 all three owners progressed. Killing a holder did not create extra capacity
 before expiry; the survivor reclaimed expired work. The peer saw 20 calls due
 to two safe read-only recoveries. This does not assert remote write exactly-once.
-The Windows run passed in 26.018 seconds; Linux full-matrix result is recorded
-separately after completion.
+The Windows run passed in 26.018 seconds. The subsequent Linux 4 CPU/4 GiB
+verification passed vet, all-package race tests, full real-infrastructure/process
+integration tests, and builds of server/worker/cli/migrate. Integration package
+times: execution 235.379 s, service 204.264 s, API 25.968 s, repo 6.538 s,
+ingestion 23.704 s, vector 5.230 s, memory 26.361 s, tool 2.913 s, A2A 7.410 s,
+capacity 5.085 s. This is correctness-test resource allocation, separate from
+the specified capacity workload's server+worker 4 CPU/8 GiB budget.
+
+The first full matrix failed because the legacy MCP upgrade fixture stopped at
+migration 011 before constructing the current service, which requires 013. It
+now seeds the old state at 010 and applies 011–013 before startup; the original
+manual-review, credential-redaction, and explicit-encryption assertions remain.
+Its focused regression and the final full matrix passed. Production startup
+continues to fail closed on missing quota schema.
 
 The burst fixture initially used GORM's unbounded open-connection default and
 two idle connections. On Windows, opening 48 fresh connections caused variable
