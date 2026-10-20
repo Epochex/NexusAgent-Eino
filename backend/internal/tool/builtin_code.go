@@ -3,6 +3,7 @@ package tool
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
+	"github.com/chengpeng-cp/nexus-agent/internal/security"
 )
 
 // RegisterCodeExec 注册 code_exec（沙箱执行 + 审计落库）。
@@ -22,8 +24,15 @@ func RegisterCodeExec(r Registry, sandbox *Sandbox, db *gorm.DB) {
 		if language == "" || code == "" {
 			return "", fmt.Errorf("language and code are required")
 		}
+		owner, ok := security.UserIDFromContext(ctx)
+		if !ok {
+			return "", fmt.Errorf("authenticated identity required for code execution")
+		}
 		if sandbox == nil {
 			return "", fmt.Errorf("sandbox disabled (enable in config)")
+		}
+		if db == nil {
+			return "", fmt.Errorf("code execution requires an audit database")
 		}
 
 		result, err := sandbox.Run(ctx, language, code)
@@ -35,7 +44,8 @@ func RegisterCodeExec(r Registry, sandbox *Sandbox, db *gorm.DB) {
 		if db != nil {
 			sum := sha256.Sum256([]byte(code))
 			exec := &model.SandboxExecution{
-				ToolCallID: fmt.Sprintf("exec_%d", timeNowUnixMilli()),
+				UserID:     owner,
+				ToolCallID: "exec_" + rand.Text(),
 				Language:   language,
 				CodeHash:   fmt.Sprintf("%x", sum),
 				ExitCode:   result.ExitCode,

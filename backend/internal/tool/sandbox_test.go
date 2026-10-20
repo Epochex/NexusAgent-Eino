@@ -1,9 +1,21 @@
 package tool
 
 import (
+	"context"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestCodeExecRejectsMissingIdentityBeforeRuntime(t *testing.T) {
+	reg := NewRegistry()
+	RegisterCodeExec(reg, nil, nil)
+	handler, _ := reg.Get("code_exec")
+	_, err := handler(context.Background(), map[string]any{"language": "shell", "code": "printf unauthenticated"}, "")
+	if err == nil || !strings.Contains(err.Error(), "identity") {
+		t.Fatal("missing actor was not rejected before touching the runtime", err)
+	}
+}
 
 func TestSandboxRejectsUnboundedOrMutableConfiguration(t *testing.T) {
 	base := SandboxConfig{Image: "python@sha256:2c285c669cc837aa3bcf1af23ea1932b7b5214f9c9d3aad22417446ad91cb4fb", Memory: "128m", CPUs: "0.5", PoolSize: 1, Timeout: time.Second}

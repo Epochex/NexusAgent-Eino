@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chengpeng-cp/nexus-agent/internal/security"
 	"github.com/chengpeng-cp/nexus-agent/internal/testutil/testpg"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
@@ -132,7 +133,7 @@ func TestCodeExecAuditFailureIsNotReportedAsSuccess(t *testing.T) {
 	reg := NewRegistry()
 	RegisterCodeExec(reg, s, db)
 	handler, _ := reg.Get("code_exec")
-	output, err := handler(context.Background(), map[string]any{"language": "shell", "code": "printf actual-result"}, "")
+	output, err := handler(security.WithUserID(context.Background(), 1), map[string]any{"language": "shell", "code": "printf actual-result"}, "")
 	if err == nil || output != "" || !strings.Contains(err.Error(), "audit") {
 		t.Fatal("uncommitted audit produced success", output, err)
 	}
