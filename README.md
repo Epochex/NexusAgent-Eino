@@ -1,4 +1,19 @@
-# NexusAgent —— 从零手写 Go 智能体平台（教学项目源码）
+# NexusAgent-Eino
+
+基于 [chengpeng-cp/nexus-agent](https://github.com/chengpeng-cp/nexus-agent) 的 Go + Eino 生产工程化改造。保留完整平台功能，重点推进可靠执行、审批恢复、工具权限、数据一致性与可验证的性能。
+
+**当前状态：已导入上游源码与提交历史，已形成生产化设计；Eino 迁移、可靠性改造和性能目标尚未完成或验证。** 当前代码仍为 Hertz + 自研执行循环，下面原项目介绍中的 Eino 生产版描述不能作为已实现依据。
+
+- [生产化设计与分阶段验收](docs/superpowers/specs/2026-10-20-nexus-agent-eino-design.md)
+- [上游来源与改造归属](UPSTREAM.md)
+
+目标架构：Hertz API + Eino ADK/Graph + PostgreSQL 运行与审批状态 + Redis Streams Worker，沿用 Milvus、MinIO、OpenTelemetry 与 Prometheus。优先完成执行语义与故障恢复，再以真实测试推进吞吐和资源效率。
+
+---
+
+以下保留上游项目介绍与启动说明：
+
+## NexusAgent —— 从零手写 Go 智能体平台（教学项目源码）
 
 <div align="center">
 

@@ -3,6 +3,7 @@
 # 仅保留 images/（README 中的微信/小红书二维码引用它）
 /docs/*
 !/docs/images/
+!/docs/superpowers/
 
 # ---- 系统与临时文件 ----
 .DS_Store
