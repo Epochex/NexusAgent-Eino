@@ -10,6 +10,7 @@ import (
 
 // Executor 工具执行器：Agent 运行时的唯一工具入口。
 type Executor interface {
+	ListContext(ctx context.Context, agentToolsJSON string) ([]llm.ToolDef, error)
 	// List 当前可用工具定义（已按 Agent 配置过滤并附加默认参数）。
 	List(agentToolsJSON string) ([]llm.ToolDef, error)
 	// Invoke 执行一次工具调用：
@@ -20,9 +21,9 @@ type Executor interface {
 
 // ToolResult 工具执行结果（含指标，供事件流与 trace 使用）。
 type ToolResult struct {
-	Output   string `json:"output"`    // 给模型的观察文本
+	Output   string `json:"output"` // 给模型的观察文本
 	Elapsed  int64  `json:"elapsed_ms"`
-	Status   string `json:"status"`    // ok/error/timeout
+	Status   string `json:"status"` // ok/error/timeout
 	ToolName string `json:"tool"`
 }
 

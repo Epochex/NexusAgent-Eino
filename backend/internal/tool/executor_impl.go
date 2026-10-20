@@ -51,6 +51,13 @@ func NewExecutor(repo ToolRepo, reg Registry, cfg ExecutorConfig) *ProdExecutor 
 // List 按 Agent 的工具绑定 JSON（[{tool_id, config}]）产出模型可见的工具定义。
 // 兼容只带 tool_id 的绑定（前端表单）：按 ID 查库回填定义；带 tool_code 的按 code 查询。
 func (e *ProdExecutor) List(agentToolsJSON string) ([]llm.ToolDef, error) {
+	return e.ListContext(context.Background(), agentToolsJSON)
+}
+
+func (e *ProdExecutor) ListContext(ctx context.Context, agentToolsJSON string) ([]llm.ToolDef, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	bindings, err := ParseAgentBindings(agentToolsJSON)
 	if err != nil {
 		return nil, err
@@ -59,7 +66,6 @@ func (e *ProdExecutor) List(agentToolsJSON string) ([]llm.ToolDef, error) {
 		return nil, nil
 	}
 
-	ctx := context.Background()
 	// 按绑定中已有的标识分两路查询（tool_id 必有；tool_code 可选）
 	ids := make([]int64, 0, len(bindings))
 	codes := make([]string, 0, len(bindings))
@@ -84,20 +90,31 @@ func (e *ProdExecutor) List(agentToolsJSON string) ([]llm.ToolDef, error) {
 
 	defs := make([]llm.ToolDef, 0, len(tools))
 	seen := map[string]bool{}
+	resolvedIDs := map[int64]bool{}
 	for _, t := range tools {
+		if t.Status != 1 {
+			continue
+		}
+		resolvedIDs[t.ID] = true
 		if seen[t.Code] { // 两条查询路径可能重复命中
 			continue
 		}
 		seen[t.Code] = true
 		var params map[string]any
 		if jsonErr := json.Unmarshal(t.Parameters, &params); jsonErr != nil {
-			params = map[string]any{"type": "object", "properties": map[string]any{}}
+			return nil, fmt.Errorf("invalid schema for tool %s: %w", t.Code, jsonErr)
 		}
 		defs = append(defs, llm.ToolDef{
 			Name:        t.Code,
 			Description: t.Description,
 			Parameters:  params,
+			Dangerous:   t.IsDangerous,
 		})
+	}
+	for _, binding := range bindings {
+		if binding.ToolCode != "" && !seen[binding.ToolCode] || binding.ToolCode == "" && !resolvedIDs[binding.ToolID] {
+			return nil, errcode.ErrToolNotFound
+		}
 	}
 	return defs, nil
 }
