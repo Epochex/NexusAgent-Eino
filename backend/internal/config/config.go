@@ -156,7 +156,9 @@ type A2A struct {
 }
 
 type Search struct {
-	SearxngURL string `mapstructure:"searxng_url"`
+	SearxngURL         string   `mapstructure:"searxng_url"`
+	HTTPDomains        []string `mapstructure:"http_domains"`
+	HTTPPrivateOrigins []string `mapstructure:"http_private_origins"`
 }
 
 // Load 加载配置。configDir 为空时使用 ./configs 与可执行文件旁的 configs/。

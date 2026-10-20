@@ -106,7 +106,11 @@ func run() error {
 	repos := repo.New(db)
 	reg := tool.NewRegistry()
 	tool.RegisterSimple(reg)
-	tool.RegisterWeb(reg, tool.SearchConfig{SearxngURL: cfg.Search.SearxngURL})
+	closeWeb, err := tool.RegisterWeb(reg, tool.SearchConfig{SearxngURL: cfg.Search.SearxngURL, DomainWhitelist: cfg.Search.HTTPDomains, HTTPPrivateOrigins: cfg.Search.HTTPPrivateOrigins})
+	if err != nil {
+		return fmt.Errorf("web tools: %w", err)
+	}
+	defer closeWeb()
 	tool.RegisterFiles(reg, tool.FileOpsConfig{BaseDir: "./data/files", MaxSize: 10 << 20})
 	tool.RegisterDBQuery(reg, db)
 	if cfg.Sandbox.Enabled {

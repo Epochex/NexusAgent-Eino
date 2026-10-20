@@ -110,3 +110,5 @@ a2a:
 
 search:
   searxng_url: http://127.0.0.1:8081/search
+  http_domains: []                # 空列表关闭 http_client；仅接受域名或 IP，不含端口/通配符
+  http_private_origins: []        # 用户 HTTP 工具的独立私网许可，不继承 MCP 出站许可
