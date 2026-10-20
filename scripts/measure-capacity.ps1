@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$Fixture,
-    [ValidateSet('Pilot','Grid','Baseline','All','Faults')][string]$Suite='Pilot',
+    [ValidateSet('Pilot','Grid','Grid500','Baseline','All','Faults')][string]$Suite='Pilot',
     [string]$Driver,
     [string]$OutputDirectory
 )
@@ -14,13 +14,16 @@ New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 if (-not $env:NX_TEST_DATABASE_DSN) { $env:NX_TEST_DATABASE_DSN='postgres://postgres@127.0.0.1:55449/nexus_acceptance_test?sslmode=disable' }
 $campaignID=[Guid]::NewGuid().ToString('N').Substring(0,8)
 $binaryRoot=Split-Path -Parent $Driver
+$frozenManifestPath=Join-Path (Split-Path -Parent $Fixture) 'manifest.json'
+$frozenRevision=if(Test-Path -LiteralPath $frozenManifestPath){(Get-Content -LiteralPath $frozenManifestPath -Raw|ConvertFrom-Json).source_revision}else{$null}
 [ordered]@{
     campaign_id=$campaignID; source_revision=(& git -C $repoRoot rev-parse HEAD).Trim()
     driver_hash=(Get-FileHash -LiteralPath $Driver -Algorithm SHA256).Hash
     app_server_hash=(Get-FileHash -LiteralPath (Join-Path $binaryRoot 'server') -Algorithm SHA256).Hash
     app_worker_hash=(Get-FileHash -LiteralPath (Join-Path $binaryRoot 'worker') -Algorithm SHA256).Hash
+    app_frozen_source_revision=$frozenRevision
     primary_mix='80% durable LLM-MCP-LLM / 20% Eino ADK Chat-MCP-final SSE'
-    sse='Fixed subscriber slots; Chat temporarily replaces one idle subscription; workflow subscriptions return to waiting fixtures after completion. Reconnect gaps are included in sampled actual count.'
+    sse='Fixed slots, initial ramp batches32; all subscriptions must exist before arrival window. Chat replaces one idle slot; workflow subscriptions return to waiting fixtures. Actual counts, ramp duration and setup/phase errors are reported.'
     model_delay_ms=250; tool_delay_ms=100
     platform='server 2 CPU/4GiB + worker 2 CPU/4GiB; peer, driver and all infrastructure external'
     source_dirty=[bool]((& git -C $repoRoot status --porcelain) -join '')
@@ -38,8 +41,9 @@ function Invoke-CapacityStage([string]$Name,[int]$SSE,[int]$Slots,[int]$Rate,[st
 Push-Location -LiteralPath $repoRoot
 try {
     if ($Suite -eq 'Pilot') { Invoke-CapacityStage pilot 50 8 1 '30s' }
-    if ($Suite -in @('Grid','All')) {
-        foreach ($sse in @(50,200,500)) { foreach ($slots in @(8,32,64)) { foreach ($rate in @(1,5,10,20)) {
+    if ($Suite -in @('Grid','Grid500','All')) {
+        $sseValues=if($Suite -eq 'Grid500'){@(500)}else{@(50,200,500)}
+        foreach ($sse in $sseValues) { foreach ($slots in @(8,32,64)) { foreach ($rate in @(1,5,10,20)) {
             Invoke-CapacityStage "grid-s$sse-c$slots-r$rate" $sse $slots $rate '30s'
         } } }
     }

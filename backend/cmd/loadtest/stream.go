@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -80,14 +83,65 @@ type streamPool struct {
 	seeds                          []streamTarget
 	active, peak, opened, failures atomic.Int64
 	observe                        func(string, float64)
+	phase                          atomic.Value
+	causeMu                        sync.Mutex
+	causes                         map[string]int64
 }
 
 func newStreamPool(ctx context.Context, api *apiClient, seeds []streamTarget, observe func(string, float64)) *streamPool {
-	p := &streamPool{ctx: ctx, client: api, seeds: seeds, observe: observe}
+	p := &streamPool{ctx: ctx, client: api, seeds: seeds, observe: observe, causes: map[string]int64{}}
+	p.phase.Store("setup")
 	for range seeds {
 		p.slots = append(p.slots, &streamSlot{})
 	}
 	return p
+}
+func (p *streamPool) recordFailure(ctx context.Context, reason string) {
+	if ctx.Err() != nil {
+		return
+	}
+	p.failures.Add(1)
+	key := p.phase.Load().(string) + "_" + reason
+	p.causeMu.Lock()
+	defer p.causeMu.Unlock()
+	if len(p.causes) < 32 || p.causes[key] > 0 {
+		p.causes[key]++
+	}
+}
+
+// All subscribers exist before timing; warmup is not an instantaneous TCP flood.
+func (p *streamPool) start(batch int, timeout time.Duration) error {
+	if batch < 1 {
+		return fmt.Errorf("invalid subscription ramp batch")
+	}
+	deadline := time.Now().Add(timeout)
+	for i := range p.slots {
+		if err := p.change(i, &p.seeds[i], false); err != nil {
+			return err
+		}
+		if (i+1)%batch != 0 && i+1 != len(p.slots) {
+			continue
+		}
+		for p.active.Load() < int64(i+1) {
+			if p.ctx.Err() != nil {
+				return p.ctx.Err()
+			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf("SSE fixture incomplete: %d/%d", p.active.Load(), len(p.slots))
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	return nil
+}
+func (p *streamPool) failureCauses() map[string]int64 {
+	p.causeMu.Lock()
+	defer p.causeMu.Unlock()
+	out := map[string]int64{}
+	for k, v := range p.causes {
+		out[k] = v
+	}
+	return out
 }
 func (p *streamPool) change(index int, target *streamTarget, pause bool) error {
 	slot := p.slots[index]
@@ -140,13 +194,29 @@ func (p *streamPool) subscribe(ctx context.Context, target streamTarget) {
 	res, err := p.client.http.Do(req)
 	if err != nil {
 		if ctx.Err() == nil {
-			p.failures.Add(1)
+			reason := "transport_error"
+			var ne net.Error
+			if errors.As(err, &ne) && ne.Timeout() {
+				reason = "transport_timeout"
+			}
+			var oe *net.OpError
+			if errors.As(err, &oe) && oe.Op == "dial" {
+				reason = "dial_error"
+				if oe.Timeout() {
+					reason = "dial_timeout"
+				}
+			}
+			var errno syscall.Errno
+			if errors.As(err, &errno) {
+				reason += fmt.Sprintf("_errno_%d", errno)
+			}
+			p.recordFailure(ctx, reason)
 		}
 		return
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 || !strings.Contains(res.Header.Get("Content-Type"), "text/event-stream") {
-		p.failures.Add(1)
+		p.recordFailure(ctx, fmt.Sprintf("http_%d_content_type", res.StatusCode))
 		return
 	}
 	p.opened.Add(1)
@@ -165,6 +235,6 @@ func (p *streamPool) subscribe(ctx context.Context, target streamTarget) {
 		}
 	})
 	if err != nil && ctx.Err() == nil {
-		p.failures.Add(1)
+		p.recordFailure(ctx, "read_error")
 	}
 }

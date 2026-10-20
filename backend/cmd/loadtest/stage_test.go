@@ -17,3 +17,11 @@ func TestCapacityTargetDoesNotHideOffersAfterWindow(t *testing.T) {
 		t.Fatal("late HTTP offers hidden behind scheduled callback counts")
 	}
 }
+
+func TestCapacityTargetDoesNotHideClientTerminalLossBehindDBSuccess(t *testing.T) {
+	r := &stageReport{Wire: 1, Arrivals: arrivalSnapshot{Target: 1}, Outcomes: map[string]int{"chat_missing_terminal": 1}, Database: &databaseAudit{ChatTotal: 1, WorkflowStates: map[string]int{}, ChatStates: map[string]int{"done": 1}}, Latency: map[string]distribution{"control_query": {Count: 1}, "control_approve": {Count: 1}, "control_cancel": {Count: 1}}}
+	assessStage(r)
+	if r.Passed {
+		t.Fatal("missing client terminal hidden behind persisted success")
+	}
+}

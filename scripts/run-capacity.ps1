@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('BootstrapOnly','Pilot','Grid','Baseline','All','Faults')]
+    [ValidateSet('BootstrapOnly','Pilot','Grid','Grid500','Baseline','All','Faults')]
     [string]$Suite = 'BootstrapOnly',
     [string]$Go = 'go',
     [switch]$SkipBuild,

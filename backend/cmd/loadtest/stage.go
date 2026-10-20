@@ -43,6 +43,9 @@ type stageReport struct {
 	PeerMismatches                  int                     `json:"peer_completed_run_mismatches"`
 	Peer                            any                     `json:"controlled_peer"`
 	SSEOpened, SSEFailures, SSEPeak int64
+	SSESetupFailures                int64
+	SSEOpenRampMS                   float64          `json:"sse_open_ramp_ms"`
+	SSEFailureCauses                map[string]int64 `json:"sse_failure_causes"`
 	Samples                         []resourceSample `json:"resource_samples"`
 	Passed                          bool             `json:"passed"`
 	Gaps                            []string         `json:"gaps"`
@@ -206,18 +209,13 @@ func runStage(parent context.Context, fixturePath, out string, cfg stageConfig) 
 	streamCtx, stopStreams := context.WithCancel(ctx)
 	defer stopStreams()
 	pool := newStreamPool(streamCtx, api, seeds[:cfg.SSE], stats.latencyValue)
-	for i := range pool.slots {
-		if err = pool.change(i, &pool.seeds[i], false); err != nil {
-			return err
-		}
+	rampStart := time.Now()
+	if err = pool.start(32, 20*time.Second); err != nil {
+		return err
 	}
-	ready := time.Now().Add(20 * time.Second)
-	for pool.active.Load() != int64(cfg.SSE) && time.Now().Before(ready) {
-		time.Sleep(20 * time.Millisecond)
-	}
-	if pool.active.Load() != int64(cfg.SSE) {
-		return fmt.Errorf("SSE fixture failed to establish requested connections: %d/%d", pool.active.Load(), cfg.SSE)
-	}
+	rampMS := float64(time.Since(rampStart)) / 1e6
+	setupFailures := pool.failures.Load()
+	pool.phase.Store("load")
 	report := &stageReport{Config: cfg, Prefix: prefix, Started: time.Now().UTC()}
 	resourceFile, err := os.OpenFile(out+".resources.jsonl", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
@@ -355,6 +353,7 @@ func runStage(parent context.Context, fixturePath, out string, cfg stageConfig) 
 	stopControls()
 	<-controlsDone
 	phase.Store("drain")
+	pool.phase.Store("drain")
 	drainCtx, stopDrain := context.WithTimeout(ctx, 2*time.Minute)
 	err = arrival.wait(drainCtx)
 	stopDrain()
@@ -421,6 +420,9 @@ func runStage(parent context.Context, fixturePath, out string, cfg stageConfig) 
 	report.WireAfterWindow = wireAfter.Load()
 	report.SSEOpened = pool.opened.Load()
 	report.SSEFailures = pool.failures.Load()
+	report.SSESetupFailures = setupFailures
+	report.SSEOpenRampMS = rampMS
+	report.SSEFailureCauses = pool.failureCauses()
 	report.SSEPeak = pool.peak.Load()
 	report.Outcomes = stats.outcomes
 	report.Errors = stats.errors
@@ -544,6 +546,9 @@ func controlLoop(ctx context.Context, api *apiClient, seeds []streamTarget, stat
 	}
 }
 func assessStage(r *stageReport) {
+	if r.Arrivals.Failed > 0 || r.Outcomes["chat_missing_terminal"] > 0 {
+		r.Gaps = append(r.Gaps, "client request or terminal delivery failed independently of database success")
+	}
 	if r.WireAfterWindow > 0 {
 		r.Gaps = append(r.Gaps, "actual HTTP offers occurred after the scheduled arrival window")
 	}
