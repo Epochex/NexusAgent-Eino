@@ -98,3 +98,27 @@ func TestGatewayDoesNotFallbackAfterPartialOutput(t *testing.T) {
 		t.Fatal("partial response was silently replayed on fallback")
 	}
 }
+
+func TestGatewayQueueTimeoutDoesNotOpenProviderCircuit(t *testing.T) {
+	g, desc, entered := gatewayFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	stream, _, err := g.ChatStream(ctx, desc, nil, &ChatRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	defer func() {
+		cancel()
+		for range stream {
+		}
+	}()
+	for range 20 {
+		waiting, stop := context.WithTimeout(context.Background(), time.Millisecond)
+		_, _, _ = g.ChatStream(waiting, desc, nil, &ChatRequest{})
+		stop()
+	}
+	_, breaker, _ := g.providerFor(desc.ProviderCode)
+	if !breaker.Allow() {
+		t.Fatal("local queue deadlines opened the healthy provider circuit")
+	}
+}

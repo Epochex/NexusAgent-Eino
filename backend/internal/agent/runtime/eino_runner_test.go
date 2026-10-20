@@ -291,3 +291,20 @@ func TestEinoRunnerBoundsGeneratedOutput(t *testing.T) {
 	r.cfg.MaxModelOutputBytes = 1024
 	terminal(t, collect(t, r, in), agent.TypeError)
 }
+
+func TestEinoRunnerTraceMeasuresToolExecution(t *testing.T) {
+	var requests atomic.Int32
+	r, in := testRunner(t, func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			toolAnswer(w, 1)
+		} else {
+			answer(w, "done")
+		}
+	}, runtimeTools{invoke: func(context.Context) string { time.Sleep(20 * time.Millisecond); return "42" }}, 3)
+	in.Trace = observability.NewAgentTrace()
+	collect(t, r, in)
+	steps := in.Trace.Snapshot()
+	if len(steps) == 0 || steps[0].Elapsed < 15 {
+		t.Fatalf("trace omitted tool execution duration: %+v", steps)
+	}
+}

@@ -290,6 +290,10 @@ func (m *runMiddleware) WrapInvokableToolCall(_ context.Context, next adk.Invoka
 			return "", ctx.Err()
 		}
 		start := time.Now()
+		var traceStep *observability.TraceStep
+		if m.trace != nil {
+			traceStep = m.trace.AddTool(m.agentName, name, args)
+		}
 		output, err := next(ctx, args, opts...)
 		status := "ok"
 		var observation struct {
@@ -306,8 +310,7 @@ func (m *runMiddleware) WrapInvokableToolCall(_ context.Context, next adk.Invoka
 			status = "denied"
 		}
 		if m.trace != nil {
-			step := m.trace.AddTool(m.agentName, name, args)
-			m.trace.Done(step, output, status)
+			m.trace.Done(traceStep, output, status)
 		}
 		if sendErr := m.sink.Send(ctx, agent.EvtToolResult(id, output, time.Since(start).Milliseconds(), status)); sendErr != nil {
 			return "", sendErr

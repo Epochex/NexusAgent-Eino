@@ -57,10 +57,11 @@ func main() {
 
 // Client API 客户端。
 type Client struct {
-	addr   string
-	token  string
-	agent  int64
-	http   *http.Client
+	addr    string
+	token   string
+	agent   int64
+	session string
+	http    *http.Client
 }
 
 // NewClient 构造。
@@ -95,7 +96,7 @@ func (c *Client) Login(user, pass string) error {
 
 // Chat 发起一次 SSE 流式对话并渲染到终端。
 func (c *Client) Chat(content string) error {
-	body, _ := json.Marshal(map[string]any{"content": content, "agent_id": c.agent})
+	body, _ := json.Marshal(map[string]any{"content": content, "agent_id": c.agent, "session_id": c.session})
 	req, err := http.NewRequest("POST", c.addr+"/api/v1/chat/stream", strings.NewReader(string(body)))
 	if err != nil {
 		return err
@@ -124,13 +125,28 @@ func (c *Client) Chat(content string) error {
 			event = strings.TrimPrefix(line, "event: ")
 		case strings.HasPrefix(line, "data: "):
 			data := strings.TrimPrefix(line, "data: ")
+			var payload map[string]any
+			if decodeErr := json.Unmarshal([]byte(data), &payload); decodeErr != nil {
+				return fmt.Errorf("invalid SSE data: %w", decodeErr)
+			}
+			if event == "meta" {
+				if session, ok := payload["session_id"].(string); ok && session != "" {
+					c.session = session
+				}
+			}
+			if event == "error" {
+				return fmt.Errorf("chat failed: %v", payload["message"])
+			}
 			render(event, data)
+			if event == "done" {
+				return nil
+			}
 		case line == "" && event != "":
 			event = ""
 		}
 		if err != nil {
 			if err == io.EOF {
-				return nil
+				return io.ErrUnexpectedEOF
 			}
 			return err
 		}

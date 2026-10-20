@@ -72,11 +72,13 @@ func (g *Gateway) runWithGuard(ctx context.Context, desc *ModelDescriptor, fn fu
 	}
 
 	start := time.Now()
+	providerAttempted := false
 	err := RetryDo(ctx, g.retryCfg, func(ctx context.Context) error {
 		if aErr := sem.Acquire(ctx); aErr != nil {
 			return aErr
 		}
 		defer sem.Release()
+		providerAttempted = true
 		return fn(p)
 	})
 
@@ -89,7 +91,9 @@ func (g *Gateway) runWithGuard(ctx context.Context, desc *ModelDescriptor, fn fu
 		m.LLMRequests.WithLabelValues(desc.ModelName, status).Inc()
 		m.LLMLatency.WithLabelValues(desc.ModelName).Observe(time.Since(start).Seconds())
 	}
-	breaker.Record(err == nil)
+	if providerAttempted && !errors.Is(err, context.Canceled) {
+		breaker.Record(err == nil)
+	}
 	return err
 }
 
@@ -211,11 +215,13 @@ func (g *Gateway) guardStream(ctx context.Context, desc *ModelDescriptor, req *C
 	streamCtx, cancel := context.WithCancel(ctx)
 	start := time.Now()
 	var source <-chan StreamEvent
+	providerAttempted := false
 	err := RetryDo(streamCtx, g.retryCfg, func(ctx context.Context) error {
 		if err := sem.Acquire(ctx); err != nil {
 			return err
 		}
 		var callErr error
+		providerAttempted = true
 		source, callErr = p.ChatStream(ctx, desc, req)
 		if callErr != nil {
 			sem.Release()
@@ -224,7 +230,7 @@ func (g *Gateway) guardStream(ctx context.Context, desc *ModelDescriptor, req *C
 	})
 	if err != nil {
 		cancel()
-		g.finishStream(desc, breaker, start, err, Usage{})
+		g.finishStream(desc, breaker, start, err, Usage{}, providerAttempted)
 		return nil, err
 	}
 	out := make(chan StreamEvent, 64)
@@ -234,7 +240,7 @@ func (g *Gateway) guardStream(ctx context.Context, desc *ModelDescriptor, req *C
 		defer close(out)
 		defer cancel()
 		defer sem.Release()
-		defer func() { g.finishStream(desc, breaker, start, streamErr, usage) }()
+		defer func() { g.finishStream(desc, breaker, start, streamErr, usage, true) }()
 		for {
 			select {
 			case <-streamCtx.Done():
@@ -265,9 +271,9 @@ func (g *Gateway) guardStream(ctx context.Context, desc *ModelDescriptor, req *C
 	return out, nil
 }
 
-func (g *Gateway) finishStream(desc *ModelDescriptor, breaker *CircuitBreaker, start time.Time, err error, usage Usage) {
+func (g *Gateway) finishStream(desc *ModelDescriptor, breaker *CircuitBreaker, start time.Time, err error, usage Usage, providerAttempted bool) {
 	// Caller cancellation is neither a provider failure nor a breaker sample.
-	if !errors.Is(err, context.Canceled) {
+	if providerAttempted && !errors.Is(err, context.Canceled) {
 		breaker.Record(err == nil)
 	}
 	status := "ok"
