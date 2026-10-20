@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 // Agent Agent 配置（host 负责路由聚合，expert 负责专项执行）。
@@ -47,23 +48,30 @@ type AgentToolBinding struct {
 
 // Tool 工具（builtin / mcp / custom）。
 type Tool struct {
-	ID            int64          `gorm:"primaryKey" json:"id"`
-	Code          string         `gorm:"size:64;uniqueIndex" json:"code"`
-	Name          string         `gorm:"size:128" json:"name"`
-	Type          string         `gorm:"size:20" json:"type"`
-	Description   string         `gorm:"type:text" json:"description"` // 给模型看
-	Parameters    datatypes.JSON `gorm:"type:jsonb" json:"parameters"` // JSON Schema
-	Handler       string         `gorm:"size:64" json:"handler,omitempty"`
-	MCPServerID   *int64         `json:"mcp_server_id,omitempty"`
-	Endpoint      string         `gorm:"size:512" json:"endpoint,omitempty"`
-	AuthConfig    datatypes.JSON `gorm:"type:jsonb" json:"auth_config,omitempty"` // 加密
-	DefaultConfig datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"default_config"`
-	TimeoutMs     int            `gorm:"default:30000" json:"timeout_ms"`
-	IsDangerous   bool           `json:"is_dangerous"` // HITL 审批依据
-	ReplayPolicy  string         `gorm:"size:16;default:manual" json:"replay_policy"`
-	Status        int16          `json:"status"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	PolicyReviewedBy *int64         `json:"policy_reviewed_by,omitempty"`
+	PolicyReviewedAt *time.Time     `json:"policy_reviewed_at,omitempty"`
+	ReplayEvidence   string         `json:"replay_evidence,omitempty"`
+	SourceIdentity   string         `gorm:"-" json:"-"`
+	MCPName          string         `json:"mcp_name,omitempty"`
+	MCPConfigVersion int64          `json:"-"`
+	BindingVersion   int64          `json:"binding_version"`
+	ID               int64          `gorm:"primaryKey" json:"id"`
+	Code             string         `gorm:"size:64;uniqueIndex" json:"code"`
+	Name             string         `gorm:"size:128" json:"name"`
+	Type             string         `gorm:"size:20" json:"type"`
+	Description      string         `gorm:"type:text" json:"description"` // 给模型看
+	Parameters       datatypes.JSON `gorm:"type:jsonb" json:"parameters"` // JSON Schema
+	Handler          string         `gorm:"size:64" json:"handler,omitempty"`
+	MCPServerID      *int64         `json:"mcp_server_id,omitempty"`
+	Endpoint         string         `gorm:"size:512" json:"endpoint,omitempty"`
+	AuthConfig       datatypes.JSON `gorm:"type:jsonb" json:"auth_config,omitempty"` // 加密
+	DefaultConfig    datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"default_config"`
+	TimeoutMs        int            `gorm:"default:30000" json:"timeout_ms"`
+	IsDangerous      bool           `json:"is_dangerous"` // HITL 审批依据
+	ReplayPolicy     string         `gorm:"size:16;default:manual" json:"replay_policy"`
+	Status           int16          `json:"status"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
 // 工具类型。
@@ -75,19 +83,29 @@ const (
 
 // MCPServer MCP 服务端配置。
 type MCPServer struct {
-	ID           int64          `gorm:"primaryKey" json:"id"`
-	Name         string         `gorm:"size:64" json:"name"`
-	Transport    string         `gorm:"size:20" json:"transport"` // streamable_http/stdio/sse
-	URL          string         `gorm:"size:512" json:"url"`
-	Command      string         `gorm:"size:512" json:"command"`
-	Args         datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"args"`
-	Env          datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"env"`
-	Headers      datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"headers"`
-	Status       string         `gorm:"size:20;default:disconnected" json:"status"`
-	LastHealthAt *time.Time     `json:"last_health_at"`
-	ToolsCache   datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"tools_cache"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
+	ToolCount                   int            `gorm:"->;-:migration" json:"tool_count"`
+	Enabled                     *bool          `gorm:"default:true" json:"enabled"`
+	ConfigVersion               int64          `gorm:"default:1" json:"config_version"`
+	EncryptedCredentials        string         `json:"-"`
+	AllowedUserIDs              datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"allowed_user_ids"`
+	ToolsHash                   string         `json:"-"`
+	ArchivedAt                  gorm.DeletedAt `json:"-"`
+	ClearHeaders                bool           `gorm:"-" json:"clear_headers,omitempty"`
+	HeadersConfigured           bool           `gorm:"column:headers_present" json:"headers_configured"`
+	CredentialsPendingMigration bool           `gorm:"->;-:migration" json:"credentials_pending_migration"`
+	ID                          int64          `gorm:"primaryKey" json:"id"`
+	Name                        string         `gorm:"size:64" json:"name"`
+	Transport                   string         `gorm:"size:20" json:"transport"` // streamable_http/stdio/sse
+	URL                         string         `gorm:"size:512" json:"url"`
+	Command                     string         `gorm:"size:512" json:"command"`
+	Args                        datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"args"`
+	Env                         datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"env"`
+	Headers                     datatypes.JSON `gorm:"type:jsonb;default:'{}'" json:"headers"`
+	Status                      string         `gorm:"size:20;default:disconnected" json:"status"`
+	LastHealthAt                *time.Time     `json:"last_health_at"`
+	ToolsCache                  datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"tools_cache"`
+	CreatedAt                   time.Time      `json:"created_at"`
+	UpdatedAt                   time.Time      `json:"updated_at"`
 }
 
 // A2AAgent A2A 远程 Agent 注册表。

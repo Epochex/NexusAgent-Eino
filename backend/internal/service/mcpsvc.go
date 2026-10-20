@@ -1,235 +1,333 @@
-// MCP 服务：Server 注册管理 / 工具同步 / 健康检查（td.md §8.9，Ep 14）。
-//
-// MCP 的接入是一次"协议适配"而非"工具开发"：
-//
-//	注册 Server（URL + 鉴权头） → tools/list 发现工具
-//	  → 工具落库（type=mcp，code = mcp_{serverID}_{name}）
-//	  → handler 闭包注册进 Registry（执行时 tools/call 透传）
-//
-// 教学要点：同步后的 MCP 工具与内置工具在 Agent 视角完全一致 ——
-// ReAct 循环、工具执行器、决策链都不感知差异，这就是协议标准的意义。
 package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"time"
-
 	"github.com/chengpeng-cp/nexus-agent/internal/mcp"
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
+	"github.com/chengpeng-cp/nexus-agent/internal/security"
 	"github.com/chengpeng-cp/nexus-agent/internal/tool"
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"net/url"
+	"sort"
+	"strings"
+	"time"
+	"unicode/utf8"
 )
 
-// MCPService MCP 服务端管理业务。
 type MCPService struct {
 	svcs     *Services
-	registry tool.Registry // 工具同步时注册执行 handler（main 注入）
+	registry tool.Registry
 }
 
-// NewMCPService 构造。
-func NewMCPService(svcs *Services) *MCPService {
-	return &MCPService{svcs: svcs}
+func NewMCPService(svcs *Services) *MCPService { return &MCPService{svcs: svcs} }
+func (s *MCPService) SetRegistry(reg tool.Registry) {
+	s.registry = reg
+	if dynamic, ok := reg.(tool.DynamicRegistry); ok && s.svcs.Cfg.MCP.Enabled {
+		dynamic.RegisterPrefix("mcp_", func(code string) (tool.BuiltinHandler, bool) {
+			if len(code) > 64 || !mcp.ValidToolName(code) {
+				return nil, false
+			}
+			return func(ctx context.Context, args map[string]any, _ string) (string, error) {
+				return s.invoke(ctx, code, args)
+			}, true
+		})
+	}
 }
-
-// SetRegistry 注入工具注册表。
-func (s *MCPService) SetRegistry(reg tool.Registry) { s.registry = reg }
-
-// Create 注册 MCP 服务端。
-func (s *MCPService) Create(ctx context.Context, srv *model.MCPServer) error {
-	if srv.Name == "" || srv.URL == "" {
-		return errcode.ErrInvalidParam.WithMsg("name 和 url 不能为空")
-	}
-	if srv.Transport == "" {
-		srv.Transport = "streamable_http" // 教学版仅实现 Streamable HTTP 传输
-	}
-	if err := s.svcs.Deps.Repos.MCP.Create(ctx, srv); err != nil {
-		return errcode.ErrInternal.WithCause(err)
-	}
-	return nil
+func (s *MCPService) transaction(ctx context.Context, fn func(*gorm.DB) error) error {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	return s.svcs.Repos.DB.WithContext(ctx).Transaction(fn)
 }
-
-// Update 更新配置（URL/鉴权头变更后需重新同步工具）。
-func (s *MCPService) Update(ctx context.Context, srv *model.MCPServer) error {
-	if srv.ID <= 0 {
-		return errcode.ErrInvalidParam.WithMsg("id 不能为空")
+func (s *MCPService) actor(ctx context.Context) (*model.User, error) {
+	id, ok := security.UserIDFromContext(ctx)
+	if !ok || id < 1 {
+		return nil, errcode.ErrUnauthorized
 	}
-	if _, err := s.get(ctx, srv.ID); err != nil {
-		return err
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	actor, err := s.svcs.Repos.User.GetByID(ctx, id)
+	if err != nil || actor.Status != 1 {
+		return nil, errcode.ErrForbidden
 	}
-	return s.svcs.Deps.Repos.MCP.Update(ctx, srv)
+	return actor, nil
 }
-
-// Delete 删除服务端及其同步的全部工具。
-func (s *MCPService) Delete(ctx context.Context, id int64) error {
-	if _, err := s.get(ctx, id); err != nil {
-		return err
-	}
-	if err := s.svcs.Deps.Repos.MCP.DeleteToolsByServer(ctx, id); err != nil {
-		return errcode.ErrInternal.WithCause(err)
-	}
-	return s.svcs.Deps.Repos.MCP.Delete(ctx, id)
-}
-
-// List 服务端列表。
-func (s *MCPService) List(ctx context.Context) ([]model.MCPServer, error) {
-	list, err := s.svcs.Deps.Repos.MCP.List(ctx)
-	if err != nil {
-		return nil, errcode.ErrInternal.WithCause(err)
-	}
-	return list, nil
-}
-
-// get 详情（统一 NotFound 转换）。
-func (s *MCPService) get(ctx context.Context, id int64) (*model.MCPServer, error) {
-	srv, err := s.svcs.Deps.Repos.MCP.Get(ctx, id)
-	if err != nil {
-		return nil, errcode.ErrMCPConnFail.WithMsg("MCP 服务端不存在: %d", id)
-	}
-	return srv, nil
-}
-
-// Get 详情。
-func (s *MCPService) Get(ctx context.Context, id int64) (*model.MCPServer, error) {
-	return s.get(ctx, id)
-}
-
-// SyncTools 工具同步（本服务核心）：
-//
-//	① 建连握手 → ② tools/list 发现 → ③ 全量替换工具表
-//	④ 逐个注册执行 handler → ⑤ 状态/缓存回写。
-func (s *MCPService) SyncTools(ctx context.Context, serverID int64) ([]model.Tool, error) {
-	srv, err := s.get(ctx, serverID)
+func (s *MCPService) admin(ctx context.Context) (*model.User, error) {
+	actor, err := s.actor(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	// ① 建连（headers 从 JSONB 解析，鉴权信息不进日志）
-	client := mcp.NewClient(srv.URL, parseHeaders(srv.Headers))
-
-	// ② 工具发现
-	defs, err := client.ListTools(ctx)
-	if err != nil {
-		s.markStatus(ctx, srv, "error")
-		return nil, errcode.ErrMCPConnFail.WithCause(err)
+	if actor.Role != "admin" {
+		return nil, errcode.ErrForbidden
 	}
-
-	// ③ 全量替换：先删旧（避免下线工具残留），再建新
-	repo := s.svcs.Deps.Repos
-	if err := repo.MCP.DeleteToolsByServer(ctx, srv.ID); err != nil {
-		return nil, errcode.ErrInternal.WithCause(err)
-	}
-	tools := make([]model.Tool, 0, len(defs))
-	for _, d := range defs {
-		params, _ := json.Marshal(schemaOrEmpty(d.InputSchema))
-		t := model.Tool{
-			Code:        mcpToolCode(srv.ID, d.Name),
-			Name:        d.Name,
-			Type:        model.ToolTypeMCP,
-			Description: d.Description,
-			Parameters:  params,
-			MCPServerID: &srv.ID,
-			TimeoutMs:   60000,
-			Status:      1,
-		}
-		if err := repo.Tool.Create(ctx, &t); err != nil {
-			return nil, errcode.ErrInternal.WithCause(err)
-		}
-		tools = append(tools, t)
-
-		// ④ 注册执行 handler：闭包捕获 serverID + 远端工具名
-		s.registerHandler(srv.ID, d.Name)
-	}
-
-	// ⑤ 状态与缓存回写
-	now := time.Now()
-	srv.Status = "connected"
-	srv.LastHealthAt = &now
-	if cache, err := json.Marshal(defs); err == nil {
-		srv.ToolsCache = cache
-	}
-	if err := repo.MCP.Update(ctx, srv); err != nil {
-		return nil, errcode.ErrInternal.WithCause(err)
-	}
-	return tools, nil
+	return actor, nil
 }
-
-// CallTool 直接调用某服务端工具（管理台调试用；Agent 链路走 Executor）。
-func (s *MCPService) CallTool(ctx context.Context, serverID int64, name string, args map[string]any) (string, error) {
-	srv, err := s.get(ctx, serverID)
-	if err != nil {
-		return "", err
+func lockedMCP(tx *gorm.DB, id int64) (*model.MCPServer, error) {
+	var srv model.MCPServer
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&srv, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errcode.ErrToolNotFound.WithMsg("MCP服务端不存在")
 	}
-	client := mcp.NewClient(srv.URL, parseHeaders(srv.Headers))
-	out, err := client.CallTool(ctx, name, args)
-	if err != nil {
-		return "", errcode.ErrMCPToolFail.WithCause(err)
-	}
-	return out, nil
+	return &srv, err
 }
-
-// HealthCheck 健康检查：Ping 成功即视为连接正常。
-func (s *MCPService) HealthCheck(ctx context.Context, serverID int64) error {
-	srv, err := s.get(ctx, serverID)
+func (s *MCPService) get(ctx context.Context, id int64) (*model.MCPServer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	srv, err := s.svcs.Repos.MCP.Get(ctx, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, errcode.ErrToolNotFound.WithMsg("MCP服务端不存在")
+	}
+	return srv, err
+}
+func canonicalMCPUsers(raw []byte) (datatypes.JSON, error) {
+	var ids []int64
+	if len(raw) > 4096 || len(raw) > 0 && json.Unmarshal(raw, &ids) != nil || len(ids) > 128 {
+		return nil, errcode.ErrInvalidParam.WithMsg("MCP授权用户列表无效")
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	unique := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id < 1 {
+			return nil, errcode.ErrInvalidParam
+		}
+		if len(unique) == 0 || unique[len(unique)-1] != id {
+			unique = append(unique, id)
+		}
+	}
+	result, _ := json.Marshal(unique)
+	return datatypes.JSON(result), nil
+}
+func (s *MCPService) validate(srv *model.MCPServer) error {
+	if srv.Name == "" || len(srv.Name) > 64 || !utf8.ValidString(srv.Name) || len(srv.URL) > 512 {
+		return errcode.ErrInvalidParam.WithMsg("MCP名称或地址无效")
+	}
+	if srv.Transport != "streamable_http" {
+		return errcode.ErrNotImplement.WithMsg("仅支持Streamable HTTP传输")
+	}
+	endpoint, err := url.Parse(srv.URL)
+	if err != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
+		return errcode.ErrInvalidParam.WithMsg("MCP地址不能包含凭据、查询参数或片段")
+	}
+	if err := (security.OutboundPolicy{PrivateOrigins: s.svcs.Cfg.Outbound.PrivateOrigins}).Validate(srv.URL); err != nil {
+		return errcode.ErrDomainNotAllow.WithMsg("MCP目标未获出站许可；内部服务需要配置准确的origin").WithCause(err)
+	}
+	return nil
+}
+func mcpHasUnsupportedInput(srv *model.MCPServer) bool {
+	return srv.Command != "" || len(srv.Env) > 0 && string(srv.Env) != "{}" && string(srv.Env) != "null" || len(srv.Args) > 0 && string(srv.Args) != "[]" && string(srv.Args) != "null"
+}
+func mcpAuthority(srv *model.MCPServer, envelope mcpCredentialEnvelope) string {
+	raw, _ := json.Marshal(struct {
+		URL, Transport string
+		Headers        map[string]string
+	}{srv.URL, srv.Transport, envelope.Headers})
+	return fmt.Sprintf("%x", sha256.Sum256(raw))
+}
+func (s *MCPService) Create(ctx context.Context, srv *model.MCPServer) error {
+	if _, err := s.admin(ctx); err != nil {
+		return err
+	}
+	if srv == nil {
+		return errcode.ErrInvalidParam
+	}
+	if mcpHasUnsupportedInput(srv) {
+		return errcode.ErrNotImplement.WithMsg("HTTP MCP不执行本地命令或环境变量")
+	}
+	if srv.Transport == "" {
+		srv.Transport = "streamable_http"
+	}
+	if err := s.validate(srv); err != nil {
+		return err
+	}
+	users, err := canonicalMCPUsers(srv.AllowedUserIDs)
 	if err != nil {
 		return err
 	}
-	client := mcp.NewClient(srv.URL, parseHeaders(srv.Headers))
-	if err := client.Ping(ctx); err != nil {
-		s.markStatus(ctx, srv, "error")
-		return errcode.ErrMCPConnFail.WithCause(err)
+	srv.AllowedUserIDs = users
+	srv.ID = 0
+	srv.ConfigVersion = 1
+	srv.ToolsHash = ""
+	srv.Status = "disconnected"
+	srv.ToolsCache = datatypes.JSON("[]")
+	if srv.Enabled == nil {
+		value := true
+		srv.Enabled = &value
 	}
-	s.markStatus(ctx, srv, "connected")
-	return nil
-}
-
-// registerHandler 把 MCP 工具注册为普通 BuiltinHandler。
-// handler 闭包只存 serverID/远端工具名，执行时再查库取最新配置 ——
-// 服务端 URL 或鉴权变更后无需重新注册。
-func (s *MCPService) registerHandler(serverID int64, remoteName string) {
-	if s.registry == nil {
-		return
+	envelope, err := s.credentials(srv)
+	if err != nil {
+		return err
 	}
-	code := mcpToolCode(serverID, remoteName)
-	repo := s.svcs.Deps.Repos.MCP
-	s.registry.Register(code, func(ctx context.Context, args map[string]any, _ string) (string, error) {
-		srv, err := repo.Get(ctx, serverID)
-		if err != nil {
-			return "", fmt.Errorf("mcp server %d unavailable: %w", serverID, err)
+	if err = s.seal(srv, envelope); err != nil {
+		return err
+	}
+	err = s.transaction(ctx, func(tx *gorm.DB) error {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(current_schema()||':mcp-config',0))").Error; err != nil {
+			return err
 		}
-		client := mcp.NewClient(srv.URL, parseHeaders(srv.Headers))
-		return client.CallTool(ctx, remoteName, args)
+		var count int64
+		if err := tx.Model(&model.MCPServer{}).Count(&count).Error; err != nil {
+			return err
+		}
+		if count >= 128 {
+			return errcode.ErrInvalidParam.WithMsg("MCP服务端数量已达128个上限")
+		}
+		return tx.Create(srv).Error
+	})
+	if err == nil {
+		*srv = *redactMCP(srv)
+	}
+	return err
+}
+func (s *MCPService) Update(ctx context.Context, input *model.MCPServer) error {
+	if _, err := s.admin(ctx); err != nil {
+		return err
+	}
+	if input == nil || input.ID < 1 || input.ConfigVersion < 1 {
+		return errcode.ErrInvalidParam.WithMsg("需要配置版本")
+	}
+	if mcpHasUnsupportedInput(input) {
+		return errcode.ErrNotImplement.WithMsg("HTTP MCP不执行本地命令或环境变量")
+	}
+	return s.transaction(ctx, func(tx *gorm.DB) error {
+		current, err := lockedMCP(tx, input.ID)
+		if err != nil {
+			return err
+		}
+		if current.ConfigVersion != input.ConfigVersion {
+			return errcode.ErrRunConflict.WithMsg("MCP配置已变化，请刷新")
+		}
+		envelope, err := s.credentials(current)
+		if err != nil {
+			return err
+		}
+		before := mcpAuthority(current, envelope)
+		if input.Name != "" {
+			current.Name = input.Name
+		}
+		if input.URL != "" {
+			current.URL = input.URL
+		}
+		if input.Transport != "" {
+			current.Transport = input.Transport
+		}
+		if input.Enabled != nil {
+			current.Enabled = input.Enabled
+		}
+		if len(input.AllowedUserIDs) > 0 {
+			current.AllowedUserIDs, err = canonicalMCPUsers(input.AllowedUserIDs)
+			if err != nil {
+				return err
+			}
+		}
+		if input.ClearHeaders {
+			envelope.Headers = map[string]string{}
+		} else if len(input.Headers) > 0 && strings.TrimSpace(string(input.Headers)) != "{}" {
+			if len(input.Headers) > 16384 || json.Unmarshal(input.Headers, &envelope.Headers) != nil {
+				return errcode.ErrInvalidParam.WithMsg("MCP鉴权头无效")
+			}
+		}
+		if err = s.validate(current); err != nil {
+			return err
+		}
+		current.ConfigVersion++
+		updates := map[string]any{"mcp_config_version": current.ConfigVersion}
+		if before != mcpAuthority(current, envelope) {
+			current.Status = "disconnected"
+			updates["binding_version"] = gorm.Expr("binding_version+1")
+			updates["is_dangerous"] = true
+			updates["replay_policy"] = "manual"
+			updates["policy_reviewed_by"] = nil
+			updates["policy_reviewed_at"] = nil
+			updates["replay_evidence"] = ""
+		}
+		if err = tx.Model(&model.Tool{}).Where("mcp_server_id=? AND type=? AND status=1", current.ID, model.ToolTypeMCP).Updates(updates).Error; err != nil {
+			return err
+		}
+		if err = s.seal(current, envelope); err != nil {
+			return err
+		}
+		if err = tx.Save(current).Error; err != nil {
+			return err
+		}
+		*input = *redactMCP(current)
+		return nil
 	})
 }
-
-// markStatus 回写服务端健康状态（失败不阻塞主流程）。
-func (s *MCPService) markStatus(ctx context.Context, srv *model.MCPServer, status string) {
-	now := time.Now()
-	srv.Status = status
-	srv.LastHealthAt = &now
-	_ = s.svcs.Deps.Repos.MCP.Update(ctx, srv)
-}
-
-// mcpToolCode 平台侧工具唯一 code：mcp_{serverID}_{远端工具名}。
-// serverID 保证跨服务端同名工具不冲突。
-func mcpToolCode(serverID int64, remoteName string) string {
-	return fmt.Sprintf("mcp_%d_%s", serverID, remoteName)
-}
-
-// parseHeaders 服务端鉴权头 JSONB → map。
-func parseHeaders(raw []byte) map[string]string {
-	out := map[string]string{}
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &out)
+func (s *MCPService) Delete(ctx context.Context, id int64) error {
+	if _, err := s.admin(ctx); err != nil {
+		return err
 	}
-	return out
-}
-
-// schemaOrEmpty 兜底空 Schema（部分 MCP 服务端不返回 inputSchema）。
-func schemaOrEmpty(m map[string]any) map[string]any {
-	if m == nil {
-		return map[string]any{"type": "object", "properties": map[string]any{}}
+	var codes []string
+	err := s.transaction(ctx, func(tx *gorm.DB) error {
+		current, err := lockedMCP(tx, id)
+		if err != nil {
+			return err
+		}
+		if err = tx.Model(&model.Tool{}).Where("mcp_server_id=? AND type=? AND status=1", id, model.ToolTypeMCP).Limit(257).Pluck("code", &codes).Error; err != nil {
+			return err
+		}
+		if len(codes) > 256 {
+			return errcode.ErrInvalidParam.WithMsg("MCP活动工具超过删除上限")
+		}
+		if err = tx.Model(&model.Tool{}).Where("mcp_server_id=? AND type=?", id, model.ToolTypeMCP).Updates(map[string]any{"status": 0, "binding_version": gorm.Expr("binding_version+1"), "mcp_config_version": current.ConfigVersion + 1}).Error; err != nil {
+			return err
+		}
+		if err = tx.Model(current).Updates(map[string]any{"enabled": false, "config_version": current.ConfigVersion + 1}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(current).Error
+	})
+	if err == nil {
+		if dynamic, ok := s.registry.(interface{ Unregister(string) }); ok {
+			for _, code := range codes {
+				dynamic.Unregister(code)
+			}
+		}
 	}
-	return m
+	return err
+}
+func (s *MCPService) List(ctx context.Context) ([]model.MCPServer, error) {
+	if _, err := s.admin(ctx); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var rows []model.MCPServer
+	err := s.svcs.Repos.DB.WithContext(ctx).Select("id,name,transport,url,enabled,config_version,allowed_user_ids,status,last_health_at,created_at,updated_at,headers_present,(CASE WHEN jsonb_typeof(tools_cache)='array' THEN jsonb_array_length(tools_cache) ELSE 0 END) AS tool_count,(headers<>'{}'::jsonb OR env<>'{}'::jsonb OR args<>'[]'::jsonb OR command<>'') AS credentials_pending_migration").Order("id").Limit(1001).Find(&rows).Error
+	for i := range rows {
+		rows[i].ToolsCache = datatypes.JSON("[]")
+	}
+	if len(rows) > 1000 {
+		return nil, fmt.Errorf("MCP configuration limit exceeded")
+	}
+	return rows, err
+}
+func (s *MCPService) Get(ctx context.Context, id int64) (*model.MCPServer, error) {
+	if _, err := s.admin(ctx); err != nil {
+		return nil, err
+	}
+	srv, err := s.get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return redactMCP(srv), nil
+}
+func (s *MCPService) protocolClient(srv *model.MCPServer) (*mcp.Client, error) {
+	if !s.svcs.Cfg.MCP.Enabled || srv.Enabled == nil || !*srv.Enabled {
+		return nil, errcode.ErrNotImplement.WithMsg("MCP执行已停用")
+	}
+	if err := s.validate(srv); err != nil {
+		return nil, err
+	}
+	envelope, err := s.credentials(srv)
+	if err != nil {
+		return nil, err
+	}
+	return mcp.NewClient(srv.URL, envelope.Headers, mcp.WithOutboundPolicy(security.OutboundPolicy{PrivateOrigins: s.svcs.Cfg.Outbound.PrivateOrigins})), nil
 }

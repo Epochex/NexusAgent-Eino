@@ -1,49 +1,64 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"github.com/chengpeng-cp/nexus-agent/internal/pkg/callmeta"
+	"github.com/chengpeng-cp/nexus-agent/internal/security"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
-
-	"github.com/chengpeng-cp/nexus-agent/internal/pkg/callmeta"
+	"time"
 )
 
 func TestMCPPropagatesOperationIDOnlyToToolCall(t *testing.T) {
-	var calls int
+	var calls atomic.Int32
+	server := sdk.NewServer(&sdk.Implementation{Name: "operation-peer", Version: "1"}, &sdk.ServerOptions{SupportedProtocolVersions: []string{"2025-11-25"}})
+	server.AddTool(&sdk.Tool{Name: "write", InputSchema: map[string]any{"type": "object"}}, func(context.Context, *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+		calls.Add(1)
+		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: "confirmed"}}}, nil
+	})
+	handler := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{JSONResponse: true})
 	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var request struct {
-			ID     int64  `json:"id"`
-			Method string `json:"method"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Error(err)
-			return
-		}
-		if request.Method == "tools/call" {
-			calls++
-			if r.Header.Get("Idempotency-Key") != "stable-operation-id" {
-				t.Errorf("missing stable operation key: %+v", r.Header)
+		if r.Method == http.MethodPost {
+			raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+			r.Body.Close()
+			if err != nil {
+				t.Error(err)
+				return
 			}
-			fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"content":[{"type":"text","text":"confirmed"}]}}`, request.ID)
-		} else {
-			if r.Header.Get("Idempotency-Key") != "" {
-				t.Error("tool key attached to initialization")
+			r.Body = io.NopCloser(bytes.NewReader(raw))
+			var request struct{ Method string }
+			if json.Unmarshal(raw, &request) != nil {
+				t.Error("invalid RPC")
+				return
 			}
-			fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%d,"result":{"protocolVersion":"2025-03-26","serverInfo":{"name":"test","version":"1"}}}`, request.ID)
+			if request.Method == "tools/call" {
+				if r.Header.Get("Idempotency-Key") != "stable-operation-id" {
+					t.Error("missing stable operation key")
+				}
+			} else if r.Header.Get("Idempotency-Key") != "" {
+				t.Error("tool key attached to lifecycle/discovery")
+			}
 		}
+		handler.ServeHTTP(w, r)
 	}))
 	defer peer.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	for range 2 {
-		client := NewClient(peer.URL, nil)
-		out, err := client.CallTool(callmeta.WithOperationID(context.Background(), "stable-operation-id"), "write", map[string]any{})
-		if err != nil || out != "confirmed" {
-			t.Fatalf("call failed: %q %v", out, err)
+		client := NewClient(peer.URL, nil, WithOutboundPolicy(security.OutboundPolicy{PrivateOrigins: []string{peer.URL}}))
+		out, err := client.CallTool(callmeta.WithOperationID(ctx, "stable-operation-id"), "write", map[string]any{})
+		closeErr := client.Close()
+		if err != nil || out != "confirmed" || closeErr != nil {
+			t.Fatalf("call failed: %q %v close %v", out, err, closeErr)
 		}
 	}
-	if calls != 2 {
+	if calls.Load() != 2 {
 		t.Fatal("tool calls not exercised")
 	}
 }

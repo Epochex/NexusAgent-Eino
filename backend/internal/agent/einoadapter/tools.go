@@ -106,6 +106,9 @@ func (t *boundTool) InvokableRun(ctx context.Context, args string, _ ...einotool
 	if current == nil {
 		return toolObservation("tool_unavailable", "tool is no longer bound"), nil
 	}
+	if current.BindingVersion != t.definition.BindingVersion {
+		return toolObservation("tool_configuration_changed", "restart with the updated tool binding"), nil
+	}
 	if (t.dangerous || current.Dangerous) && !toolApproved(ctx, t.definition.Name, args) {
 		return toolObservation("approval_required", "sensitive tool requires persistent approval"), nil
 	}
@@ -131,7 +134,7 @@ func (t *boundTool) InvokableRun(ctx context.Context, args string, _ ...einotool
 	}
 	runCtx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
-	result := t.source.Invoke(runCtx, t.bindings, t.definition.Name, args)
+	result := t.source.Invoke(platformtool.WithBindingVersion(runCtx, t.definition.Name, t.definition.BindingVersion), t.bindings, t.definition.Name, args)
 	if runCtx.Err() != nil {
 		return toolObservation("timeout", "tool execution deadline/cancellation reached"), nil
 	}
@@ -163,6 +166,10 @@ func (denySchemaLoader) Load(string) (any, error) {
 	return nil, fmt.Errorf("external schema loading is disabled")
 }
 
+// ValidateToolSchema checks the supported Eino schema subset before publishing
+// a discovered remote catalogue. It performs no external schema reads.
+func ValidateToolSchema(value any) error { return checkSchema(value) }
+
 // Walk only schema positions: properties named "default" or literal objects in
 // enum/default/examples are user data, not additional validation keywords.
 func checkSchema(value any) error {
@@ -173,12 +180,16 @@ func checkSchema(value any) error {
 	if !ok {
 		return fmt.Errorf("schema must be an object or boolean")
 	}
-	allowed := " $schema $id $anchor $dynamicAnchor $ref $dynamicRef $comment $defs definitions type enum const multipleOf maximum exclusiveMaximum minimum exclusiveMinimum maxLength minLength pattern maxItems minItems uniqueItems maxContains minContains maxProperties minProperties required dependentRequired title description default examples deprecated readOnly writeOnly format properties patternProperties dependentSchemas dependencies allOf anyOf oneOf not if then else items prefixItems contains additionalProperties unevaluatedProperties unevaluatedItems propertyNames additionalItems "
+	allowed := " x-mcp-header $schema $id $anchor $dynamicAnchor $ref $dynamicRef $comment $defs definitions type enum const multipleOf maximum exclusiveMaximum minimum exclusiveMinimum maxLength minLength pattern maxItems minItems uniqueItems maxContains minContains maxProperties minProperties required dependentRequired title description default examples deprecated readOnly writeOnly format properties patternProperties dependentSchemas dependencies allOf anyOf oneOf not if then else items prefixItems contains additionalProperties unevaluatedProperties unevaluatedItems propertyNames additionalItems "
 	for key, child := range object {
 		if !strings.Contains(allowed, " "+key+" ") {
 			return fmt.Errorf("unsupported schema keyword %q", key)
 		}
 		switch key {
+		case "x-mcp-header":
+			if annotation, ok := child.(string); !ok || annotation == "" {
+				return fmt.Errorf("invalid MCP header annotation")
+			}
 		case "$ref", "$dynamicRef":
 			ref, ok := child.(string)
 			if !ok || !strings.HasPrefix(ref, "#") {

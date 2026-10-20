@@ -5,6 +5,7 @@ package tool
 
 import (
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -12,6 +13,37 @@ import (
 type registry struct {
 	mu       sync.RWMutex
 	handlers map[string]BuiltinHandler
+	prefixes []prefixHandler
+}
+type prefixHandler struct {
+	prefix  string
+	factory func(string) (BuiltinHandler, bool)
+}
+
+func (r *registry) Unregister(code string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.handlers, code)
+}
+func (r *registry) RegisterPrefix(prefix string, factory func(string) (BuiltinHandler, bool)) {
+	if prefix == "" || factory == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.prefixes {
+		if r.prefixes[i].prefix == prefix {
+			r.prefixes[i].factory = factory
+			return
+		}
+	}
+	r.prefixes = append(r.prefixes, prefixHandler{prefix, factory})
+	sort.Slice(r.prefixes, func(i, j int) bool {
+		if len(r.prefixes[i].prefix) != len(r.prefixes[j].prefix) {
+			return len(r.prefixes[i].prefix) > len(r.prefixes[j].prefix)
+		}
+		return r.prefixes[i].prefix < r.prefixes[j].prefix
+	})
 }
 
 // NewRegistry 构造空注册表。
@@ -29,9 +61,21 @@ func (r *registry) Register(code string, h BuiltinHandler) {
 // Get 查找。
 func (r *registry) Get(code string) (BuiltinHandler, bool) {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
 	h, ok := r.handlers[code]
-	return h, ok
+	if ok {
+		r.mu.RUnlock()
+		return h, true
+	}
+	prefixes := append([]prefixHandler(nil), r.prefixes...)
+	r.mu.RUnlock()
+	for _, entry := range prefixes {
+		if strings.HasPrefix(code, entry.prefix) {
+			if handler, ok := entry.factory(code); ok {
+				return handler, true
+			}
+		}
+	}
+	return nil, false
 }
 
 // Codes 列出全部已注册 code（排序，稳定输出）。

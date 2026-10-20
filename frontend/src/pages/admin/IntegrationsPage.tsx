@@ -2,14 +2,12 @@
  * 集成中心 —— 「MCP Server」与「A2A 远程 Agent」两个区块上下排列。
  *
  * 职责：
- * 1. MCP Server：CRUD（args/env/headers 等 JSON 字段提交前解析校验）、同步工具、
- *    健康检查，以及基于 tools_cache 的工具手动调试；
+ * 1. MCP Server：版本化配置、加密凭据、授权用户、同步工具与调用策略审阅；
  * 2. A2A 远程 Agent：注册（后端先拉名片验活）、健康检查、任务委派与删除；
- * 3. 对 tools_cache / card 等后端结构做宽容处理，字段缺失或结构变化时降级展示。
+ * 3. MCP 只读调试受后端策略约束，工具清单使用独立分页接口。
  */
 import { useEffect, useRef, useState } from 'react';
 import {
-  callMCPTool,
   checkA2AAgent,
   checkMCPServer,
   createMCPServer,
@@ -21,7 +19,9 @@ import {
   sendA2ATask,
   syncMCPServer,
   updateMCPServer,
+  migrateMCPCredentials,
 } from '@/api/admin';
+import { MCPToolsModal } from './MCPToolsModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import {
@@ -51,7 +51,7 @@ const TRANSPORT_TONE: Record<string, 'lime' | 'teal' | 'violet'> = {
 };
 
 /** 传输方式选项（与后端 MCPServer.transport 枚举一致） */
-const TRANSPORTS = ['streamable_http', 'stdio', 'sse'] as const;
+const TRANSPORTS = ['streamable_http'] as const;
 
 /** 解析 JSON 文本：空串回退默认值，非法返回 null（由调用方 toast 阻断提交） */
 function parseJson<T>(text: string, fallback: T): T | null {
@@ -69,14 +69,14 @@ const clip = (s: string) => truncate(s, 2000);
 
 /* ---- 表单草稿类型 ---- */
 
-/** MCP 表单草稿：三个 JSON 字段以文本承载，提交时统一解析校验 */
+/** MCP 表单草稿：授权用户与鉴权头在提交时解析校验。 */
 interface McpDraft {
   name: string;
   transport: string;
   url: string;
-  command: string;
-  args: string;
-  env: string;
+  enabled: boolean;
+  allowedUserIDs: string;
+  clearHeaders: boolean;
   headers: string;
 }
 
@@ -84,9 +84,9 @@ const EMPTY_MCP: McpDraft = {
   name: '',
   transport: 'streamable_http',
   url: '',
-  command: '',
-  args: '[]',
-  env: '{}',
+  enabled: true,
+  allowedUserIDs: '[]',
+  clearHeaders: false,
   headers: '{}',
 };
 
@@ -105,12 +105,7 @@ export function IntegrationsPage() {
   const [editingMcp, setEditingMcp] = useState<MCPServer | null>(null);
   const [mcpDraft, setMcpDraft] = useState<McpDraft>(EMPTY_MCP);
 
-  /* ---- MCP 工具调试 ---- */
-  const [debugServer, setDebugServer] = useState<MCPServer | null>(null);
-  const [debugTool, setDebugTool] = useState('');
-  const [debugArgs, setDebugArgs] = useState('{}');
-  const [debugOutput, setDebugOutput] = useState('');
-  const [debugRunning, setDebugRunning] = useState(false);
+  const [toolsServer, setToolsServer] = useState<MCPServer | null>(null);
 
   /* ---- A2A 注册 ---- */
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -177,10 +172,10 @@ export function IntegrationsPage() {
       name: s.name,
       transport: s.transport,
       url: s.url,
-      command: s.command,
-      args: JSON.stringify(Array.isArray(s.args) ? s.args : [], null, 2),
-      env: JSON.stringify(s.env ?? {}, null, 2),
-      headers: JSON.stringify(s.headers ?? {}, null, 2),
+      enabled: s.enabled,
+      allowedUserIDs: JSON.stringify(s.allowed_user_ids ?? []),
+      clearHeaders: false,
+      headers: '{}',
     });
     setMcpOpen(true);
   };
@@ -190,19 +185,12 @@ export function IntegrationsPage() {
       toast.err('名称为必填项');
       return;
     }
-    // JSON 字段提交前统一解析，任一非法即阻断（args=字符串数组，env/headers=对象）
-    const args = parseJson<string[]>(mcpDraft.args, []);
-    if (!args || !Array.isArray(args)) {
-      toast.err('args 不是合法的 JSON 数组');
-      return;
-    }
-    const env = parseJson<Record<string, string>>(mcpDraft.env, {});
-    if (!env) {
-      toast.err('env 不是合法的 JSON 对象');
-      return;
+    const allowedUserIDs = parseJson<number[]>(mcpDraft.allowedUserIDs, []);
+    if (!Array.isArray(allowedUserIDs) || allowedUserIDs.some(id => !Number.isSafeInteger(id) || id < 1)) {
+      toast.err('授权用户 ID 必须为正整数数组'); return;
     }
     const headers = parseJson<Record<string, string>>(mcpDraft.headers, {});
-    if (!headers) {
+    if (!headers || Array.isArray(headers) || typeof headers !== 'object' || Object.values(headers).some(v => typeof v !== 'string')) {
       toast.err('headers 不是合法的 JSON 对象');
       return;
     }
@@ -212,9 +200,10 @@ export function IntegrationsPage() {
         name: mcpDraft.name.trim(),
         transport: mcpDraft.transport,
         url: mcpDraft.url.trim(),
-        command: mcpDraft.command.trim(),
-        args,
-        env,
+        config_version: editingMcp?.config_version,
+        enabled: mcpDraft.enabled,
+        allowed_user_ids: allowedUserIDs,
+        clear_headers: mcpDraft.clearHeaders,
         headers,
       };
       if (editingMcp) {
@@ -240,8 +229,7 @@ export function IntegrationsPage() {
     setBusyId(s.id);
     try {
       const res = await syncMCPServer(s.id);
-      // synced 字段可能缺省，兜底 0
-      toast.ok(`已同步 ${res.synced ?? 0} 个工具`);
+      toast.ok(`已同步 ${res.length} 个工具，新工具需审阅调用策略`);
       await load();
     } catch (e) {
       toast.err(errMsg(e));
@@ -263,50 +251,11 @@ export function IntegrationsPage() {
     }
   };
 
-  /* ---- MCP：工具调试 ---- */
-
-  const openDebug = (s: MCPServer) => {
-    setDebugServer(s);
-    setDebugTool('');
-    setDebugArgs('{}');
-    setDebugOutput('');
+  const handleMigrate = async (s: MCPServer) => {
+    setBusyId(s.id);
+    try { await migrateMCPCredentials(s.id); toast.ok('旧配置已加密迁移'); await load(); }
+    catch (e) { toast.err(errMsg(e)); } finally { setBusyId(null); }
   };
-
-  /** 执行工具调试：args 非法 JSON 时阻断并提示 */
-  const runDebug = async () => {
-    if (!debugServer) return;
-    if (!debugTool.trim()) {
-      toast.err('请选择或输入工具名');
-      return;
-    }
-    let args: Record<string, unknown> = {};
-    const text = debugArgs.trim();
-    if (text) {
-      try {
-        args = JSON.parse(text) as Record<string, unknown>;
-      } catch {
-        toast.err('参数不是合法的 JSON');
-        return;
-      }
-    }
-    setDebugRunning(true);
-    try {
-      const res = await callMCPTool(debugServer.id, debugTool.trim(), args);
-      setDebugOutput(clip(JSON.stringify(res.output ?? null, null, 2)));
-    } catch (e) {
-      toast.err(errMsg(e));
-    } finally {
-      setDebugRunning(false);
-    }
-  };
-
-  // 宽容解析 tools_cache：元素结构不确定，逐项尝试取 name 字段；取不到则退化为手动输入
-  const toolNames =
-    debugServer && Array.isArray(debugServer.tools_cache)
-      ? debugServer.tools_cache
-          .map((t) => (typeof t === 'object' && t !== null ? (t as { name?: string }).name : undefined))
-          .filter((n): n is string => typeof n === 'string' && n.length > 0)
-      : [];
 
   /* ---- A2A：注册 / 健康检查 / 委派任务 ---- */
 
@@ -429,7 +378,7 @@ export function IntegrationsPage() {
                   <tbody className="divide-y divide-smoke/40">
                     {servers.map((s) => (
                       <tr key={s.id} className="transition-colors hover:bg-graphite/40">
-                        <td className="px-4 py-2.5 text-bone">{s.name}</td>
+                        <td className="px-4 py-2.5 text-bone">{s.name}{!s.enabled && <span className="ml-2 text-ash">已停用</span>}{s.credentials_pending_migration && <span className="ml-2 text-coral">凭据待迁移</span>}</td>
                         <td className="px-4 py-2.5">
                           <Badge tone={TRANSPORT_TONE[s.transport] ?? 'gray'}>{s.transport}</Badge>
                         </td>
@@ -446,14 +395,14 @@ export function IntegrationsPage() {
                           <StatusBadge status={s.status} />
                         </td>
                         <td className="px-4 py-2.5 font-mono text-xs text-fog">
-                          {/* tools_cache 结构不确定，仅计数展示 */}
-                          {Array.isArray(s.tools_cache) ? s.tools_cache.length : 0}
+                          {s.tool_count}
                         </td>
                         <td className="px-4 py-2.5 text-xs text-fog">
                           {relativeTime(s.last_health_at) || '—'}
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex justify-end gap-3 whitespace-nowrap text-xs">
+                            {s.credentials_pending_migration && <button disabled={busyId === s.id} className="text-coral" onClick={() => void handleMigrate(s)}>加密迁移</button>}
                             <button
                               disabled={busyId === s.id}
                               className="text-ash transition-colors hover:text-lime disabled:opacity-40"
@@ -470,9 +419,9 @@ export function IntegrationsPage() {
                             </button>
                             <button
                               className="text-ash transition-colors hover:text-lime"
-                              onClick={() => openDebug(s)}
+                              onClick={() => setToolsServer(s)}
                             >
-                              调试
+                              工具与策略
                             </button>
                             <button
                               className="text-ash transition-colors hover:text-lime"
@@ -629,7 +578,7 @@ export function IntegrationsPage() {
             </div>
           </div>
           <div>
-            <label className="field-label">URL（streamable_http / sse）</label>
+            <label className="field-label">URL（Streamable HTTP）</label>
             <Input
               value={mcpDraft.url}
               placeholder="如 https://mcp.example.com/mcp"
@@ -637,101 +586,20 @@ export function IntegrationsPage() {
             />
           </div>
           <div>
-            <label className="field-label">Command（stdio）</label>
-            <Input
-              value={mcpDraft.command}
-              placeholder="如 npx -y @modelcontextprotocol/server-filesystem /tmp"
-              onChange={(e) => patchMcp({ command: e.target.value })}
-            />
+            <label className="field-label">授权用户 ID（JSON 数组，空数组仅管理员）</label>
+            <Input value={mcpDraft.allowedUserIDs} onChange={e => patchMcp({allowedUserIDs: e.target.value})} />
           </div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={mcpDraft.enabled} onChange={e => patchMcp({enabled: e.target.checked})} />启用服务</label>
           <div>
-            <label className="field-label">args（JSON 数组）</label>
-            <Textarea
-              rows={2}
-              className="font-mono"
-              value={mcpDraft.args}
-              onChange={(e) => patchMcp({ args: e.target.value })}
-            />
+            <label className="field-label">鉴权头（JSON 对象，留空或 {'{}'} 保留已有凭据）</label>
+            <Textarea rows={3} className="font-mono" value={mcpDraft.headers} onChange={e => patchMcp({headers: e.target.value})} />
+            <p className="mt-1 text-xs text-ash">{editingMcp?.headers_configured ? '已配置加密凭据；原文不回显。更换凭据后需重新审阅工具。' : '凭据加密保存，禁止填入 URL。'}</p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="field-label">env（JSON 对象）</label>
-              <Textarea
-                rows={3}
-                className="font-mono"
-                value={mcpDraft.env}
-                onChange={(e) => patchMcp({ env: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="field-label">headers（JSON 对象）</label>
-              <Textarea
-                rows={3}
-                className="font-mono"
-                value={mcpDraft.headers}
-                onChange={(e) => patchMcp({ headers: e.target.value })}
-              />
-            </div>
-          </div>
+          {editingMcp && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={mcpDraft.clearHeaders} onChange={e => patchMcp({clearHeaders: e.target.checked})} />明确清除已有鉴权头</label>}
         </div>
       </Modal>
 
-      {/* MCP 工具调试 */}
-      <Modal
-        open={debugServer !== null}
-        title={`工具调试 · ${debugServer?.name ?? ''}`}
-        onClose={() => setDebugServer(null)}
-        width="max-w-xl"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDebugServer(null)}>
-              关闭
-            </Button>
-            <Button loading={debugRunning} onClick={() => void runDebug()}>
-              执行
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div>
-            <label className="field-label">工具名</label>
-            {toolNames.length > 0 ? (
-              // tools_cache 中解析出工具名 → 下拉选择
-              <Select value={debugTool} onChange={(e) => setDebugTool(e.target.value)}>
-                <option value="">请选择工具</option>
-                {toolNames.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </Select>
-            ) : (
-              // 解析不到工具名 → 退化为手动输入
-              <Input
-                value={debugTool}
-                placeholder="tools_cache 中未解析出工具名，请手动输入"
-                onChange={(e) => setDebugTool(e.target.value)}
-              />
-            )}
-          </div>
-          <div>
-            <label className="field-label">参数（JSON）</label>
-            <Textarea
-              rows={4}
-              className="font-mono"
-              value={debugArgs}
-              onChange={(e) => setDebugArgs(e.target.value)}
-            />
-          </div>
-          {debugOutput && (
-            <div>
-              <label className="field-label">输出</label>
-              <pre className="code-block max-h-64 whitespace-pre-wrap">{debugOutput}</pre>
-            </div>
-          )}
-        </div>
-      </Modal>
+      {toolsServer && <MCPToolsModal server={toolsServer} onClose={() => setToolsServer(null)} />}
 
       {/* 注册远程 Agent */}
       <Modal

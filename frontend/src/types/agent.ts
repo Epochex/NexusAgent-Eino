@@ -37,6 +37,12 @@ export type AgentReq = Partial<
 
 /** 工具（builtin / mcp / custom） */
 export interface Tool {
+	 mcp_name?: string;
+	 binding_version: number;
+	 replay_policy: 'readonly' | 'idempotent' | 'manual';
+	 policy_reviewed_by?: number;
+	 policy_reviewed_at?: string;
+	 replay_evidence?: string;
   id: number;
   code: string;
   name: string;

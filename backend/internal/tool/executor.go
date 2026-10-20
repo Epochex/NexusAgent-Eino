@@ -37,3 +37,8 @@ type Registry interface {
 	Get(code string) (BuiltinHandler, bool)
 	Codes() []string
 }
+type DynamicRegistry interface {
+	Registry
+	RegisterPrefix(string, func(string) (BuiltinHandler, bool))
+	Unregister(string)
+}

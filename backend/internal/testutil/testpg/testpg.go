@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -18,6 +19,12 @@ import (
 )
 
 func Open(t testing.TB) *gorm.DB {
+	return OpenAt(t, 0)
+}
+
+// OpenAt builds an isolated schema at a migration boundary for upgrade tests.
+// Zero applies all current migrations, matching Open.
+func OpenAt(t testing.TB, maximum int) *gorm.DB {
 	t.Helper()
 	parsed, err := url.Parse(os.Getenv("NX_TEST_DATABASE_DSN"))
 	if err != nil || parsed.Host == "" || !strings.HasSuffix(parsed.Path, "_test") {
@@ -65,6 +72,13 @@ func Open(t testing.TB) *gorm.DB {
 		t.Fatal("migration sources unavailable")
 	}
 	for _, file := range files {
+		version, err := strconv.Atoi(strings.SplitN(filepath.Base(file), "_", 2)[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if maximum > 0 && version > maximum {
+			continue
+		}
 		if strings.HasPrefix(filepath.Base(file), "002_") {
 			continue
 		}

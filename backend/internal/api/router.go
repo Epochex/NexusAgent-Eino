@@ -125,6 +125,9 @@ func Register(g *route.RouterGroup, h *Handler, jwt *security.JWTManager) {
 		admin.POST("/mcp/servers/:id/sync", h.SyncMCPServer)
 		admin.POST("/mcp/servers/:id/health", h.CheckMCPServer)
 		admin.POST("/mcp/servers/:id/call", h.CallMCPTool)
+		admin.POST("/mcp/servers/:id/credentials/migrate", h.MigrateMCPCredentials)
+		admin.GET("/mcp/servers/:id/tools", h.ListMCPTools)
+		admin.PUT("/mcp/servers/:id/tools/:toolID/policy", h.ReviewMCPTool)
 
 		// A2A
 		admin.GET("/a2a/agents", h.ListA2AAgents)

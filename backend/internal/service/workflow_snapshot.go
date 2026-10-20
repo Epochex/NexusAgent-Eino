@@ -27,11 +27,13 @@ type frozenModel struct {
 
 const frozenKBRerankKey = "\x00kb-rerank" // NUL cannot appear in persisted model aliases.
 type frozenTool struct {
-	Name         string         `json:"name"`
-	Description  string         `json:"description"`
-	Parameters   map[string]any `json:"parameters"`
-	Dangerous    bool           `json:"dangerous"`
-	ReplayPolicy string         `json:"replay_policy"`
+	SourceIdentity string         `json:"source_identity,omitempty"`
+	BindingVersion int64          `json:"binding_version"`
+	Name           string         `json:"name"`
+	Description    string         `json:"description"`
+	Parameters     map[string]any `json:"parameters"`
+	Dangerous      bool           `json:"dangerous"`
+	ReplayPolicy   string         `json:"replay_policy"`
 }
 
 func (s *WorkflowService) freeze(ctx context.Context, ownerID int64, w *model.Workflow) (*execution.Definition, error) {
@@ -108,7 +110,6 @@ func (s *WorkflowService) freeze(ctx context.Context, ownerID int64, w *model.Wo
 				}
 				definition.Models["kb-embedding:"+strconv.FormatInt(kb.ID, 10)] = snapshotRaw
 			case "tool":
-				capabilities["tool:"+node.ToolCode] = true
 				if node.ToolCode == "kb_search" {
 					capabilities["rag"] = true
 				}
@@ -124,11 +125,16 @@ func (s *WorkflowService) freeze(ctx context.Context, ownerID int64, w *model.Wo
 					return errcode.ErrToolNotFound
 				}
 				def := defs[0]
+				if def.Capability != "" {
+					capabilities[def.Capability] = true
+				} else {
+					capabilities["tool:"+node.ToolCode] = true
+				}
 				policy := def.ReplayPolicy
 				if policy == "" {
 					policy = "manual"
 				}
-				raw, err := json.Marshal(frozenTool{Name: def.Name, Description: def.Description, Parameters: def.Parameters, Dangerous: def.Dangerous, ReplayPolicy: policy})
+				raw, err := json.Marshal(frozenTool{Name: def.Name, Description: def.Description, Parameters: def.Parameters, Dangerous: def.Dangerous, ReplayPolicy: policy, BindingVersion: def.BindingVersion, SourceIdentity: def.SourceIdentity})
 				if err != nil {
 					return err
 				}
@@ -292,13 +298,14 @@ func (f *frozenExecutor) ListContext(ctx context.Context, bindings string) ([]ll
 		if policy == "" {
 			policy = "manual"
 		}
-		if string(before) != string(after) || policy != frozen.ReplayPolicy {
+		if string(before) != string(after) || policy != frozen.ReplayPolicy || def.BindingVersion != frozen.BindingVersion {
 			return nil, fmt.Errorf("%w: tool configuration changed", execution.ErrConflict)
 		}
 		current[i].Description = frozen.Description
 		current[i].Parameters = frozen.Parameters
 		current[i].Dangerous = def.Dangerous || frozen.Dangerous
 		current[i].ReplayPolicy = frozen.ReplayPolicy
+		current[i].SourceIdentity = frozen.SourceIdentity
 	}
 	return current, nil
 }
@@ -307,5 +314,5 @@ func (f *frozenExecutor) Invoke(ctx context.Context, bindings, name, args string
 	if err != nil || len(defs) != 1 || defs[0].Name != name {
 		return tool.ToolResult{Status: "error", Output: "tool binding revoked or changed", ToolName: name}
 	}
-	return f.base.Invoke(ctx, bindings, name, args)
+	return f.base.Invoke(tool.WithBindingVersion(ctx, name, defs[0].BindingVersion), bindings, name, args)
 }

@@ -1,262 +1,347 @@
-// Package mcp MCP（Model Context Protocol）客户端（td.md §8.9，Ep 14）。
-//
-// MCP 是 Anthropic 提出的工具/资源接入开放协议，2025 年成为行业标准。
-// 本文件实现 Streamable HTTP 传输的客户端 —— 一切皆是 JSON-RPC 2.0：
-//
-//	initialize        → 握手，声明能力
-//	tools/list        → 发现服务端提供的工具（含 JSON Schema）
-//	tools/call        → 调用工具
-//
-// 教学要点：MCP 的价值在于"一次实现，处处可用"——
-// 我们不写任何具体工具逻辑，只做协议适配，工具生态直接接入。
+// Package mcp adapts the official protocol client to bounded platform tool calls.
 package mcp
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"time"
-
-	"github.com/chengpeng-cp/nexus-agent/internal/pkg/callmeta"
 	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
+	"github.com/chengpeng-cp/nexus-agent/internal/security"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"io"
+	"log/slog"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
 )
 
-// jsonRPCRequest JSON-RPC 2.0 请求。
-type jsonRPCRequest struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int64  `json:"id"`
-	Method  string `json:"method"`
-	Params  any    `json:"params,omitempty"`
-}
-
-// jsonRPCError JSON-RPC 错误体。
-type jsonRPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
-// jsonRPCResponse JSON-RPC 2.0 响应。
-type jsonRPCResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      int64           `json:"id"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *jsonRPCError   `json:"error,omitempty"`
-}
-
-// Client 单个 MCP Server 的客户端连接。
-type Client struct {
-	baseURL     string
-	headers     map[string]string
-	httpClient  *http.Client
-	nextID      int64
-	sessionID   string // Streamable HTTP 会话（Mcp-Session-Id 头）
-	initialized bool
-}
-
-// NewClient 构造。
-func NewClient(baseURL string, headers map[string]string) *Client {
-	return &Client{
-		baseURL:    baseURL,
-		headers:    headers,
-		httpClient: &http.Client{Timeout: 60 * time.Second},
-	}
-}
-
-// ToolDef MCP 工具定义（协议字段与 OpenAI Function Schema 高度同构）。
 type ToolDef struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description,omitempty"`
 	InputSchema map[string]any `json:"inputSchema"`
+	validate    func(any) error
+}
+type clientOptions struct{ policy security.OutboundPolicy }
+type ClientOption func(*clientOptions)
+
+func WithOutboundPolicy(policy security.OutboundPolicy) ClientOption {
+	return func(options *clientOptions) { options.policy = policy }
 }
 
-// Initialize 协议握手（惰性：首次调用前自动执行）。
-func (c *Client) Initialize(ctx context.Context) error {
-	if c.initialized {
+var ErrClientClosed = errors.New("MCP client closed")
+
+type Client struct {
+	baseURL           string
+	httpClient        *http.Client
+	sdkClient         *sdk.Client
+	setupErr          error
+	gate, catalogGate chan struct{}
+	mu                sync.RWMutex
+	session           *sdk.ClientSession
+	initCancel        context.CancelFunc
+	closed            bool
+	catalogue         []ToolDef
+	catalogReady      bool
+}
+
+func NewClient(endpoint string, headers map[string]string, options ...ClientOption) *Client {
+	cfg := clientOptions{}
+	for _, option := range options {
+		if option != nil {
+			option(&cfg)
+		}
+	}
+	c := &Client{baseURL: endpoint, gate: make(chan struct{}, 1), catalogGate: make(chan struct{}, 1)}
+	if err := cfg.policy.Validate(endpoint); err != nil {
+		c.setupErr = err
+		return c
+	}
+	network, err := security.NewOutboundClient(cfg.policy)
+	if err != nil {
+		c.setupErr = err
+		return c
+	}
+	transport, err := newHeaderTransport(network.Transport, headers)
+	if err != nil {
+		network.CloseIdleConnections()
+		c.setupErr = err
+		return c
+	}
+	network.Transport = transport
+	c.httpClient = network
+	c.sdkClient = sdk.NewClient(&sdk.Implementation{Name: "nexus-agent-eino", Version: "0.3"}, &sdk.ClientOptions{Capabilities: &sdk.ClientCapabilities{}, MultiRoundTrip: &sdk.MultiRoundTripOptions{Disabled: true}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	// Validate before the SDK's permissive tool filtering; malformed discovery
+	// must fail a sync rather than silently revoke the previous usable catalogue.
+	c.sdkClient.AddSendingMiddleware(func(next sdk.MethodHandler) sdk.MethodHandler {
+		return func(ctx context.Context, method string, request sdk.Request) (sdk.Result, error) {
+			result, err := next(ctx, method, request)
+			if err != nil {
+				return result, err
+			}
+			if list, ok := result.(*sdk.ListToolsResult); ok {
+				if len(list.Tools) > 256 {
+					return nil, fmt.Errorf("MCP catalogue page exceeds 256 tools")
+				}
+				for _, tool := range list.Tools {
+					if _, err := convertTool(tool); err != nil {
+						return nil, err
+					}
+				}
+			}
+			return result, nil
+		}
+	})
+	return c
+}
+func (c *Client) current() (*sdk.ClientSession, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.session, c.closed
+}
+func (c *Client) Initialize(parent context.Context) error {
+	if c.setupErr != nil {
+		return c.setupErr
+	}
+	if session, closed := c.current(); closed {
+		return ErrClientClosed
+	} else if session != nil {
 		return nil
 	}
-	var result struct {
-		ProtocolVersion string `json:"protocolVersion"`
-		ServerInfo      struct {
-			Name    string `json:"name"`
-			Version string `json:"version"`
-		} `json:"serverInfo"`
+	select {
+	case c.gate <- struct{}{}:
+	case <-parent.Done():
+		return parent.Err()
 	}
-	if _, err := c.call(ctx, "initialize", map[string]any{
-		"protocolVersion": "2025-03-26",
-		"capabilities":    map[string]any{},
-		"clientInfo":      map[string]any{"name": "nexus-agent", "version": "1.0.0"},
-	}, &result); err != nil {
+	defer func() { <-c.gate }()
+	if session, closed := c.current(); closed {
+		return ErrClientClosed
+	} else if session != nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
+	defer cancel()
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return ErrClientClosed
+	}
+	c.initCancel = cancel
+	c.mu.Unlock()
+	session, err := c.sdkClient.Connect(ctx, &sdk.StreamableClientTransport{Endpoint: c.baseURL, HTTPClient: c.httpClient, MaxRetries: -1, DisableStandaloneSSE: true, MaxEventSize: 1 << 20}, nil)
+	c.mu.Lock()
+	c.initCancel = nil
+	if err != nil {
+		c.mu.Unlock()
 		return errcode.ErrMCPConnFail.WithCause(err)
 	}
-	c.initialized = true
+	if c.closed {
+		c.mu.Unlock()
+		session.Close()
+		return ErrClientClosed
+	}
+	c.session = session
+	c.catalogReady = false
+	c.catalogue = nil
+	c.mu.Unlock()
+	go func() {
+		_ = session.Wait()
+		c.mu.Lock()
+		if c.session == session {
+			c.session = nil
+			c.catalogReady = false
+			c.catalogue = nil
+		}
+		c.mu.Unlock()
+	}()
 	return nil
 }
-
-// ListTools 工具发现。
-func (c *Client) ListTools(ctx context.Context) ([]ToolDef, error) {
+func (c *Client) ListTools(parent context.Context) ([]ToolDef, error) {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
 	if err := c.Initialize(ctx); err != nil {
 		return nil, err
 	}
-	var result struct {
-		Tools []ToolDef `json:"tools"`
+	session, closed := c.current()
+	if closed || session == nil {
+		return nil, ErrClientClosed
 	}
-	if _, err := c.call(ctx, "tools/list", map[string]any{}, &result); err != nil {
-		return nil, errcode.ErrMCPConnFail.WithCause(err)
+	result := make([]ToolDef, 0)
+	cursor := ""
+	seenCursors := map[string]bool{}
+	seenNames := map[string]bool{}
+	for page := 0; page < 16; page++ {
+		response, err := session.ListTools(ctx, &sdk.ListToolsParams{Cursor: cursor})
+		if err != nil {
+			return nil, errcode.ErrMCPConnFail.WithCause(err)
+		}
+		if response == nil {
+			return nil, fmt.Errorf("empty MCP catalogue response")
+		}
+		for _, remote := range response.Tools {
+			tool, err := convertTool(remote)
+			if err != nil {
+				return nil, err
+			}
+			if seenNames[tool.Name] || len(result) >= 256 {
+				return nil, fmt.Errorf("duplicate or oversized MCP catalogue")
+			}
+			seenNames[tool.Name] = true
+			result = append(result, tool)
+		}
+		if response.NextCursor == "" {
+			return result, nil
+		}
+		if len(response.NextCursor) > 1024 || seenCursors[response.NextCursor] {
+			return nil, fmt.Errorf("invalid MCP pagination cursor")
+		}
+		cursor = response.NextCursor
+		seenCursors[cursor] = true
 	}
-	return result.Tools, nil
+	return nil, fmt.Errorf("MCP catalogue exceeds 16 pages")
 }
-
-// CallTool 调用工具。返回结构化内容文本。
-func (c *Client) CallTool(ctx context.Context, name string, args map[string]any) (string, error) {
-	if err := c.Initialize(ctx); err != nil {
+func (c *Client) catalog(parent context.Context) ([]ToolDef, error) {
+	c.mu.RLock()
+	if c.catalogReady {
+		result := c.catalogue
+		c.mu.RUnlock()
+		return result, nil
+	}
+	c.mu.RUnlock()
+	select {
+	case c.catalogGate <- struct{}{}:
+	case <-parent.Done():
+		return nil, parent.Err()
+	}
+	defer func() { <-c.catalogGate }()
+	c.mu.RLock()
+	if c.catalogReady {
+		result := c.catalogue
+		c.mu.RUnlock()
+		return result, nil
+	}
+	c.mu.RUnlock()
+	catalogue, err := c.ListTools(parent)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed || c.session == nil {
+		return nil, ErrClientClosed
+	}
+	c.catalogue = catalogue
+	c.catalogReady = true
+	return catalogue, nil
+}
+func (c *Client) CallTool(parent context.Context, name string, args map[string]any) (string, error) {
+	if !ValidToolName(name) {
+		return "", fmt.Errorf("invalid MCP tool name")
+	}
+	if args == nil {
+		args = map[string]any{}
+	}
+	raw, err := json.Marshal(args)
+	if err != nil || len(raw) > 65536 {
+		return "", fmt.Errorf("MCP arguments exceed 64KiB")
+	}
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	catalogue, err := c.catalog(ctx)
+	if err != nil {
 		return "", err
 	}
-	var result struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
-		IsError bool `json:"isError"`
+	found := false
+	var validate func(any) error
+	for _, tool := range catalogue {
+		if tool.Name == name {
+			found = true
+			validate = tool.validate
+			break
+		}
 	}
-	if _, err := c.call(ctx, "tools/call", map[string]any{"name": name, "arguments": args}, &result); err != nil {
+	if !found {
+		return "", errcode.ErrToolNotFound
+	}
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&value) != nil || validate == nil {
+		return "", fmt.Errorf("invalid MCP arguments")
+	}
+	if err = validate(value); err != nil {
+		return "", fmt.Errorf("MCP arguments violate the discovered schema")
+	}
+	session, closed := c.current()
+	if closed || session == nil {
+		return "", ErrClientClosed
+	}
+	result, err := session.CallTool(ctx, &sdk.CallToolParams{Name: name, Arguments: args})
+	if err != nil {
 		return "", errcode.ErrMCPToolFail.WithCause(err)
 	}
+	if result == nil || len(result.InputRequests) > 0 || result.RequestState != "" {
+		return "", fmt.Errorf("MCP result is incomplete or requires unsupported interactive input")
+	}
+	var output strings.Builder
+	for _, content := range result.Content {
+		text, ok := content.(*sdk.TextContent)
+		if !ok {
+			return "", fmt.Errorf("MCP tool returned unsupported non-text content")
+		}
+		if output.Len() > 0 {
+			output.WriteByte('\n')
+		}
+		if output.Len()+len(text.Text) > 65536 {
+			return "", fmt.Errorf("MCP tool output exceeds 64KiB")
+		}
+		output.WriteString(text.Text)
+	}
+	if result.StructuredContent != nil {
+		structured, err := json.Marshal(result.StructuredContent)
+		if err != nil {
+			return "", err
+		}
+		if output.String() != string(structured) {
+			if output.Len() > 0 {
+				output.WriteByte('\n')
+			}
+			if output.Len()+len(structured) > 65536 {
+				return "", fmt.Errorf("MCP structured output exceeds 64KiB")
+			}
+			output.Write(structured)
+		}
+	}
 	if result.IsError {
-		return "", errcode.ErrMCPToolFail.WithMsg("mcp tool %s failed", name)
+		return output.String(), errcode.ErrMCPToolFail.WithMsg("MCP工具执行失败")
 	}
-	out := ""
-	for _, part := range result.Content {
-		if part.Type == "text" {
-			out += part.Text
-		}
-	}
-	return out, nil
+	return output.String(), nil
 }
-
-// call 发送一次 JSON-RPC 请求（Streamable HTTP：单次 POST）。
-func (c *Client) call(ctx context.Context, method string, params any, out any) (json.RawMessage, error) {
-	c.nextID++
-	reqBody, err := json.Marshal(jsonRPCRequest{
-		JSONRPC: "2.0", ID: c.nextID, Method: method, Params: params,
-	})
-	if err != nil {
-		return nil, err
+func (c *Client) Ping(ctx context.Context) error { _, err := c.ListTools(ctx); return err }
+func (c *Client) Close() error {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL, bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, err
+	c.closed = true
+	session := c.session
+	cancel := c.initCancel
+	c.session = nil
+	c.catalogue = nil
+	c.catalogReady = false
+	c.mu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	for k, v := range c.headers {
-		req.Header.Set(k, v)
+	var err error
+	if session != nil {
+		err = session.Close()
 	}
-	if method == "tools/call" {
-		if id := callmeta.OperationID(ctx); id != "" {
-			req.Header.Set("Idempotency-Key", id)
-		}
+	if c.httpClient != nil {
+		c.httpClient.CloseIdleConnections()
 	}
-	if c.sessionID != "" {
-		req.Header.Set("Mcp-Session-Id", c.sessionID)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("mcp transport: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// 会话 ID 由服务端在 initialize 响应头下发
-	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
-		c.sessionID = sid
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, truncate(string(body), 256))
-	}
-
-	// 响应可能是 JSON 或 SSE 帧（服务端可选流式回包），兼容处理
-	payload := extractJSONPayload(body)
-	var rpcResp jsonRPCResponse
-	if err := json.Unmarshal(payload, &rpcResp); err != nil {
-		return nil, fmt.Errorf("decode jsonrpc: %w", err)
-	}
-	if rpcResp.Error != nil {
-		return nil, fmt.Errorf("jsonrpc error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
-	}
-	if out != nil && len(rpcResp.Result) > 0 {
-		if err := json.Unmarshal(rpcResp.Result, out); err != nil {
-			return nil, fmt.Errorf("decode result: %w", err)
-		}
-	}
-	return rpcResp.Result, nil
-}
-
-// extractJSONPayload 从响应体提取 JSON（兼容纯 JSON 与 SSE `data:` 帧）。
-func extractJSONPayload(body []byte) []byte {
-	s := string(body)
-	// SSE 形态：event: message\ndata: {...}
-	for _, line := range splitLines(s) {
-		if after, ok := cutPrefix(line, "data:"); ok {
-			return []byte(after)
-		}
-	}
-	return body
-}
-
-func splitLines(s string) []string {
-	var out []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			out = append(out, trimCR(s[start:i]))
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		out = append(out, trimCR(s[start:]))
-	}
-	return out
-}
-
-func trimCR(s string) string {
-	if len(s) > 0 && s[len(s)-1] == '\r' {
-		return s[:len(s)-1]
-	}
-	return s
-}
-
-func cutPrefix(s, prefix string) (string, bool) {
-	if len(s) > len(prefix) && s[:len(prefix)] == prefix {
-		return trimSpace(s[len(prefix):]), true
-	}
-	return "", false
-}
-
-func trimSpace(s string) string {
-	for len(s) > 0 && (s[0] == ' ' || s[0] == '\t') {
-		s = s[1:]
-	}
-	return s
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "..."
-}
-
-// Ping 健康检查（tools/list 可达即视为健康）。
-func (c *Client) Ping(ctx context.Context) error {
-	_, err := c.ListTools(ctx)
 	return err
 }

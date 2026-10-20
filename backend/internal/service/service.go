@@ -7,11 +7,13 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/config"
 	"github.com/chengpeng-cp/nexus-agent/internal/llm"
+	"github.com/chengpeng-cp/nexus-agent/internal/model"
 	"github.com/chengpeng-cp/nexus-agent/internal/rag/engine"
 	"github.com/chengpeng-cp/nexus-agent/internal/repo"
 	"github.com/chengpeng-cp/nexus-agent/internal/security"
@@ -62,6 +64,14 @@ type Services struct {
 
 // New 装配全部业务服务。
 func New(d Deps) (*Services, error) {
+	if d.Cfg == nil {
+		return nil, fmt.Errorf("service configuration is required")
+	}
+	probe, err := security.NewOutboundClient(security.OutboundPolicy{PrivateOrigins: d.Cfg.Outbound.PrivateOrigins})
+	if err != nil {
+		return nil, fmt.Errorf("outbound configuration: %w", err)
+	}
+	probe.CloseIdleConnections()
 	s := &Services{Deps: d}
 
 	// ② 各业务服务
@@ -74,6 +84,12 @@ func New(d Deps) (*Services, error) {
 	s.MCP = NewMCPService(s)
 	s.A2A = NewA2AService(s)
 	s.Memory = NewMemoryService(s)
+	s.MCP.SetRegistry(d.Registry)
+	if guarded, ok := d.Executor.(interface {
+		SetAccessCheck(func(context.Context, []model.Tool) error)
+	}); ok {
+		guarded.SetAccessCheck(s.MCP.AuthorizeTools)
+	}
 	return s, nil
 }
 

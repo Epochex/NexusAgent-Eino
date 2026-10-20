@@ -3,6 +3,7 @@
  * 模型供应商/模型配置、MCP Server、A2A 远程 Agent。
  */
 import { http } from '@/lib/request';
+import type { Tool } from '@/types/agent';
 import type {
   A2AAgent,
   MCPServer,
@@ -55,7 +56,17 @@ export const deleteMCPServer = (id: number) =>
 
 /** 同步工具：拉取远端工具清单写入 tools_cache + tools 表 */
 export const syncMCPServer = (id: number) =>
-  http.post<{ synced: number }>(`/admin/mcp/servers/${id}/sync`);
+  http.post<Tool[]>(`/admin/mcp/servers/${id}/sync`);
+
+export const listMCPTools = (id: number, page = 1) =>
+  http.get<{list: Tool[]; total: number}>(`/admin/mcp/servers/${id}/tools`, {page, page_size: 100});
+
+export const reviewMCPTool = (id: number, toolId: number, policy: {
+  binding_version: number; is_dangerous: boolean; replay_policy: Tool['replay_policy']; evidence: string;
+}) => http.put<Tool>(`/admin/mcp/servers/${id}/tools/${toolId}/policy`, policy);
+
+export const migrateMCPCredentials = (id: number) =>
+  http.post(`/admin/mcp/servers/${id}/credentials/migrate`);
 
 /** 健康检查 */
 export const checkMCPServer = (id: number) =>

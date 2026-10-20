@@ -32,6 +32,11 @@ type Config struct {
 	MCP           MCP           `mapstructure:"mcp"`
 	A2A           A2A           `mapstructure:"a2a"`
 	Search        Search        `mapstructure:"search"`
+	Outbound      Outbound      `mapstructure:"outbound"`
+}
+
+type Outbound struct {
+	PrivateOrigins []string `mapstructure:"private_origins"`
 }
 
 type HTTP struct {

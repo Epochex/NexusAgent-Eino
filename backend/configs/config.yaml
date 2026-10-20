@@ -3,6 +3,8 @@
 # 环境变量映射示例：http.port -> NX_HTTP__PORT
 
 env: dev
+outbound:
+  private_origins: [] # Exact operator-approved http(s) origins for internal MCP/A2A services
 http:
   port: 8080
   shutdown_timeout: 10s

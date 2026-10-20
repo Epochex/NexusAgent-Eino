@@ -132,6 +132,9 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("services: %w", err)
 	}
+	if err = svcs.MCP.RestoreRegistry(ctx); err != nil {
+		return fmt.Errorf("MCP registry restore: %w", err)
+	}
 
 	// ===== ⑧ RAG 引擎（注入实时解析函数，改配置无需重启） =====
 	ragEngine := engine.New(gateway, store, repos.KB, &cfg.RAG, cfg.Milvus.Dim)

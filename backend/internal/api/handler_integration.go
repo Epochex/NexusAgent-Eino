@@ -3,10 +3,12 @@ package api
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/chengpeng-cp/nexus-agent/internal/model"
+	"github.com/chengpeng-cp/nexus-agent/internal/pkg/errcode"
 	"github.com/chengpeng-cp/nexus-agent/internal/service"
 )
 
@@ -126,6 +128,57 @@ func (h *Handler) CallMCPTool(ctx context.Context, c *app.RequestContext) {
 }
 
 // ---- A2A（admin 管理）----
+
+func (h *Handler) MigrateMCPCredentials(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	if err = h.svcs.MCP.MigrateCredentials(ctx, id); err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, nil)
+}
+
+func (h *Handler) ListMCPTools(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	rows, total, err := h.svcs.MCP.Tools(ctx, id, parsePagination(c))
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, map[string]any{"list": rows, "total": total})
+}
+
+func (h *Handler) ReviewMCPTool(ctx context.Context, c *app.RequestContext) {
+	id, err := pathID(c)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	toolID, err := strconv.ParseInt(c.Param("toolID"), 10, 64)
+	if err != nil || toolID < 1 {
+		Fail(c, errcode.ErrInvalidParam)
+		return
+	}
+	var input service.MCPToolPolicyInput
+	if err = c.BindAndValidate(&input); err != nil {
+		Fail(c, errcode.ErrInvalidParam)
+		return
+	}
+	row, err := h.svcs.MCP.UpdateToolPolicy(ctx, id, toolID, &input)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, row)
+}
 
 // ListA2AAgents GET /api/v1/admin/a2a/agents
 func (h *Handler) ListA2AAgents(ctx context.Context, c *app.RequestContext) {

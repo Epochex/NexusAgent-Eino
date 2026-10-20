@@ -144,7 +144,7 @@ func Auth(jwt *security.JWTManager) app.HandlerFunc {
 			return
 		}
 		c.Set(claimsKey, claims)
-		c.Next(ctx)
+		c.Next(security.WithUserID(ctx, claims.UserID))
 	}
 }
 

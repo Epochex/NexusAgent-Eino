@@ -42,6 +42,19 @@ func TestBoundToolPreservesIntegerArguments(t *testing.T) {
 		t.Fatalf("schema-valid integer changed before handler: %s %v", out, err)
 	}
 }
+
+func TestBoundToolSupportsMCPHeaderAnnotation(t *testing.T) {
+	executor, repo := toolFixture(t, false, func(_ context.Context, args map[string]any, _ string) (string, error) { return args["q"].(string), nil })
+	repo.rows[0].Parameters = []byte(`{"type":"object","properties":{"q":{"type":"string","x-mcp-header":"Region"}},"required":["q"]}`)
+	tools, err := BuildTools(context.Background(), executor, `[{"tool_code":"search"}]`, nil, time.Second, 1024)
+	if err != nil {
+		t.Fatal("valid MCP parameter header could not enter Eino", err)
+	}
+	result, err := tools[0].(einotool.InvokableTool).InvokableRun(context.Background(), `{"q":"eu-west"}`)
+	if err != nil || result != "eu-west" {
+		t.Fatal("MCP argument annotation changed invocation", result, err)
+	}
+}
 func (r *toolRepo) ListByCodes(ctx context.Context, codes []string) ([]model.Tool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -74,6 +87,42 @@ func (r *toolRepo) ListByIDs(ctx context.Context, ids []int64) ([]model.Tool, er
 }
 
 const toolSchema = `{"type":"object","properties":{"q":{"type":"string"}},"required":["q"],"additionalProperties":false}`
+
+func TestBoundToolRejectsChangedBindingWithSameSchema(t *testing.T) {
+	var calls int
+	executor, repo := toolFixture(t, false, func(context.Context, map[string]any, string) (string, error) { calls++; return "effect", nil })
+	repo.rows[0].BindingVersion = 1
+	bound := buildTool(t, executor, nil, time.Second)
+	repo.rows[0].BindingVersion = 2
+	out, err := bound.InvokableRun(context.Background(), `{"q":"same arguments"}`)
+	if err != nil || calls != 0 || !strings.Contains(out, "tool_configuration_changed") {
+		t.Fatal("changed endpoint/binding invoked with old schema", out, err, calls)
+	}
+}
+
+type hookedExecutor struct {
+	*platformtool.ProdExecutor
+	before func()
+}
+
+func (h *hookedExecutor) Invoke(ctx context.Context, bindings, name, args string) platformtool.ToolResult {
+	h.before()
+	return h.ProdExecutor.Invoke(ctx, bindings, name, args)
+}
+func TestBoundToolRejectsBindingChangedAfterFinalSchemaCheck(t *testing.T) {
+	calls := 0
+	executor, repo := toolFixture(t, false, func(context.Context, map[string]any, string) (string, error) { calls++; return "effect", nil })
+	repo.rows[0].BindingVersion = 1
+	wrapped := &hookedExecutor{executor, func() { repo.rows[0].BindingVersion = 2 }}
+	tools, err := BuildTools(context.Background(), wrapped, `[{"tool_id":1}]`, nil, time.Second, 65536)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := tools[0].(einotool.InvokableTool).InvokableRun(context.Background(), `{"q":"approved old target"}`)
+	if err != nil || calls != 0 || !strings.Contains(out, "tool_error") {
+		t.Fatal("configuration switch crossed final invoke boundary", out, err, calls)
+	}
+}
 
 func toolFixture(t *testing.T, dangerous bool, handler platformtool.BuiltinHandler) (*platformtool.ProdExecutor, *toolRepo) {
 	t.Helper()

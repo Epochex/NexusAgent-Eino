@@ -48,9 +48,16 @@ export interface ModelConfig {
 
 /** MCP 服务端配置 */
 export interface MCPServer {
+	config_version: number;
+	enabled: boolean;
+	allowed_user_ids: number[];
+	headers_configured: boolean;
+	credentials_pending_migration: boolean;
+	clear_headers?: boolean;
+	tool_count: number;
   id: number;
   name: string;
-  /** streamable_http / stdio / sse */
+  /** streamable_http（JSON / SSE 响应自动协商） */
   transport: string;
   url: string;
   command: string;

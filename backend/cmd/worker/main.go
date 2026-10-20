@@ -102,6 +102,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("services: %w", err)
 	}
+	if selected["execution"] {
+		if err = svcs.MCP.RestoreRegistry(ctx); err != nil {
+			return fmt.Errorf("MCP registry restore: %w", err)
+		}
+	}
 	var etl *worker.Worker
 	var rag *engine.Engine
 	if dataSelected {
@@ -150,6 +155,9 @@ func run() error {
 	var durable *execution.Worker
 	if selected["execution"] {
 		capabilities := []string{}
+		if cfg.MCP.Enabled {
+			capabilities = append(capabilities, "mcp")
+		}
 		for _, code := range reg.Codes() {
 			capabilities = append(capabilities, "tool:"+code)
 		}
