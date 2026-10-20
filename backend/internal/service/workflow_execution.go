@@ -160,6 +160,10 @@ func (s *WorkflowService) Events(ctx context.Context, userID, runID, after int64
 	events, err := s.store.Events(ctx, userID, runID, after, 128)
 	return events, workflowError(err)
 }
+func (s *WorkflowService) EventPage(ctx context.Context, userID, runID, after int64) (*execution.EventPage, error) {
+	page, err := s.store.ReadEventPage(ctx, userID, runID, after, 128)
+	return page, workflowError(err)
+}
 func workflowError(err error) error {
 	switch {
 	case err == nil:

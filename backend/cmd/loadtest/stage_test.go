@@ -1,0 +1,11 @@
+package main
+
+import "testing"
+
+func TestCapacityTargetDoesNotPassByRejectingOfferedWork(t *testing.T) {
+	r := &stageReport{Wire: 2, Arrivals: arrivalSnapshot{Target: 2}, Outcomes: map[string]int{"chat_rejected": 1}, Database: &databaseAudit{WorkflowTotal: 1, WorkflowStates: map[string]int{"succeeded": 1}}, Latency: map[string]distribution{"control_query": {Count: 1}, "control_approve": {Count: 1}, "control_cancel": {Count: 1}}}
+	assessStage(r)
+	if r.Passed {
+		t.Fatal("offered capacity target incorrectly passed by rejecting half the work")
+	}
+}

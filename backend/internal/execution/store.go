@@ -445,28 +445,11 @@ func appendEvent(tx *gorm.DB, id int64, kind string, data any) error {
 }
 
 func (s *Store) Events(ctx context.Context, ownerID, id, after int64, limit int) ([]Event, error) {
-	run, err := s.Get(ctx, ownerID, id)
+	page, err := s.ReadEventPage(ctx, ownerID, id, after, limit)
 	if err != nil {
 		return nil, err
 	}
-	if after < 0 || after > run.NextSeq {
-		return nil, ErrInvalidInput
-	}
-	if limit <= 0 || limit > 256 {
-		limit = 128
-	}
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	var min int64
-	if err = s.db.WithContext(ctx).Raw(`SELECT COALESCE(MIN(seq),0) FROM execution_events WHERE run_id=?`, id).Scan(&min).Error; err != nil {
-		return nil, err
-	}
-	if run.NextSeq > after && (min == 0 || after < min-1) {
-		return nil, ErrCursorExpired
-	}
-	var events []Event
-	err = s.db.WithContext(ctx).Where("run_id=? AND seq>?", id, after).Order("seq").Limit(limit).Find(&events).Error
-	return events, err
+	return page.Events, nil
 }
 
 func (s *Store) String() string { return fmt.Sprintf("execution.Store(%p)", s.db) }

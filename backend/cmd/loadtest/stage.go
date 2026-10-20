@@ -34,6 +34,8 @@ type stageReport struct {
 	Started, Finished               time.Time
 	Arrivals                        arrivalSnapshot         `json:"arrivals"`
 	Wire                            int64                   `json:"actual_wire_requests"`
+	WirePerSecond                   []int64                 `json:"wire_per_second"`
+	WireAfterWindow                 int64                   `json:"wire_after_offer_window"`
 	Outcomes                        map[string]int          `json:"http_outcomes"`
 	Errors                          map[string]int          `json:"bounded_errors"`
 	Latency                         map[string]distribution `json:"latency"`
@@ -223,9 +225,12 @@ func runStage(parent context.Context, fixturePath, out string, cfg stageConfig) 
 	}
 	defer resourceFile.Close()
 	var wire, chatActive atomic.Int64
+	var wireAfter atomic.Int64
+	wireBuckets := make([]atomic.Int64, int((cfg.Duration+time.Second-1)/time.Second))
 	var samplesMu sync.Mutex
 	sampleDone := make(chan struct{})
 	sampleCtx, stopSamples := context.WithCancel(ctx)
+	defer stopSamples()
 	phase := atomic.Value{}
 	phase.Store("load")
 	go func() {
@@ -234,10 +239,14 @@ func runStage(parent context.Context, fixturePath, out string, cfg stageConfig) 
 		defer ticker.Stop()
 		for {
 			sample := collectResources(sampleCtx, api.http, db, pool.active.Load()+chatActive.Load(), phase.Load().(string))
+			if sampleCtx.Err() != nil {
+				return
+			}
 			samplesMu.Lock()
 			report.Samples = append(report.Samples, sample)
 			samplesMu.Unlock()
 			_ = json.NewEncoder(resourceFile).Encode(sample)
+			_ = resourceFile.Sync()
 			select {
 			case <-sampleCtx.Done():
 				return
@@ -246,6 +255,7 @@ func runStage(parent context.Context, fixturePath, out string, cfg stageConfig) 
 		}
 	}()
 	controlCtx, stopControls := context.WithCancel(ctx)
+	defer stopControls()
 	controlsDone := make(chan struct{})
 	go func() { defer close(controlsDone); controlLoop(controlCtx, api, seeds[cfg.SSE:], stats) }()
 	// Keep request deadlines independent of the offer window so accepted work can
@@ -258,6 +268,14 @@ func runStage(parent context.Context, fixturePath, out string, cfg stageConfig) 
 		trace := &httptrace.ClientTrace{WroteRequest: func(info httptrace.WroteRequestInfo) {
 			if info.Err == nil {
 				wire.Add(1)
+				elapsed := time.Since(report.Started)
+				bucket := int(elapsed / time.Second)
+				if bucket >= 0 && bucket < len(wireBuckets) {
+					wireBuckets[bucket].Add(1)
+				} else {
+					wireAfter.Add(1)
+				}
+				stats.latencyValue("wire_schedule_lag", float64(time.Since(scheduled))/1e6)
 			}
 		}}
 		callCtx = httptrace.WithClientTrace(callCtx, trace)
@@ -397,6 +415,10 @@ func runStage(parent context.Context, fixturePath, out string, cfg stageConfig) 
 	report.Finished = time.Now().UTC()
 	report.Arrivals = arrival.snapshot()
 	report.Wire = wire.Load()
+	for i := range wireBuckets {
+		report.WirePerSecond = append(report.WirePerSecond, wireBuckets[i].Load())
+	}
+	report.WireAfterWindow = wireAfter.Load()
 	report.SSEOpened = pool.opened.Load()
 	report.SSEFailures = pool.failures.Load()
 	report.SSEPeak = pool.peak.Load()
@@ -519,6 +541,9 @@ func controlLoop(ctx context.Context, api *apiClient, seeds []streamTarget, stat
 	}
 }
 func assessStage(r *stageReport) {
+	if r.Outcomes["workflow_rejected"]+r.Outcomes["chat_rejected"] > 0 {
+		r.Gaps = append(r.Gaps, "admission rejected offered traffic; this stage does not sustain the full offered rate")
+	}
 	if r.Wire != r.Arrivals.Target || r.Arrivals.SkippedBusy+r.Arrivals.SkippedLate+r.Arrivals.NotScheduled != 0 {
 		r.Gaps = append(r.Gaps, "open arrival delivery below target")
 	}

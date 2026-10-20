@@ -85,13 +85,13 @@ func (h *Handler) RunEvents(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	owner := userID(c)
-	events, err := h.svcs.Workflow.Events(ctx, owner, id, after)
+	page, err := h.svcs.Workflow.EventPage(ctx, owner, id, after)
 	if err != nil {
 		Fail(c, err)
 		return
 	}
 	if !strings.Contains(string(c.GetHeader("Accept")), "text/event-stream") {
-		OK(c, events)
+		OK(c, page.Events)
 		return
 	}
 	// Maximum subscriber lifetime bounds idle sockets; clients resume by sequence.
@@ -113,7 +113,7 @@ func (h *Handler) RunEvents(ctx context.Context, c *app.RequestContext) {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		for {
-			for _, event := range events {
+			for _, event := range page.Events {
 				data, e := json.Marshal(event)
 				if e != nil {
 					return
@@ -124,12 +124,8 @@ func (h *Handler) RunEvents(ctx context.Context, c *app.RequestContext) {
 				after = event.Seq
 			}
 			// Drain all pages before checking terminal status to avoid dropping the tail.
-			if len(events) < 128 {
-				run, e := h.svcs.Workflow.GetWorkflowRun(streamCtx, owner, id)
-				if e != nil {
-					return
-				}
-				if (run.Status == execution.Succeeded || run.Status == execution.Failed || run.Status == execution.Canceled) && after >= run.LastSeq {
+			if len(page.Events) < 128 {
+				if (page.Status == execution.Succeeded || page.Status == execution.Failed || page.Status == execution.Canceled) && after >= page.NextSeq {
 					return
 				}
 				select {
@@ -137,11 +133,11 @@ func (h *Handler) RunEvents(ctx context.Context, c *app.RequestContext) {
 					return
 				case <-ticker.C:
 				}
-				if _, e = io.WriteString(pw, ": keepalive\n\n"); e != nil {
+				if _, e := io.WriteString(pw, ": keepalive\n\n"); e != nil {
 					return
 				}
 			}
-			events, err = h.svcs.Workflow.Events(streamCtx, owner, id, after)
+			page, err = h.svcs.Workflow.EventPage(streamCtx, owner, id, after)
 			if err != nil {
 				data, _ := json.Marshal(map[string]string{"message": "event replay unavailable; fetch run snapshot and reconnect"})
 				_, _ = writeSSE(pw, "error", data)
