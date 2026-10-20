@@ -30,6 +30,7 @@ try {
     }
     # Dedicated test database and public fixture credentials; no user model keys.
     $dockerArgs = @('run', '--rm', '--network', 'nexus-eino-acceptance_default', '--network', 'nexus-eino-acceptance_parser', '--cpus=4', '--memory=4g',
+        '--env', 'GIT_CONFIG_COUNT=1', '--env', 'GIT_CONFIG_KEY_0=safe.directory', '--env', 'GIT_CONFIG_VALUE_0=/workspace',
         '--env', 'NX_TEST_DATABASE_DSN=postgres://postgres@postgres:5432/nexus_acceptance_test?sslmode=disable',
         '--env', 'NX_TEST_REDIS_ADDR=redis:6379', '--env', 'NX_TEST_MILVUS_ADDR=milvus:19530',
         '--env', 'NX_TEST_MINIO_ADDR=minio:9000', '--env', 'NX_TEST_PDF_PARSER_URL=http://docparser:8095',
