@@ -4,7 +4,7 @@ Go + Eino 的 Agent 应用平台，面向需要接入企业知识、业务工具
 
 基于 [chengpeng-cp/nexus-agent](https://github.com/chengpeng-cp/nexus-agent) 改造，保留上游历史和教学实现；本仓库的独立工作是将生产路径接入实际 Eino ADK/Graph，并补齐可验证的执行、数据和集成边界。来源及许可情况见 [UPSTREAM.md](UPSTREAM.md)。
 
-**实施状态：P0–P3 已验证，P4 容量与发布验收进行中。尚未配置真实模型服务，不能据受控模型测试推断回答质量、真实 token 成本或供应商容量。**
+**实施状态：P0–P4 工程实现与本地验收已完成；[最终验收与审查记录](docs/research/2026-10-21-release-validation.md)。尚未配置真实模型服务，回答质量、真实 token 成本和供应商容量待实测。**
 
 ## 已实现的主流程
 
@@ -50,6 +50,8 @@ PDF 上传要求配置 `NX_PDF_PARSER__ENDPOINT` 和 `NX_PDF_PARSER__TOKEN`，�
 ```
 
 容量部署将 API 与 Worker 各限制为 2 CPU/4 GiB，模型桩、负载发生器及基础设施单列。模型桩每次响应等待 250ms，MCP 工具等待 100ms；主要请求中 80% 为工作流两次模型与一次工具，20% 为实际 Eino Agent 工具循环。报告分别记录计划到达、实际写出、拒绝、接收、最终状态、数据库独立核对、首 token、控制接口延迟、CPU、内存、GC、连接与 outbox 积压。等待审批的 SSE、执行中的订阅与重新连接间隙会反映在实际采样中。
+
+实测基准：200 SSE / 32 共享槽位 / 10 新请求每秒持续 30 分钟，18000 次实际请求全部成功；36 档中 30 档支撑完整到达率，低槽位高负载的拒绝边界保留。详情、全部原始数据与基础设施成本见[容量报告](docs/research/2026-10-21-p4-capacity-validation.md)，部署步骤见[发布/回滚手册](docs/research/deployment-runbook.md)。
 
 生成凭据仅保存在忽略目录下的 fixture 文件；不要上传该文件。受控负载结果只说明对应硬件、配置和工作负载的行为。详细设计和验收约束见 [生产化设计](docs/superpowers/specs/2026-10-20-nexus-agent-eino-design.md)。
 

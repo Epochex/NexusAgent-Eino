@@ -40,14 +40,16 @@
 
 **Files:** `backend/cmd/loadtest/`, isolated infrastructure/peer scripts and machine-readable results; P4 report.
 
-- [ ] Validate load generator records scheduled vs actually offered work and all outcomes against independent DB totals, not only successful responses.
-- [ ] Run exact staged load and 30-minute target, cancellation/approval/restart/slow-SSE scenarios, profile real bottlenecks, TDD any fixes.
-- [ ] Repeat three drain/recovery cycles and measure resource trends. Publish actual result and target gaps; do not fabricate or reduce the required workload silently.
+- [x] Validate load generator records scheduled vs actually offered work and all outcomes against independent DB totals, not only successful responses.
+- [x] Run exact staged load and 30-minute target, cancellation/approval/restart/slow-SSE scenarios, profile real bottlenecks, TDD any fixes.
+- [x] Repeat three drain/recovery cycles and measure resource trends. Publish actual result and target gaps; do not fabricate or reduce the required workload silently.
 
 ### Task 3: Review release and push
 
 **Files:** CI, deployment/rollback runbook, README, acceptance matrix and reports.
 
-- [ ] Full Go vet/race/unit/real infrastructure/process E2E, frontend build/browser, fixed knowledge queries and optional real-model results; list every failed/unavailable check.
-- [ ] One fresh independent whole-branch reviewer per native skill; fix Critical/Important with RED/GREEN, rerun appropriate full checks; record rulings.
+- [x] Full Go vet/race/unit/real infrastructure/process E2E, frontend build/browser, fixed knowledge queries and optional real-model results; list every failed/unavailable check.
+- [x] One fresh independent whole-branch reviewer per native skill; fix Critical/Important with RED/GREEN, rerun appropriate full checks; record rulings.
 - [ ] Exercise additive migration and rollback compatibility; push tested main to authorized repository without repeat confirmation. Confirm actual CI and remote SHA. Preserve local validation scratch where cleanup remains policy-blocked.
+
+Release verification: local full backend/infra/process/PDF race and six builds passed at59da984; frontend ci/typecheck/build and browser passed separately. Two independent-review Important findings fixed RED→GREEN. Main push/CI is the final external verification; its exact SHA and outcome are reported by the executor, not inferred from local tests.
