@@ -63,6 +63,7 @@ func (s *ChatService) pump(ctx context.Context, cancel context.CancelFunc, run c
 	firstToken := -1
 	deliveryErr := emit(ctx, agent.Evt(agent.TypeMeta, map[string]any{"session_id": run.Session.ID, "agent": run.Agent.Name, "message_id": run.UserMessage.ID, "preparation_warnings": run.Warnings}))
 	var content, reasoning strings.Builder
+	var protocolHistory chatProtocolHistory
 	var calls []llm.ToolCall
 	var prompt, completion int
 	var modelName string
@@ -91,6 +92,7 @@ consume:
 				terminal = &copy
 				continue
 			}
+			protocolHistory.add(ev)
 			switch ev.Type {
 			case agent.TypeDelta:
 				if firstToken < 0 {
@@ -144,6 +146,11 @@ consume:
 		assistant.Refs, _ = json.Marshal(run.Refs)
 	}
 	metadata := map[string]any{}
+	if status == model.MsgStatusDone {
+		if history := protocolHistory.complete(); len(history) > 0 {
+			metadata["model_history"] = history
+		}
+	}
 	if run.Trace != nil {
 		metadata["agent_trace"] = run.Trace.Snapshot()
 	}

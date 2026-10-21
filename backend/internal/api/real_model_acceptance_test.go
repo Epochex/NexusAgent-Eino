@@ -45,6 +45,14 @@ import (
 // Explicit opt-in only: ordinary CI cannot spend model credits. The real key is
 // read from a private file and exists only in the loopback budget relay memory.
 func TestRealModelCriticalEndToEnd(t *testing.T) {
+	runRealModelEndToEnd(t, false)
+}
+
+func TestRealModelExtendedEndToEnd(t *testing.T) {
+	runRealModelEndToEnd(t, true)
+}
+
+func runRealModelEndToEnd(t *testing.T, extended bool) {
 	if os.Getenv("NX_REAL_SPEND") != "ALLOW" {
 		t.Skip("explicit NX_REAL_SPEND=ALLOW required")
 	}
@@ -57,9 +65,14 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 		t.Fatal("absolute NX_REAL_OUTPUT required")
 	}
 	budget := newRealBudgetRelay("https://api.deepseek.com", strings.TrimSpace(string(key)), filepath.Join(out, "private", "ledger.json"))
+	if extended {
+		// Leave 0.20 CNY below the newly authorized 5 CNY limit. The baseline
+		// ledger is separate and must never be erased or reused for a new round.
+		budget.capCNY, budget.maxCalls, budget.maxBody, budget.maxOutput, budget.reserve = 4.8, 180, 65536, 2048, .3
+	}
 	checks := map[string]any{}
 	t.Cleanup(func() {
-		raw, _ := json.MarshalIndent(map[string]any{"checks": checks, "requests": budget.snapshot(), "failed": t.Failed(), "embedding": "controlled 32D fixture; no real embedding quality claim", "max_requests": 24, "max_output_tokens": 1024, "peak_price_budget_cny": .8}, "", "  ")
+		raw, _ := json.MarshalIndent(map[string]any{"checks": checks, "requests": budget.snapshot(), "failed": t.Failed(), "embedding": "controlled 32D fixture; no real embedding quality claim", "max_requests": budget.maxCalls, "max_output_tokens": budget.maxOutput, "peak_price_budget_cny": budget.capCNY}, "", "  ")
 		if err := os.WriteFile(filepath.Join(out, "report.json"), raw, 0600); err != nil {
 			t.Error("report persistence failed")
 		}
@@ -85,7 +98,7 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 		budget.ServeHTTP(w, r)
 	}))
 	t.Cleanup(proxy.Close)
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	t.Cleanup(cancel)
 	db := testpg.Open(t)
 	repos := repo.New(db)
@@ -109,6 +122,10 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 		effects.Add(1)
 		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: marker}}}, nil
 	})
+	var extendedTools *realExtendedTools
+	if extended {
+		extendedTools = registerRealExtendedTools(remote)
+	}
 	mcp := httptest.NewServer(sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return remote }, &sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true}))
 	t.Cleanup(mcp.Close)
 	cfg := &config.Config{LLM: config.LLM{DefaultChat: "live-chat", DefaultEmbedding: "live-embed", MaxConnsPerProvider: 1, CircuitErrorRate: 1}, Agent: config.Agent{RunTimeout: 90 * time.Second, StepTimeout: 60 * time.Second, MaxIterations: 4}, Milvus: config.Milvus{Dim: 32}, RAG: config.RAG{ChunkSize: 256, ChunkOverlap: 16, BatchEmbed: 1, DenseTopK: 4, SparseTopK: 4, FusedTopN: 4, FinalTopK: 2, RRFK: 60}, Worker: config.Worker{Concurrency: 1, MaxRetry: 1}}
@@ -218,10 +235,19 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 	var tools []model.Tool
 	mcpPath := fmt.Sprintf("/admin/mcp/servers/%d", serverConfig.ID)
 	call("POST", mcpPath+"/sync", map[string]any{}, &tools, 200)
-	if len(tools) != 1 {
+	if (!extended && len(tools) != 1) || (extended && len(tools) != 3) {
 		t.Fatal("MCP discovery")
 	}
-	call("PUT", fmt.Sprintf("%s/tools/%d/policy", mcpPath, tools[0].ID), map[string]any{"binding_version": tools[0].BindingVersion, "replay_policy": "readonly", "is_dangerous": false, "evidence": "fixture SDK tool reviewed; reads ephemeral marker only"}, nil, 200)
+	var inspectTool model.Tool
+	for _, discovered := range tools {
+		call("PUT", fmt.Sprintf("%s/tools/%d/policy", mcpPath, discovered.ID), map[string]any{"binding_version": discovered.BindingVersion, "replay_policy": "readonly", "is_dangerous": false, "evidence": "fixture SDK tool reviewed; reads ephemeral marker only"}, nil, 200)
+		if strings.HasSuffix(discovered.Code, "_inspect") {
+			inspectTool = discovered
+		}
+	}
+	if inspectTool.ID == 0 {
+		t.Fatal("inspect discovery absent")
+	}
 	fileTool := &model.Tool{Code: "file_ops", Name: "Acceptance file save", Type: "builtin", Handler: "file_ops", Description: "Save a release acceptance marker within the owner's directory", Parameters: datatypes.JSON(`{"type":"object","properties":{"operation":{"type":"string","enum":["read","save"]},"path":{"type":"string"},"content":{"type":"string"}},"required":["operation","path"]}`), IsDangerous: true, ReplayPolicy: "manual", Status: 1}
 	if err = db.Create(fileTool).Error; err != nil {
 		t.Fatal(err)
@@ -232,13 +258,15 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 		call("POST", "/agents", a, &got, 200)
 		return &got
 	}
-	bindings, _ := json.Marshal([]map[string]any{{"tool_id": tools[0].ID}})
+	bindings, _ := json.Marshal([]map[string]any{{"tool_id": inspectTool.ID}})
 	_ = newAgent("Deployment marker expert", "Use the inspect tool exactly once. Return the marker verbatim in one short sentence. Never invent the marker.", "expert", bindings, datatypes.JSON(`[]`))
 	host := newAgent("Deployment coordinator", "Delegate inspection to the deployment marker expert.", "host", datatypes.JSON(`[]`), datatypes.JSON(`[]`))
+	nextSession := ""
+	expectBudgetError := false
 	chat := func(name string, ag int64, question string) string {
 		t.Helper()
 		started := time.Now()
-		raw, _ := json.Marshal(map[string]any{"agent_id": ag, "content": question})
+		raw, _ := json.Marshal(map[string]any{"agent_id": ag, "content": question, "session_id": nextSession})
 		request, _ := http.NewRequestWithContext(ctx, "POST", base+"/chat/stream", bytes.NewReader(raw))
 		request.Header.Set("Authorization", "Bearer "+token)
 		request.Header.Set("Content-Type", "application/json")
@@ -258,6 +286,7 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 		first := 0.0
 		events := map[string]int{}
 		var refs any
+		sessionID := ""
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "event:") {
@@ -271,8 +300,16 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 				continue
 			}
 			events[event]++
+			if event == "meta" {
+				if id, ok := data["session_id"].(string); ok && id != "" {
+					sessionID = id
+				}
+			}
 			if event == "error" {
 				checks[name] = data
+				if expectBudgetError && data["code"] == float64(30006) && data["persisted"] == true {
+					return ""
+				}
 				t.Fatalf("real chat failed: %v", data)
 			}
 			if event == "delta" {
@@ -289,15 +326,35 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 				done = true
 			}
 		}
-		checks[name] = map[string]any{"answer": answer, "first_content_ms": first, "total_ms": float64(time.Since(started)) / float64(time.Millisecond), "events": events, "references": refs, "done": done}
+		checks[name] = map[string]any{"answer": answer, "session_id": sessionID, "first_content_ms": first, "total_ms": float64(time.Since(started)) / float64(time.Millisecond), "events": events, "references": refs, "done": done}
 		if scanner.Err() != nil || !done {
 			t.Fatal("missing client terminal")
 		}
 		var rows int64
-		if err := db.Model(&model.Message{}).Where("role='assistant' AND content=? AND status=1", answer).Count(&rows).Error; err != nil || rows != 1 {
+		if err := db.Model(&model.Message{}).Where("session_id=? AND role='assistant' AND content=? AND status=1", sessionID, answer).Count(&rows).Error; err != nil || rows != 1 {
 			t.Fatal("answer not committed exactly once")
 		}
+		var persisted model.Message
+		if err := db.Where("session_id=? AND role='assistant' AND content=? AND status=1", sessionID, answer).First(&persisted).Error; err != nil {
+			t.Fatal(err)
+		}
+		var metadata struct {
+			History []llm.Message `json:"model_history"`
+		}
+		_ = json.Unmarshal(persisted.Metadata, &metadata)
+		toolResults := 0
+		for _, m := range metadata.History {
+			if m.Role == llm.RoleTool {
+				toolResults++
+			}
+		}
+		checks[name].(map[string]any)["persisted_tool_results"] = toolResults
+		checks[name].(map[string]any)["persisted_protocol_messages"] = len(metadata.History)
 		return answer
+	}
+	if extended && os.Getenv("NX_REAL_FOCUS") == "history" {
+		runRealExtendedMatrix(t, checks, chat, newAgent, &nextSession, &expectBudgetError, 0, tools, extendedTools, budget)
+		return
 	}
 	answer := chat("host_expert_mcp", host.ID, "Inspect the current deployment acceptance marker using the expert and its tool. Return the exact marker.")
 	if !strings.Contains(answer, marker) || effects.Load() != 1 {
@@ -479,6 +536,9 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 	if answer = chat("unanswerable", qa.ID, "What is the annual GPU budget in dollars for LANTERN? Use only the supplied handbook."); !strings.Contains(answer, "NOT_PROVIDED") {
 		t.Fatal("unanswerable fact was invented")
 	}
+	if extended {
+		runRealExtendedMatrix(t, checks, chat, newAgent, &nextSession, &expectBudgetError, qa.ID, tools, extendedTools, budget)
+	}
 	before := len(budget.snapshot())
 	var foreign model.User
 	call("POST", "/auth/register", map[string]any{"username": "real-foreign", "email": "foreign@test.invalid", "password": "real-public-fixture-2026"}, &foreign, 200)
@@ -489,7 +549,7 @@ func TestRealModelCriticalEndToEnd(t *testing.T) {
 		t.Fatal("access denial consumed model budget")
 	}
 	checks["cross_owner_denied_before_model"] = true
-	t.Logf("Real model critical cases complete; billable attempts=%d (cap24), report saved without credentials", len(budget.snapshot()))
+	t.Logf("Real model critical cases complete; billable attempts=%d (cap%d), report saved without credentials", len(budget.snapshot()), budget.maxCalls)
 }
 
 func mustRealJSON(value any) []byte { raw, _ := json.Marshal(value); return raw }

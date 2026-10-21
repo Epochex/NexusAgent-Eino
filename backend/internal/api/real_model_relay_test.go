@@ -29,24 +29,29 @@ type realModelObservation struct {
 	FirstContentMS    float64 `json:"first_content_ms"`
 	TotalMS           float64 `json:"total_ms"`
 	ChargedCeilingCNY float64 `json:"peak_price_ceiling_cny"`
+	InputBytes        int     `json:"input_bytes,omitempty"`
+	ReasoningHistory  int     `json:"reasoning_history_messages,omitempty"`
+	ToolHistory       int     `json:"tool_history_messages,omitempty"`
 }
 
 // An opt-in acceptance fixture, not a model implementation. Requests and model
 // responses are forwarded unchanged; only Authorization is replaced in memory.
 // No response text, reasoning text, credential or request headers are persisted.
 type realBudgetRelay struct {
-	mu              sync.Mutex
-	url, key, path  string
-	client          *http.Client
-	capCNY, charged float64
-	maxCalls        int
-	rows            []realModelObservation
-	seen            map[string]bool
-	loadErr         bool
+	mu                 sync.Mutex
+	url, key, path     string
+	client             *http.Client
+	capCNY, charged    float64
+	maxCalls           int
+	maxBody, maxOutput int
+	reserve            float64
+	rows               []realModelObservation
+	seen               map[string]bool
+	loadErr            bool
 }
 
 func newRealBudgetRelay(url, key, path string) *realBudgetRelay {
-	b := &realBudgetRelay{url: url, key: key, path: path, client: &http.Client{Timeout: 90 * time.Second}, capCNY: .8, maxCalls: 24, seen: map[string]bool{}}
+	b := &realBudgetRelay{url: url, key: key, path: path, client: &http.Client{Timeout: 90 * time.Second}, capCNY: .8, maxCalls: 24, maxBody: 16384, maxOutput: 1024, reserve: .08, seen: map[string]bool{}}
 	if raw, err := os.ReadFile(path); err == nil {
 		if json.Unmarshal(raw, &b.rows) != nil {
 			b.loadErr = true
@@ -85,8 +90,8 @@ func (b *realBudgetRelay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	raw, err := io.ReadAll(io.LimitReader(r.Body, 16385))
-	if err != nil || len(raw) > 16384 {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, int64(b.maxBody+1)))
+	if err != nil || len(raw) > b.maxBody {
 		http.Error(w, "input bound", 413)
 		return
 	}
@@ -96,7 +101,7 @@ func (b *realBudgetRelay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Stream    bool              `json:"stream"`
 		Messages  []json.RawMessage `json:"messages"`
 	}
-	if json.Unmarshal(raw, &request) != nil || request.Model != "deepseek-flash" || request.MaxTokens < 1 || request.MaxTokens > 1024 || len(request.Messages) > 32 {
+	if json.Unmarshal(raw, &request) != nil || request.Model != "deepseek-flash" || request.MaxTokens < 1 || request.MaxTokens > b.maxOutput || len(request.Messages) > 32 {
 		http.Error(w, "model/output bound", 400)
 		return
 	}
@@ -112,13 +117,26 @@ func (b *realBudgetRelay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// Peak/miss CNY prices checked 2026-10-21: input2/M, output8/M.
 	// .08 reserves >35K input +1024 output tokens for a <=16KiB text body.
-	const reserve = .08
+	reserve := b.reserve
 	if b.charged+reserve > b.capCNY+1e-9 {
 		http.Error(w, "spending ceiling", 402)
 		return
 	}
 	index := len(b.rows)
-	b.rows = append(b.rows, realModelObservation{Fingerprint: fingerprint, Stream: request.Stream, ChargedCeilingCNY: reserve})
+	reasoningHistory, toolHistory := 0, 0
+	for _, message := range request.Messages {
+		var m struct {
+			Reasoning string `json:"reasoning_content"`
+			Role      string `json:"role"`
+		}
+		if json.Unmarshal(message, &m) == nil && m.Reasoning != "" {
+			reasoningHistory++
+		}
+		if m.Role == "tool" {
+			toolHistory++
+		}
+	}
+	b.rows = append(b.rows, realModelObservation{Fingerprint: fingerprint, Stream: request.Stream, ChargedCeilingCNY: reserve, InputBytes: len(raw), ReasoningHistory: reasoningHistory, ToolHistory: toolHistory})
 	b.seen[fingerprint] = true
 	b.charged += reserve
 	if b.save() != nil {

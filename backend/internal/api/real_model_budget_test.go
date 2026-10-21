@@ -75,3 +75,37 @@ func TestRealModelBudgetRejectsBeforeBilling(t *testing.T) {
 		t.Fatal("vendor error must remain diagnostic without credentials")
 	}
 }
+
+func TestRealModelExtendedBoundsRemainFailClosed(t *testing.T) {
+	var calls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		fmt.Fprint(w, `{"choices":[{"finish_reason":"stop"}],"usage":{"prompt_tokens":18000,"completion_tokens":20}}`)
+	}))
+	defer upstream.Close()
+	b := newRealBudgetRelay(upstream.URL, "fixture-only", filepath.Join(t.TempDir(), "ledger.json"))
+	b.capCNY, b.maxCalls, b.maxBody, b.maxOutput, b.reserve = 4.8, 180, 65536, 2048, .3
+	proxy := httptest.NewServer(b)
+	defer proxy.Close()
+	post := func(body string, want int) {
+		t.Helper()
+		r, err := http.Post(proxy.URL+"/chat/completions", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		if r.StatusCode != want {
+			t.Fatalf("status=%d want=%d", r.StatusCode, want)
+		}
+	}
+	valid := `{"model":"deepseek-flash","max_tokens":2048,"messages":[{"role":"user","content":"` + strings.Repeat("a", 32000) + `"}]}`
+	post(valid, 200)
+	post(valid, 409)
+	post(strings.ReplaceAll(valid, "2048", "2049"), 400)
+	post(strings.Repeat("a", 65537), 413)
+	b.capCNY = b.charged + .29
+	post(strings.ReplaceAll(valid, `"content":"a`, `"content":"b`), 402)
+	if calls.Load() != 1 {
+		t.Fatal("invalid extended request consumed upstream calls")
+	}
+}

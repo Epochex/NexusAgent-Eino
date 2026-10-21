@@ -504,12 +504,25 @@ func buildSystemPrompt(persona, memory string, refs []engine.Ref) string {
 	return b.String()
 }
 
-// historyToLLM DB 消息 → LLM 消息（只保留文本角色）。
+// historyToLLM restores complete server-recorded tool turns; legacy rows keep
+// their text representation. Failed/stopped output is never successful evidence.
 func historyToLLM(list []model.Message) []llm.Message {
 	out := make([]llm.Message, 0, len(list))
 	for _, m := range list {
 		if m.Role != llm.RoleUser && m.Role != llm.RoleAssistant {
 			continue
+		}
+		if m.Role == llm.RoleAssistant {
+			if m.Status == model.MsgStatusFailed || m.Status == model.MsgStatusStopped {
+				continue
+			}
+			var metadata struct {
+				History []llm.Message `json:"model_history"`
+			}
+			if m.Status == model.MsgStatusDone && json.Unmarshal(m.Metadata, &metadata) == nil && validChatProtocolHistory(metadata.History) {
+				out = append(out, metadata.History...)
+				continue
+			}
 		}
 		if m.Content == "" {
 			continue

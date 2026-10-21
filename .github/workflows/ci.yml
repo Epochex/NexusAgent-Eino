@@ -48,6 +48,8 @@ jobs:
           cache-dependency-path: backend/go.sum
       - run: go vet ./...
       - run: go test -race ./... -timeout 180s
+      # Only local httptest peers; this cannot run the opt-in paid acceptance.
+      - run: go test -race -tags 'integration infrastructure realmodel' ./internal/api -run '^TestReal(ModelBudgetRejectsBeforeBilling|ModelExtendedBoundsRemainFailClosed|HistoryScoringRejectsQuotedRefusal)$' -count=1 -timeout 45s
       - run: go test -race -tags=integration ./internal/service ./internal/execution ./internal/api ./internal/ingestion ./internal/repo ./internal/memory/long_term ./internal/tool ./internal/a2a ./internal/capacity ./cmd/loadtest -count=1 -timeout 240s
         env:
           NX_TEST_DATABASE_DSN: postgres://postgres@localhost:5432/nexus_eino_test?sslmode=disable

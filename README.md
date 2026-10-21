@@ -4,7 +4,7 @@ Go + Eino 的 Agent 应用平台，面向需要接入企业知识、业务工具
 
 基于 [chengpeng-cp/nexus-agent](https://github.com/chengpeng-cp/nexus-agent) 改造，保留上游历史和教学实现；本仓库的独立工作是将生产路径接入实际 Eino ADK/Graph，并补齐可验证的执行、数据和集成边界。来源及许可情况见 [UPSTREAM.md](UPSTREAM.md)。
 
-**实施状态：P0–P4 工程实现与本地验收已完成；[最终验收与审查记录](docs/research/2026-10-21-release-validation.md)。已用 8 次真实 DeepSeek 请求验证工具协作、审批恢复及知识库问答，记录 token 用量与端到端延迟，见[真实模型验收](docs/research/2026-10-21-real-model-validation.md)。真实 embedding 质量、大样本回答质量与供应商容量仍待实测。**
+**实施状态：P0–P4 工程实现与本地验收已完成；[最终验收与审查记录](docs/research/2026-10-21-release-validation.md)。首轮 [8 次真实模型关键链路验收](docs/research/2026-10-21-real-model-validation.md)后，追加 [100 次真实请求扩展验收](docs/research/2026-10-21-real-model-extended-validation.md)，发现并修复跨轮工具证据丢失，验证问答/拒答、复杂参数、历史恢复与上下文预算。真实 embedding 质量、代表性业务回答质量与供应商容量仍待实测。**
 
 ## 已实现的主流程
 
