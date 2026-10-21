@@ -1,0 +1,82 @@
+{
+  "before": {
+    "model": "Qwen/Qwen3-Embedding-0.6B",
+    "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+    "device": "cuda",
+    "dtype": "torch.float16",
+    "versions": {
+      "torch": "2.8.0+cu128",
+      "cuda": "12.8",
+      "transformers": "4.57.6"
+    },
+    "calls": 0,
+    "items": 0,
+    "input_tokens": 0,
+    "inference_failures": 0,
+    "dimension": 1024,
+    "max_input_tokens": 512,
+    "max_batch": 4,
+    "query_instruction": "none; identical production embedding contract for documents and queries",
+    "inference_ms": [],
+    "cpu_threads": 2,
+    "cpu_user_seconds": 12.765625,
+    "cpu_system_seconds": 6.65625,
+    "gpu": "NVIDIA GeForce RTX 5060",
+    "allocated_bytes": 1191567872,
+    "reserved_bytes": 1216348160,
+    "peak_allocated_bytes": 1191567872,
+    "peak_reserved_bytes": 1216348160
+  },
+  "after": {
+    "model": "Qwen/Qwen3-Embedding-0.6B",
+    "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+    "device": "cuda",
+    "dtype": "torch.float16",
+    "versions": {
+      "torch": "2.8.0+cu128",
+      "cuda": "12.8",
+      "transformers": "4.57.6"
+    },
+    "calls": 2,
+    "items": 5,
+    "input_tokens": 2055,
+    "inference_failures": 0,
+    "dimension": 1024,
+    "max_input_tokens": 512,
+    "max_batch": 4,
+    "query_instruction": "none; identical production embedding contract for documents and queries",
+    "inference_ms": [
+      1136.6267999401316,
+      230.98979995120317
+    ],
+    "cpu_threads": 2,
+    "cpu_user_seconds": 13.5625,
+    "cpu_system_seconds": 7.0625,
+    "gpu": "NVIDIA GeForce RTX 5060",
+    "allocated_bytes": 1200087552,
+    "reserved_bytes": 1507852288,
+    "peak_allocated_bytes": 1465709568,
+    "peak_reserved_bytes": 1507852288
+  },
+  "measurements": [
+    {
+      "batch": 1,
+      "input_tokens": 7,
+      "norms": [
+        0.9999999715135093
+      ]
+    },
+    {
+      "batch": 4,
+      "input_tokens": 2048,
+      "norms": [
+        0.9999999733243184,
+        0.9999999733243184,
+        0.9999999733243184,
+        0.9999999733243184
+      ]
+    }
+  ],
+  "stress_tokens_per_input": 512,
+  "paid_api_calls": 0
+}
