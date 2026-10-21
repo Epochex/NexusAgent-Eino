@@ -50,6 +50,7 @@ jobs:
       - run: go test -race ./... -timeout 180s
       # Only local httptest peers; this cannot run the opt-in paid acceptance.
       - run: go test -race -tags 'integration infrastructure realmodel' ./internal/api -run '^TestReal(ModelBudgetRejectsBeforeBilling|ModelExtendedBoundsRemainFailClosed|HistoryScoringRejectsQuotedRefusal)$' -count=1 -timeout 45s
+      - run: go test -race -tags 'integration infrastructure localembedding' ./internal/service -run '^TestSemanticMetricCountsDistinctRelevantDocuments$' -count=1 -timeout 45s
       - run: go test -race -tags=integration ./internal/service ./internal/execution ./internal/api ./internal/ingestion ./internal/repo ./internal/memory/long_term ./internal/tool ./internal/a2a ./internal/capacity ./cmd/loadtest -count=1 -timeout 240s
         env:
           NX_TEST_DATABASE_DSN: postgres://postgres@localhost:5432/nexus_eino_test?sslmode=disable
@@ -88,6 +89,16 @@ jobs:
             go test -p 1 -race -tags 'integration infrastructure' ./internal/vector ./internal/service ./internal/memory/long_term ./internal/execution ./internal/api ./internal/rag/loader -run 'TestMilvusUpsertAndDimensionContract|TestMilvusScope|TestMemoryScope|TestDocumentPipelineRealInfrastructure|TestFixed100QueryRetrievalEvaluation|TestMemoryPipeline|TestMemorySupersededMigration|TestMemoryWorkerProcess|TestMemoryHTTP|TestA2AServerProcess|TestChatServerProcess|TestPDFParserContainer' -count=1 -timeout 300s -v
       - if: failure()
         run: docker compose -f backend/deployments/docker-compose.acceptance.yaml logs --tail 100
+  local-embedding-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      # Contract/dataset tests only: no torch, GPU, weights or paid API access.
+      - run: python -m pip install fastapi==0.128.0 httpx==0.28.1
+      - run: python -m unittest discover -s scripts/embedding -p 'test_*.py'
   frontend:
     runs-on: ubuntu-latest
     defaults:

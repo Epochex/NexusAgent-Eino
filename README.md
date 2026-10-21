@@ -4,7 +4,9 @@ Go + Eino 的 Agent 应用平台，面向需要接入企业知识、业务工具
 
 基于 [chengpeng-cp/nexus-agent](https://github.com/chengpeng-cp/nexus-agent) 改造，保留上游历史和教学实现；本仓库的独立工作是将生产路径接入实际 Eino ADK/Graph，并补齐可验证的执行、数据和集成边界。来源及许可情况见 [UPSTREAM.md](UPSTREAM.md)。
 
-**实施状态：P0–P4 工程实现与本地验收已完成；[最终验收与审查记录](docs/research/2026-10-21-release-validation.md)。首轮 [8 次真实模型关键链路验收](docs/research/2026-10-21-real-model-validation.md)后，追加 [100 次真实请求扩展验收](docs/research/2026-10-21-real-model-extended-validation.md)，发现并修复跨轮工具证据丢失，验证问答/拒答、复杂参数、历史恢复与上下文预算。真实 embedding 质量、代表性业务回答质量与供应商容量仍待实测。**
+**实施状态：P0–P4 工程实现与本地验收已完成；[最终验收与审查记录](docs/research/2026-10-21-release-validation.md)。首轮 [8 次真实模型关键链路验收](docs/research/2026-10-21-real-model-validation.md)后，追加 [100 次真实请求扩展验收](docs/research/2026-10-21-real-model-extended-validation.md)，发现并修复跨轮工具证据丢失。现已在 RTX5060 上完成[真实 Qwen3 embedding 的400题检索与 RAG 验收](docs/research/2026-10-21-local-embedding-validation.md)，保留混合检索退化与无答案候选问题；代表性业务质量与供应商容量仍需另测。**
+
+[完整开发记录](docs/research/development-journal.md)用第一人称说明选题、源码核对、实现、失败、取舍与验证，注明上游来源和 AI 辅助范围。
 
 ## 已实现的主流程
 
@@ -21,7 +23,7 @@ Go + Eino 的 Agent 应用平台，面向需要接入企业知识、业务工具
 
 危险外部操作按策略进入持久审批；调用后结果未提交而进程退出时，不能假定外部未执行。非幂等操作进入人工核对，只有只读或具备真实幂等保障的调用允许自动重试。Redis 通知采用 outbox 至少一次投递，PG 是执行状态权威。
 
-检索评测使用受控 32 维 embedding 验证召回链路、权限和无答案行为，不能当作真实 embedding 语义质量的证明。[代码执行工具](docs/research/code-execution-runbook.md)默认关闭，已单独验证真实容器资源边界、Python/shell/Go、超时与 OOM 恢复；生产需专用 TLS Docker 节点。其并发限制是每进程本地上限，不计入关闭沙箱时的容量基准。
+检索先以受控32维 embedding 验证机制，现补充实际 Qwen3-Embedding-0.6B：中文100题与 SciFact500文档/300题子集，测密集、ILIKE/TF-IDF、等权RRF。SciFact Hit@3 分别为86.33%/31.00%/71.00%，混合并未优于密集；该子集不等于完整榜单或业务质量承诺。[代码执行工具](docs/research/code-execution-runbook.md)默认关闭，已单独验证真实容器资源边界、Python/shell/Go、超时与 OOM 恢复；生产需专用 TLS Docker 节点。其并发限制是每进程本地上限，不计入关闭沙箱时的容量基准。
 
 ## 本地启动
 
