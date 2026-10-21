@@ -1,0 +1,111 @@
+{
+  "embedding": "real local Qwen/Qwen3-Embedding-0.6B revision97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3; 1024D",
+  "checks": {
+    "cross_owner_denied_before_model": true,
+    "document": {
+      "chunks": 1,
+      "id": 1,
+      "ready_version": 1
+    },
+    "grounded_answer": {
+      "answer": "The rollback window is 17 minutes [1].",
+      "done": true,
+      "events": {
+        "delta": 11,
+        "done": 1,
+        "meta": 1,
+        "reasoning": 24,
+        "refs": 1,
+        "usage": 1
+      },
+      "first_content_ms": 1359.8728,
+      "persisted_protocol_messages": 1,
+      "persisted_tool_results": 0,
+      "references": {
+        "items": [
+          {
+            "chunk_id": 1,
+            "document_id": 1,
+            "filename": "lantern-handbook.txt",
+            "page": 1,
+            "score": 0.032786883
+          }
+        ],
+        "run_id": "RZQMJXDJM4KMIKAGJFKEBSGMQQ",
+        "seq": 2,
+        "time": "2026-10-21T05:31:50.6471516Z"
+      },
+      "session_id": "610d23d9-0145-4fc4-8e48-ecbec55ebc70",
+      "total_ms": 1430.7243
+    },
+    "unanswerable": {
+      "answer": "NOT_PROVIDED — the annual GPU budget is not recorded in the handbook [1].",
+      "done": true,
+      "events": {
+        "delta": 18,
+        "done": 1,
+        "meta": 1,
+        "reasoning": 54,
+        "refs": 1,
+        "usage": 1
+      },
+      "first_content_ms": 1449.7167,
+      "persisted_protocol_messages": 1,
+      "persisted_tool_results": 0,
+      "references": {
+        "items": [
+          {
+            "chunk_id": 1,
+            "document_id": 1,
+            "filename": "lantern-handbook.txt",
+            "page": 1,
+            "score": 0.032786883
+          }
+        ],
+        "run_id": "2ZK5546RVMD46Y4IJ5QWOOTES4",
+        "seq": 2,
+        "time": "2026-10-21T05:31:52.049024Z"
+      },
+      "session_id": "ea7405f1-cdff-4888-8558-313e1dad5b55",
+      "total_ms": 1528.9978
+    }
+  },
+  "ledger_requests_before": 100,
+  "ledger_requests_after": 102,
+  "new_requests": [
+    {
+      "fingerprint": "da93bdfcb921b2597abe0a6d6fe094834a84476f5e5c297c00655e50d0676088",
+      "status": 200,
+      "stream": true,
+      "prompt_tokens": 188,
+      "completion_tokens": 36,
+      "cache_hit_tokens": 0,
+      "reasoning_tokens": 24,
+      "finish_reason": "stop",
+      "first_content_ms": 740.4399,
+      "total_ms": 768.2138,
+      "peak_price_ceiling_cny": 0.000664,
+      "input_bytes": 941
+    },
+    {
+      "fingerprint": "9e38eb0a6fb68d0624943af7ae879c8ed481daa810978b31e2eb198e605b2d83",
+      "status": 200,
+      "stream": true,
+      "prompt_tokens": 188,
+      "completion_tokens": 73,
+      "cache_hit_tokens": 0,
+      "reasoning_tokens": 54,
+      "finish_reason": "stop",
+      "first_content_ms": 867.3687,
+      "total_ms": 908.6135,
+      "peak_price_ceiling_cny": 0.0009599999999999999,
+      "input_bytes": 946
+    }
+  ],
+  "model_requests_added": 2,
+  "local_embedding_batches_added": 3,
+  "local_embedding_input_tokens_added": 87,
+  "cumulative_extended_peak_estimate_cny": 0.2588,
+  "new_peak_estimate_cny": 0.001624,
+  "failed": false
+}

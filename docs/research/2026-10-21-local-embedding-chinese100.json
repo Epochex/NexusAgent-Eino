@@ -1,0 +1,4532 @@
+{
+  "chunks": 20,
+  "dataset": "chinese100",
+  "dataset_sha256": "595d3840308810f6ed32ea4bce1b996e21e5480f16574db2f710b2efc28a216e",
+  "dense_threshold": 0.25,
+  "documents": 20,
+  "embedding": "real local Qwen/Qwen3-Embedding-0.6B; 1024 dimensions; no query instruction",
+  "index_ms": 4913,
+  "indexing": "explicit PG publication jobs and real split/embed/Milvus vectors; upload/async-worker path tested separately",
+  "model_revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+  "queries": 100,
+  "ranking": "top3 chunks mapped to documents; duplicate documents cannot inflate recall",
+  "reranker": "none",
+  "results": [
+    {
+      "answerable": 80,
+      "cases": [
+        {
+          "id": "q001",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "source-reservation",
+            "workflow-bounds"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 536.734
+        },
+        {
+          "id": "q002",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "workflow-bounds",
+            "source-reservation"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 575.607
+        },
+        {
+          "id": "q003",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "source-reservation",
+            "workflow-bounds"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 583.912
+        },
+        {
+          "id": "q004",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "publication",
+            "workflow-bounds"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 599.264
+        },
+        {
+          "id": "q005",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "outbox",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 617.333
+        },
+        {
+          "id": "q006",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "source-reservation",
+            "approval-wait",
+            "archive"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.042
+        },
+        {
+          "id": "q007",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "approval-wait",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 598.95
+        },
+        {
+          "id": "q008",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "source-reservation",
+            "approval-wait",
+            "upload-size"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 417.025
+        },
+        {
+          "id": "q009",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "uncertain-effect",
+            "request-key"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 585.19
+        },
+        {
+          "id": "q010",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "uncertain-effect",
+            "approval-wait"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 631.042
+        },
+        {
+          "id": "q011",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "uncertain-effect",
+            "lease"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 583.061
+        },
+        {
+          "id": "q012",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "uncertain-effect",
+            "vector-upsert"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 581.726
+        },
+        {
+          "id": "q013",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "document-retry",
+            "source-reservation"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 601.522
+        },
+        {
+          "id": "q014",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "approval-wait",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 617.18
+        },
+        {
+          "id": "q015",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "approval-wait",
+            "cancel"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 581.589
+        },
+        {
+          "id": "q016",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "source-reservation",
+            "approval-wait"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 402.941
+        },
+        {
+          "id": "q017",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "retrieval-scope",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 414.287
+        },
+        {
+          "id": "q018",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "retrieval-scope",
+            "approval"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 585.004
+        },
+        {
+          "id": "q019",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "uncertain-effect",
+            "outbox"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 398.713
+        },
+        {
+          "id": "q020",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "workflow-bounds",
+            "vector-upsert"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 423.204
+        },
+        {
+          "id": "q021",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "retrieval-scope",
+            "vector-upsert"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 577.245
+        },
+        {
+          "id": "q022",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "vector-upsert",
+            "archive"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 398.546
+        },
+        {
+          "id": "q023",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "embedding-pin",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 601.028
+        },
+        {
+          "id": "q024",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "vector-upsert",
+            "retrieval-scope"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 599.761
+        },
+        {
+          "id": "q025",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "credentials",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 600.337
+        },
+        {
+          "id": "q026",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "outbox",
+            "refresh"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 404.684
+        },
+        {
+          "id": "q027",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "uncertain-effect",
+            "source-reservation"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 593.575
+        },
+        {
+          "id": "q028",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "approval",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 425.315
+        },
+        {
+          "id": "q029",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "request-key",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 419.062
+        },
+        {
+          "id": "q030",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "embedding-pin",
+            "retrieval-scope"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 573.919
+        },
+        {
+          "id": "q031",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "request-key",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 598.11
+        },
+        {
+          "id": "q032",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "uncertain-effect",
+            "vector-upsert"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.3333333333333333,
+          "total_ms": 599.987
+        },
+        {
+          "id": "q033",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "uncertain-effect",
+            "approval"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.986
+        },
+        {
+          "id": "q034",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "approval",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 417.695
+        },
+        {
+          "id": "q035",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "uncertain-effect",
+            "approval"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 598.351
+        },
+        {
+          "id": "q036",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "archive",
+            "publication"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 600.165
+        },
+        {
+          "id": "q037",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "archive",
+            "source-reservation"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 584.403
+        },
+        {
+          "id": "q038",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "outbox",
+            "archive"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.3333333333333333,
+          "total_ms": 398.04
+        },
+        {
+          "id": "q039",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "source-reservation",
+            "lease"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 400.24
+        },
+        {
+          "id": "q040",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "cancel",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 399.928
+        },
+        {
+          "id": "q041",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "uncertain-effect",
+            "publication"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 399.682
+        },
+        {
+          "id": "q042",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "uncertain-effect",
+            "vector-upsert"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 199.032
+        },
+        {
+          "id": "q043",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "uncertain-effect",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 403.783
+        },
+        {
+          "id": "q044",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "uncertain-effect",
+            "vector-upsert"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 414.996
+        },
+        {
+          "id": "q045",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "uncertain-effect",
+            "request-key"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 581.634
+        },
+        {
+          "id": "q046",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "uncertain-effect",
+            "request-key"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 417.731
+        },
+        {
+          "id": "q047",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "uncertain-effect",
+            "request-key"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 600.518
+        },
+        {
+          "id": "q048",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "approval-wait",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.125
+        },
+        {
+          "id": "q049",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "lease",
+            "source-reservation"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 418.725
+        },
+        {
+          "id": "q050",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "lease",
+            "outbox"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 598.06
+        },
+        {
+          "id": "q051",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "approval",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.438
+        },
+        {
+          "id": "q052",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "uncertain-effect",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 417.707
+        },
+        {
+          "id": "q053",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "document-retry",
+            "approval-wait"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 581.734
+        },
+        {
+          "id": "q054",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "publication",
+            "approval"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 399.525
+        },
+        {
+          "id": "q055",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "uncertain-effect",
+            "cancel"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 619.673
+        },
+        {
+          "id": "q056",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "approval-wait",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.3333333333333333,
+          "total_ms": 602.629
+        },
+        {
+          "id": "q057",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "sse",
+            "cancel",
+            "approval-wait"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 385.786
+        },
+        {
+          "id": "q058",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "sse",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 612.223
+        },
+        {
+          "id": "q059",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "approval-wait",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 580.89
+        },
+        {
+          "id": "q060",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "sse",
+            "source-reservation"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 418.707
+        },
+        {
+          "id": "q061",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "approval-wait",
+            "sse"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.242
+        },
+        {
+          "id": "q062",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "cancel",
+            "approval"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 615.792
+        },
+        {
+          "id": "q063",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "document-retry",
+            "approval-wait"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.915
+        },
+        {
+          "id": "q064",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "approval-wait",
+            "sse"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 416.742
+        },
+        {
+          "id": "q065",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "approval-wait",
+            "source-reservation"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.509
+        },
+        {
+          "id": "q066",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "sse",
+            "cancel"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 399.419
+        },
+        {
+          "id": "q067",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "document-retry",
+            "approval-wait"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 418.522
+        },
+        {
+          "id": "q068",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "approval-wait",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 593.543
+        },
+        {
+          "id": "q069",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "credentials",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 640.874
+        },
+        {
+          "id": "q070",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "vector-upsert",
+            "outbox"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 549.831
+        },
+        {
+          "id": "q071",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "uncertain-effect",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 605.426
+        },
+        {
+          "id": "q072",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "document-retry",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 592.355
+        },
+        {
+          "id": "q073",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope",
+            "approval",
+            "uncertain-effect"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 615.877
+        },
+        {
+          "id": "q074",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope",
+            "source-reservation",
+            "request-key"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 581.377
+        },
+        {
+          "id": "q075",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope",
+            "uncertain-effect",
+            "cancel"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 419.127
+        },
+        {
+          "id": "q076",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "approval-wait",
+            "retrieval-scope"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.3333333333333333,
+          "total_ms": 582.724
+        },
+        {
+          "id": "q077",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "upload-size",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 600.769
+        },
+        {
+          "id": "q078",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "upload-size",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 615.86
+        },
+        {
+          "id": "q079",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "approval",
+            "request-key"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 583.232
+        },
+        {
+          "id": "q080",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "request-key",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 399.298
+        },
+        {
+          "id": "q81",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "upload-size",
+            "embedding-pin",
+            "publication"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 403.448
+        },
+        {
+          "id": "q82",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "upload-size"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 613.451
+        },
+        {
+          "id": "q83",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 597.231
+        },
+        {
+          "id": "q84",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "upload-size"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 602.615
+        },
+        {
+          "id": "q85",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "request-key",
+            "embedding-pin",
+            "publication"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 600.148
+        },
+        {
+          "id": "q86",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 620.413
+        },
+        {
+          "id": "q87",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "embedding-pin",
+            "approval-wait"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 562.936
+        },
+        {
+          "id": "q88",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "refresh",
+            "embedding-pin",
+            "retrieval-scope"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 425.966
+        },
+        {
+          "id": "q89",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "cancel",
+            "refresh",
+            "approval-wait"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 589.645
+        },
+        {
+          "id": "q90",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "request-key",
+            "document-retry"
+          ],
+          "mode": "dense_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 599.356
+        },
+        {
+          "id": "q91",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q92",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q93",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q94",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q95",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q96",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q97",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q98",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q99",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q100",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        }
+      ],
+      "citation_mismatches": 0,
+      "errors": 0,
+      "hit_at_3": 0.9625,
+      "mrr_at_3": 0.8854166666666666,
+      "no_answer": 10,
+      "no_answer_returned_candidates": 8,
+      "p95_ms": 617.333,
+      "permission": 10,
+      "permission_leaks": 0,
+      "recall_at_3": 0.9625,
+      "strategy": "dense"
+    },
+    {
+      "answerable": 80,
+      "cases": [
+        {
+          "id": "q001",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "source-reservation"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 9.973
+        },
+        {
+          "id": "q002",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "source-reservation",
+            "workflow-bounds"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 9.129
+        },
+        {
+          "id": "q003",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "source-reservation"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.349
+        },
+        {
+          "id": "q004",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "sse",
+            "document-retry"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.919
+        },
+        {
+          "id": "q005",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "source-reservation",
+            "document-retry",
+            "approval-wait"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.826
+        },
+        {
+          "id": "q006",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "source-reservation",
+            "upload-size",
+            "uncertain-effect"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.445
+        },
+        {
+          "id": "q007",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "source-reservation",
+            "uncertain-effect",
+            "approval-wait"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.932
+        },
+        {
+          "id": "q008",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "source-reservation",
+            "upload-size",
+            "request-key"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.144
+        },
+        {
+          "id": "q009",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "archive",
+            "source-reservation"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 9.415
+        },
+        {
+          "id": "q010",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "archive",
+            "source-reservation"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.141
+        },
+        {
+          "id": "q011",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "uncertain-effect",
+            "vector-upsert"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.541
+        },
+        {
+          "id": "q012",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "vector-upsert",
+            "approval"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.482
+        },
+        {
+          "id": "q013",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "document-retry"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.737
+        },
+        {
+          "id": "q014",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "cancel",
+            "lease"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.3333333333333333,
+          "total_ms": 9.026
+        },
+        {
+          "id": "q015",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "cancel",
+            "request-key"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.759
+        },
+        {
+          "id": "q016",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.693
+        },
+        {
+          "id": "q017",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.164
+        },
+        {
+          "id": "q018",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope",
+            "publication",
+            "uncertain-effect"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 7.172
+        },
+        {
+          "id": "q019",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "cancel",
+            "outbox"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.481
+        },
+        {
+          "id": "q020",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "vector-upsert",
+            "outbox"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.006
+        },
+        {
+          "id": "q021",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "retrieval-scope",
+            "vector-upsert"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.828
+        },
+        {
+          "id": "q022",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "vector-upsert",
+            "credentials"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.796
+        },
+        {
+          "id": "q023",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "publication",
+            "approval-wait"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.103
+        },
+        {
+          "id": "q024",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "vector-upsert",
+            "retrieval-scope"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.511
+        },
+        {
+          "id": "q025",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "publication",
+            "uncertain-effect"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.001
+        },
+        {
+          "id": "q026",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "publication"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 9.511
+        },
+        {
+          "id": "q027",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "uncertain-effect"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.647
+        },
+        {
+          "id": "q028",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "uncertain-effect",
+            "refresh"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.473
+        },
+        {
+          "id": "q029",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "refresh",
+            "request-key"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.49
+        },
+        {
+          "id": "q030",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "refresh",
+            "embedding-pin"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.162
+        },
+        {
+          "id": "q031",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "document-retry",
+            "publication"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.895
+        },
+        {
+          "id": "q032",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "document-retry",
+            "request-key"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.979
+        },
+        {
+          "id": "q033",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.848
+        },
+        {
+          "id": "q034",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "source-reservation",
+            "uncertain-effect"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7
+        },
+        {
+          "id": "q035",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "cancel",
+            "lease"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.008
+        },
+        {
+          "id": "q036",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "approval-wait"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.916
+        },
+        {
+          "id": "q037",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "retrieval-scope",
+            "approval-wait"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.586
+        },
+        {
+          "id": "q038",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "document-retry",
+            "uncertain-effect"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.983
+        },
+        {
+          "id": "q039",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "source-reservation",
+            "document-retry"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.194
+        },
+        {
+          "id": "q040",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "publication"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.131
+        },
+        {
+          "id": "q041",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "uncertain-effect",
+            "source-reservation"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.736
+        },
+        {
+          "id": "q042",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "refresh",
+            "source-reservation"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.156
+        },
+        {
+          "id": "q043",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "cancel",
+            "refresh"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.839
+        },
+        {
+          "id": "q044",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "publication",
+            "cancel"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.685
+        },
+        {
+          "id": "q045",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "uncertain-effect"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 4.976
+        },
+        {
+          "id": "q046",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.867
+        },
+        {
+          "id": "q047",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "credentials",
+            "source-reservation"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.305
+        },
+        {
+          "id": "q048",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "document-retry",
+            "approval-wait"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.724
+        },
+        {
+          "id": "q049",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "cancel",
+            "approval"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 9.602
+        },
+        {
+          "id": "q050",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "cancel",
+            "lease"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.96
+        },
+        {
+          "id": "q051",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "approval",
+            "outbox"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 10.912
+        },
+        {
+          "id": "q052",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.308
+        },
+        {
+          "id": "q053",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "document-retry",
+            "source-reservation"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.589
+        },
+        {
+          "id": "q054",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.804
+        },
+        {
+          "id": "q055",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "cancel",
+            "workflow-bounds"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 9.022
+        },
+        {
+          "id": "q056",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "vector-upsert",
+            "approval"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.118
+        },
+        {
+          "id": "q057",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "sse",
+            "cancel",
+            "request-key"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.035
+        },
+        {
+          "id": "q058",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "sse",
+            "approval-wait",
+            "outbox"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.768
+        },
+        {
+          "id": "q059",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "sse",
+            "lease"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 4.875
+        },
+        {
+          "id": "q060",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "sse",
+            "publication"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.037
+        },
+        {
+          "id": "q061",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "request-key",
+            "lease"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.97
+        },
+        {
+          "id": "q062",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "retrieval-scope",
+            "source-reservation"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.412
+        },
+        {
+          "id": "q063",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "vector-upsert",
+            "publication"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 7.487
+        },
+        {
+          "id": "q064",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "sse",
+            "outbox"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 9.956
+        },
+        {
+          "id": "q065",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "vector-upsert",
+            "cancel"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 11.11
+        },
+        {
+          "id": "q066",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "cancel",
+            "request-key"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.95
+        },
+        {
+          "id": "q067",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "source-reservation",
+            "publication"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.312
+        },
+        {
+          "id": "q068",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "approval-wait",
+            "sse"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.26
+        },
+        {
+          "id": "q069",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "credentials"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.965
+        },
+        {
+          "id": "q070",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "vector-upsert",
+            "workflow-bounds"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.855
+        },
+        {
+          "id": "q071",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "vector-upsert",
+            "lease"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.613
+        },
+        {
+          "id": "q072",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "document-retry",
+            "uncertain-effect"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 9.381
+        },
+        {
+          "id": "q073",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.894
+        },
+        {
+          "id": "q074",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.595
+        },
+        {
+          "id": "q075",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.989
+        },
+        {
+          "id": "q076",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope",
+            "source-reservation",
+            "credentials"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 8.083
+        },
+        {
+          "id": "q077",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "upload-size",
+            "sse"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 4.724
+        },
+        {
+          "id": "q078",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 5.311
+        },
+        {
+          "id": "q079",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "document-retry"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.457
+        },
+        {
+          "id": "q080",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "refresh",
+            "publication"
+          ],
+          "mode": "keyword_only",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 6.452
+        },
+        {
+          "id": "q81",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 4.533
+        },
+        {
+          "id": "q82",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 3.687
+        },
+        {
+          "id": "q83",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 3.903
+        },
+        {
+          "id": "q84",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 2.987
+        },
+        {
+          "id": "q85",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 4
+        },
+        {
+          "id": "q86",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 3.998
+        },
+        {
+          "id": "q87",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 3
+        },
+        {
+          "id": "q88",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 4.261
+        },
+        {
+          "id": "q89",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 4.06
+        },
+        {
+          "id": "q90",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "keyword_only",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 4.362
+        },
+        {
+          "id": "q91",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q92",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q93",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q94",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q95",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q96",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q97",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q98",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q99",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q100",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        }
+      ],
+      "citation_mismatches": 0,
+      "errors": 0,
+      "hit_at_3": 1,
+      "mrr_at_3": 0.9854166666666668,
+      "no_answer": 10,
+      "no_answer_returned_candidates": 0,
+      "p95_ms": 9.602,
+      "permission": 10,
+      "permission_leaks": 0,
+      "recall_at_3": 1,
+      "strategy": "keyword_tfidf"
+    },
+    {
+      "answerable": 80,
+      "cases": [
+        {
+          "id": "q001",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "source-reservation",
+            "workflow-bounds"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 551.94
+        },
+        {
+          "id": "q002",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "source-reservation",
+            "workflow-bounds"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 601.026
+        },
+        {
+          "id": "q003",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "source-reservation",
+            "workflow-bounds"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 590.212
+        },
+        {
+          "id": "q004",
+          "category": "answerable",
+          "relevant": [
+            "upload-size"
+          ],
+          "ranked_document_ids": [
+            "upload-size",
+            "publication",
+            "document-retry"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 591.263
+        },
+        {
+          "id": "q005",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "source-reservation",
+            "document-retry"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 403.5
+        },
+        {
+          "id": "q006",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "source-reservation",
+            "uncertain-effect",
+            "cancel"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 614.145
+        },
+        {
+          "id": "q007",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "approval-wait",
+            "source-reservation"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.3333333333333333,
+          "total_ms": 581.895
+        },
+        {
+          "id": "q008",
+          "category": "answerable",
+          "relevant": [
+            "source-reservation"
+          ],
+          "ranked_document_ids": [
+            "source-reservation",
+            "upload-size",
+            "outbox"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 400.977
+        },
+        {
+          "id": "q009",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "source-reservation",
+            "request-key"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 599.468
+        },
+        {
+          "id": "q010",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "source-reservation",
+            "workflow-bounds"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 415.653
+        },
+        {
+          "id": "q011",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "uncertain-effect",
+            "vector-upsert"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 594.507
+        },
+        {
+          "id": "q012",
+          "category": "answerable",
+          "relevant": [
+            "document-retry"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "vector-upsert",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 694.771
+        },
+        {
+          "id": "q013",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "document-retry",
+            "source-reservation"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 571.192
+        },
+        {
+          "id": "q014",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "request-key",
+            "document-retry"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 741.306
+        },
+        {
+          "id": "q015",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "cancel",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 599.12
+        },
+        {
+          "id": "q016",
+          "category": "answerable",
+          "relevant": [
+            "lease"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "source-reservation",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 598.557
+        },
+        {
+          "id": "q017",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "retrieval-scope",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 586.985
+        },
+        {
+          "id": "q018",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "retrieval-scope",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 414.099
+        },
+        {
+          "id": "q019",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "outbox",
+            "cancel"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 588.327
+        },
+        {
+          "id": "q020",
+          "category": "answerable",
+          "relevant": [
+            "publication"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "vector-upsert",
+            "outbox"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 594.925
+        },
+        {
+          "id": "q021",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "retrieval-scope",
+            "vector-upsert"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 1000.74
+        },
+        {
+          "id": "q022",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "vector-upsert",
+            "credentials"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 398.512
+        },
+        {
+          "id": "q023",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "embedding-pin",
+            "retrieval-scope"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 416.487
+        },
+        {
+          "id": "q024",
+          "category": "answerable",
+          "relevant": [
+            "embedding-pin"
+          ],
+          "ranked_document_ids": [
+            "embedding-pin",
+            "vector-upsert",
+            "retrieval-scope"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 600.598
+        },
+        {
+          "id": "q025",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "credentials",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 581.298
+        },
+        {
+          "id": "q026",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "publication",
+            "outbox"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 401.279
+        },
+        {
+          "id": "q027",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "uncertain-effect",
+            "source-reservation"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 415.625
+        },
+        {
+          "id": "q028",
+          "category": "answerable",
+          "relevant": [
+            "credentials"
+          ],
+          "ranked_document_ids": [
+            "credentials",
+            "uncertain-effect",
+            "refresh"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 585.784
+        },
+        {
+          "id": "q029",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "request-key",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 396.23
+        },
+        {
+          "id": "q030",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "embedding-pin",
+            "refresh"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 401.113
+        },
+        {
+          "id": "q031",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "vector-upsert",
+            "document-retry",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 412.223
+        },
+        {
+          "id": "q032",
+          "category": "answerable",
+          "relevant": [
+            "vector-upsert"
+          ],
+          "ranked_document_ids": [
+            "document-retry",
+            "vector-upsert",
+            "request-key"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 605.345
+        },
+        {
+          "id": "q033",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "uncertain-effect",
+            "approval"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 580.646
+        },
+        {
+          "id": "q034",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "uncertain-effect",
+            "source-reservation"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 401.573
+        },
+        {
+          "id": "q035",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "cancel",
+            "request-key"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 599.531
+        },
+        {
+          "id": "q036",
+          "category": "answerable",
+          "relevant": [
+            "parser"
+          ],
+          "ranked_document_ids": [
+            "parser",
+            "approval-wait",
+            "archive"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 399.39
+        },
+        {
+          "id": "q037",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "retrieval-scope",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 418.323
+        },
+        {
+          "id": "q038",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "document-retry",
+            "source-reservation"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 600.364
+        },
+        {
+          "id": "q039",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "source-reservation",
+            "publication"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.581
+        },
+        {
+          "id": "q040",
+          "category": "answerable",
+          "relevant": [
+            "archive"
+          ],
+          "ranked_document_ids": [
+            "archive",
+            "publication",
+            "cancel"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 400.254
+        },
+        {
+          "id": "q041",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "uncertain-effect",
+            "source-reservation"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 398.552
+        },
+        {
+          "id": "q042",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "uncertain-effect",
+            "vector-upsert"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 417.012
+        },
+        {
+          "id": "q043",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "cancel",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 601.276
+        },
+        {
+          "id": "q044",
+          "category": "answerable",
+          "relevant": [
+            "request-key"
+          ],
+          "ranked_document_ids": [
+            "request-key",
+            "retrieval-scope",
+            "outbox"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 580.319
+        },
+        {
+          "id": "q045",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "uncertain-effect",
+            "request-key"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 417.061
+        },
+        {
+          "id": "q046",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "uncertain-effect",
+            "request-key"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 600.407
+        },
+        {
+          "id": "q047",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "credentials",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.729
+        },
+        {
+          "id": "q048",
+          "category": "answerable",
+          "relevant": [
+            "approval"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "approval-wait",
+            "document-retry"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 400.447
+        },
+        {
+          "id": "q049",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "lease",
+            "approval"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 399.563
+        },
+        {
+          "id": "q050",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "lease",
+            "cancel"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 400.954
+        },
+        {
+          "id": "q051",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "approval",
+            "cancel"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 402.775
+        },
+        {
+          "id": "q052",
+          "category": "answerable",
+          "relevant": [
+            "approval-wait"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "uncertain-effect",
+            "document-retry"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 655.645
+        },
+        {
+          "id": "q053",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "document-retry",
+            "cancel"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 559.43
+        },
+        {
+          "id": "q054",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "publication",
+            "approval"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 580.219
+        },
+        {
+          "id": "q055",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "cancel",
+            "outbox"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 603.844
+        },
+        {
+          "id": "q056",
+          "category": "answerable",
+          "relevant": [
+            "uncertain-effect"
+          ],
+          "ranked_document_ids": [
+            "approval",
+            "uncertain-effect",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 614.875
+        },
+        {
+          "id": "q057",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "sse",
+            "cancel",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 582.54
+        },
+        {
+          "id": "q058",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "approval-wait",
+            "sse",
+            "outbox"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 602.394
+        },
+        {
+          "id": "q059",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "lease",
+            "sse",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 596.93
+        },
+        {
+          "id": "q060",
+          "category": "answerable",
+          "relevant": [
+            "sse"
+          ],
+          "ranked_document_ids": [
+            "publication",
+            "sse",
+            "source-reservation"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 0.5,
+          "total_ms": 404.302
+        },
+        {
+          "id": "q061",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "request-key",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 596.314
+        },
+        {
+          "id": "q062",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "uncertain-effect",
+            "source-reservation"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 616.36
+        },
+        {
+          "id": "q063",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "sse",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 583.639
+        },
+        {
+          "id": "q064",
+          "category": "answerable",
+          "relevant": [
+            "cancel"
+          ],
+          "ranked_document_ids": [
+            "cancel",
+            "sse",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 617.566
+        },
+        {
+          "id": "q065",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "cancel",
+            "vector-upsert"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 600.074
+        },
+        {
+          "id": "q066",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "cancel",
+            "source-reservation"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 581.551
+        },
+        {
+          "id": "q067",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "source-reservation",
+            "publication"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 617.338
+        },
+        {
+          "id": "q068",
+          "category": "answerable",
+          "relevant": [
+            "outbox"
+          ],
+          "ranked_document_ids": [
+            "outbox",
+            "approval-wait",
+            "sse"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 585.246
+        },
+        {
+          "id": "q069",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "credentials",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 646.189
+        },
+        {
+          "id": "q070",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "vector-upsert",
+            "workflow-bounds"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 554.136
+        },
+        {
+          "id": "q071",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "vector-upsert",
+            "document-retry"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 614.266
+        },
+        {
+          "id": "q072",
+          "category": "answerable",
+          "relevant": [
+            "refresh"
+          ],
+          "ranked_document_ids": [
+            "refresh",
+            "document-retry",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 597.305
+        },
+        {
+          "id": "q073",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope",
+            "approval",
+            "uncertain-effect"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 601.356
+        },
+        {
+          "id": "q074",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope",
+            "source-reservation",
+            "request-key"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 583.57
+        },
+        {
+          "id": "q075",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope",
+            "uncertain-effect",
+            "cancel"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 614.269
+        },
+        {
+          "id": "q076",
+          "category": "answerable",
+          "relevant": [
+            "retrieval-scope"
+          ],
+          "ranked_document_ids": [
+            "retrieval-scope",
+            "uncertain-effect",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 586.749
+        },
+        {
+          "id": "q077",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "upload-size",
+            "sse"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 616.406
+        },
+        {
+          "id": "q078",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "upload-size",
+            "document-retry"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 601.925
+        },
+        {
+          "id": "q079",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "document-retry",
+            "approval"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 578.823
+        },
+        {
+          "id": "q080",
+          "category": "answerable",
+          "relevant": [
+            "workflow-bounds"
+          ],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "publication",
+            "refresh"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 1,
+          "reciprocal_rank": 1,
+          "total_ms": 619.615
+        },
+        {
+          "id": "q81",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "upload-size",
+            "embedding-pin",
+            "publication"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 580.861
+        },
+        {
+          "id": "q82",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "upload-size"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 599.34
+        },
+        {
+          "id": "q83",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 399.443
+        },
+        {
+          "id": "q84",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "upload-size"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 618.921
+        },
+        {
+          "id": "q85",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "request-key",
+            "embedding-pin",
+            "publication"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 598.749
+        },
+        {
+          "id": "q86",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 597.794
+        },
+        {
+          "id": "q87",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "workflow-bounds",
+            "embedding-pin",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 584.824
+        },
+        {
+          "id": "q88",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "refresh",
+            "embedding-pin",
+            "retrieval-scope"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 400.534
+        },
+        {
+          "id": "q89",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "cancel",
+            "refresh",
+            "approval-wait"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 402.246
+        },
+        {
+          "id": "q90",
+          "category": "no_answer",
+          "relevant": [],
+          "ranked_document_ids": [
+            "uncertain-effect",
+            "request-key",
+            "document-retry"
+          ],
+          "mode": "hybrid",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 613.308
+        },
+        {
+          "id": "q91",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q92",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q93",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q94",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q95",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q96",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q97",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q98",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q99",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        },
+        {
+          "id": "q100",
+          "category": "permission",
+          "relevant": [],
+          "ranked_document_ids": null,
+          "mode": "",
+          "recall_at_3": 0,
+          "reciprocal_rank": 0,
+          "total_ms": 0
+        }
+      ],
+      "citation_mismatches": 0,
+      "errors": 0,
+      "hit_at_3": 1,
+      "mrr_at_3": 0.9416666666666667,
+      "no_answer": 10,
+      "no_answer_returned_candidates": 8,
+      "p95_ms": 646.189,
+      "permission": 10,
+      "permission_leaks": 0,
+      "recall_at_3": 1,
+      "strategy": "hybrid"
+    }
+  ],
+  "fixture_sha256": "a7d29154c081a0444e2aef59a0b08b4bfbd336df33ae4d2d6b546dcb44d6999c",
+  "service_source_sha256": "4da868c92bafbeed1facddd11c740ad38f2a0a2bf058d8e2c52e5653cd0ff960"
+}

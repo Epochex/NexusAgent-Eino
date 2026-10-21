@@ -1,0 +1,14 @@
+{
+  "dataset": "BEIR SciFact test, qrel-aware 500-document subset",
+  "source": "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/scifact.zip",
+  "source_sha256": "536e14446a0ba56ed1398ab1055f39fe852686ecad24a6306c80c490fa8e0165",
+  "dataset_card": "https://huggingface.co/datasets/BeIR/scifact",
+  "dataset_license_as_listed": "CC-BY-SA-4.0",
+  "full_corpus_documents": 5183,
+  "selected_documents": 500,
+  "queries": 300,
+  "qrel_policy": "all test positive documents retained; deterministic SHA256-order distractors",
+  "leaderboard_comparable": false,
+  "corpus.json_sha256": "096f513d31853398ef77836a5df4084e2d1d8bbf8d398f338c1615a786be6be4",
+  "queries.jsonl_sha256": "cf0c54fd02fd29627544ac9a9420fac0d626480f3101c2cf58fbcc0d181cc220"
+}

@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -64,21 +65,65 @@ func runRealModelEndToEnd(t *testing.T, extended bool) {
 	if out == "" {
 		t.Fatal("absolute NX_REAL_OUTPUT required")
 	}
-	budget := newRealBudgetRelay("https://api.deepseek.com", strings.TrimSpace(string(key)), filepath.Join(out, "private", "ledger.json"))
+	ledger := filepath.Join(out, "private", "ledger.json")
+	if shared := os.Getenv("NX_REAL_LEDGER_FILE"); shared != "" {
+		if !filepath.IsAbs(shared) {
+			t.Fatal("absolute shared ledger path required")
+		}
+		ledger = shared
+	}
+	budget := newRealBudgetRelay("https://api.deepseek.com", strings.TrimSpace(string(key)), ledger)
 	if extended {
 		// Leave 0.20 CNY below the newly authorized 5 CNY limit. The baseline
 		// ledger is separate and must never be erased or reused for a new round.
 		budget.capCNY, budget.maxCalls, budget.maxBody, budget.maxOutput, budget.reserve = 4.8, 180, 65536, 2048, .3
 	}
 	checks := map[string]any{}
+	embeddingEvidence := "controlled 32D fixture; no real embedding quality claim"
+	embeddingDimension := 32
+	localEmbeddingURL := os.Getenv("NX_LOCAL_EMBEDDING_URL")
+	localToken := ""
+	if localEmbeddingURL != "" {
+		u, e := url.Parse(localEmbeddingURL)
+		if e != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" {
+			t.Fatal("local embedding fixture requires literal loopback HTTP")
+		}
+		private, e := os.ReadFile(os.Getenv("NX_LOCAL_EMBEDDING_TOKEN_FILE"))
+		if e != nil {
+			t.Fatal("local embedding token unavailable")
+		}
+		localToken = strings.TrimSpace(string(private))
+		embeddingDimension = 1024
+		embeddingEvidence = "real local Qwen/Qwen3-Embedding-0.6B revision97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3; 1024D"
+	}
 	t.Cleanup(func() {
-		raw, _ := json.MarshalIndent(map[string]any{"checks": checks, "requests": budget.snapshot(), "failed": t.Failed(), "embedding": "controlled 32D fixture; no real embedding quality claim", "max_requests": budget.maxCalls, "max_output_tokens": budget.maxOutput, "peak_price_budget_cny": budget.capCNY}, "", "  ")
+		raw, _ := json.MarshalIndent(map[string]any{"checks": checks, "requests": budget.snapshot(), "failed": t.Failed(), "embedding": embeddingEvidence, "max_requests": budget.maxCalls, "max_output_tokens": budget.maxOutput, "peak_price_budget_cny": budget.capCNY}, "", "  ")
 		if err := os.WriteFile(filepath.Join(out, "report.json"), raw, 0600); err != nil {
 			t.Error("report persistence failed")
 		}
 	})
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/embeddings" {
+			if localEmbeddingURL != "" {
+				up, e := http.NewRequestWithContext(r.Context(), "POST", strings.TrimRight(localEmbeddingURL, "/")+"/embeddings", io.LimitReader(r.Body, 65537))
+				if e != nil {
+					http.Error(w, "local request", 502)
+					return
+				}
+				up.Header.Set("Content-Type", "application/json")
+				up.Header.Set("Authorization", "Bearer "+localToken)
+				client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+				res, e := client.Do(up)
+				if e != nil {
+					http.Error(w, "local embedding unavailable", 502)
+					return
+				}
+				defer res.Body.Close()
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(res.StatusCode)
+				_, _ = io.Copy(w, io.LimitReader(res.Body, 1<<20))
+				return
+			}
 			var req struct {
 				Input []string `json:"input"`
 			}
@@ -129,6 +174,7 @@ func runRealModelEndToEnd(t *testing.T, extended bool) {
 	mcp := httptest.NewServer(sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return remote }, &sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true}))
 	t.Cleanup(mcp.Close)
 	cfg := &config.Config{LLM: config.LLM{DefaultChat: "live-chat", DefaultEmbedding: "live-embed", MaxConnsPerProvider: 1, CircuitErrorRate: 1}, Agent: config.Agent{RunTimeout: 90 * time.Second, StepTimeout: 60 * time.Second, MaxIterations: 4}, Milvus: config.Milvus{Dim: 32}, RAG: config.RAG{ChunkSize: 256, ChunkOverlap: 16, BatchEmbed: 1, DenseTopK: 4, SparseTopK: 4, FusedTopN: 4, FinalTopK: 2, RRFK: 60}, Worker: config.Worker{Concurrency: 1, MaxRetry: 1}}
+	cfg.Milvus.Dim = embeddingDimension
 	cfg.MCP.Enabled = true
 	cfg.Outbound.PrivateOrigins = []string{mcp.URL, proxy.URL}
 	cli, err := infra.NewMilvus(ctx, &config.Milvus{Addr: os.Getenv("NX_TEST_MILVUS_ADDR")})
@@ -156,6 +202,10 @@ func runRealModelEndToEnd(t *testing.T, extended bool) {
 	}
 	chatModel := &model.ModelConfig{ProviderID: provider.ID, Alias: "live-chat", ModelName: "deepseek-flash", Type: model.ModelTypeChat, ContextWindow: 32768, MaxOutput: 1024, Status: 1}
 	embedModel := &model.ModelConfig{ProviderID: provider.ID, Alias: "live-embed", ModelName: "controlled-32d", Type: model.ModelTypeEmbed, EmbeddingDimension: 32, Status: 1}
+	if localEmbeddingURL != "" {
+		embedModel.ModelName = "Qwen/Qwen3-Embedding-0.6B"
+		embedModel.EmbeddingDimension = embeddingDimension
+	}
 	for _, m := range []*model.ModelConfig{chatModel, embedModel} {
 		if err = db.Create(m).Error; err != nil {
 			t.Fatal(err)
@@ -356,117 +406,120 @@ func runRealModelEndToEnd(t *testing.T, extended bool) {
 		runRealExtendedMatrix(t, checks, chat, newAgent, &nextSession, &expectBudgetError, 0, tools, extendedTools, budget)
 		return
 	}
-	answer := chat("host_expert_mcp", host.ID, "Inspect the current deployment acceptance marker using the expert and its tool. Return the exact marker.")
-	if !strings.Contains(answer, marker) || effects.Load() != 1 {
-		t.Fatalf("real tool evidence absent; invocations=%d answer=%q", effects.Load(), answer)
-	}
-	checks["mcp_effects"] = effects.Load()
-	// Durable model -> automatic manual-tool approval -> real owner file write
-	// -> model. Recreate the worker between waiting and decision to load PG state.
-	store := execution.NewStore(db)
-	startWorker := func() context.CancelFunc {
-		wc, stop := context.WithCancel(ctx)
-		w, e := execution.NewWorker(store, svcs.Workflow.Driver(), execution.WorkerConfig{Concurrency: 1, PollInterval: 20 * time.Millisecond})
-		if e != nil {
-			t.Fatal(e)
+	var answer string
+	if os.Getenv("NX_REAL_FOCUS") != "rag" {
+		answer = chat("host_expert_mcp", host.ID, "Inspect the current deployment acceptance marker using the expert and its tool. Return the exact marker.")
+		if !strings.Contains(answer, marker) || effects.Load() != 1 {
+			t.Fatalf("real tool evidence absent; invocations=%d answer=%q", effects.Load(), answer)
 		}
-		done := make(chan error, 1)
-		go func() { done <- w.Run(wc) }()
-		return func() {
-			stop()
-			select {
-			case e := <-done:
-				if e != nil {
-					t.Error(e)
+		checks["mcp_effects"] = effects.Load()
+		// Durable model -> automatic manual-tool approval -> real owner file write
+		// -> model. Recreate the worker between waiting and decision to load PG state.
+		store := execution.NewStore(db)
+		startWorker := func() context.CancelFunc {
+			wc, stop := context.WithCancel(ctx)
+			w, e := execution.NewWorker(store, svcs.Workflow.Driver(), execution.WorkerConfig{Concurrency: 1, PollInterval: 20 * time.Millisecond})
+			if e != nil {
+				t.Fatal(e)
+			}
+			done := make(chan error, 1)
+			go func() { done <- w.Run(wc) }()
+			return func() {
+				stop()
+				select {
+				case e := <-done:
+					if e != nil {
+						t.Error(e)
+					}
+				case <-time.After(6 * time.Second):
+					t.Error("worker drain")
 				}
-			case <-time.After(6 * time.Second):
-				t.Error("worker drain")
 			}
 		}
-	}
-	stopWorker := startWorker()
-	defer func() {
-		if stopWorker != nil {
-			stopWorker()
+		stopWorker := startWorker()
+		defer func() {
+			if stopWorker != nil {
+				stopWorker()
+			}
+		}()
+		var flow model.Workflow
+		call("POST", "/workflows", map[string]any{"name": "Real release approval", "dsl": "name: real-release\ninput: [marker]\nnodes:\n  - {key: plan, type: llm, prompt: 'Reply READY only. Release {{marker}}.'}\n  - key: save\n    type: tool\n    tool_code: file_ops\n    args: {operation: save, path: 'releases/{{marker}}.txt', content: '{{marker}}'}\n  - {key: answer, type: llm, prompt: 'The file was saved: {{save}}. Reply ACTIVATE_OK {{marker}} only.'}\nedges: [plan, save, answer]"}, &flow, 200)
+		waitRun := func(id int64, accept func(string) bool) map[string]json.RawMessage {
+			t.Helper()
+			deadline := time.Now().Add(100 * time.Second)
+			for time.Now().Before(deadline) {
+				var value map[string]json.RawMessage
+				call("GET", fmt.Sprintf("/workflows/runs/%d", id), nil, &value, 200)
+				var status string
+				_ = json.Unmarshal(value["status"], &status)
+				if accept(status) {
+					return value
+				}
+				if status == "failed" || status == "needs_attention" {
+					t.Fatalf("workflow failed: %.1600s", mustRealJSON(value))
+				}
+				time.Sleep(40 * time.Millisecond)
+			}
+			t.Fatal("workflow wait exceeded")
+			return nil
 		}
-	}()
-	var flow model.Workflow
-	call("POST", "/workflows", map[string]any{"name": "Real release approval", "dsl": "name: real-release\ninput: [marker]\nnodes:\n  - {key: plan, type: llm, prompt: 'Reply READY only. Release {{marker}}.'}\n  - key: save\n    type: tool\n    tool_code: file_ops\n    args: {operation: save, path: 'releases/{{marker}}.txt', content: '{{marker}}'}\n  - {key: answer, type: llm, prompt: 'The file was saved: {{save}}. Reply ACTIVATE_OK {{marker}} only.'}\nedges: [plan, save, answer]"}, &flow, 200)
-	waitRun := func(id int64, accept func(string) bool) map[string]json.RawMessage {
-		t.Helper()
-		deadline := time.Now().Add(100 * time.Second)
-		for time.Now().Before(deadline) {
-			var value map[string]json.RawMessage
-			call("GET", fmt.Sprintf("/workflows/runs/%d", id), nil, &value, 200)
+		for _, approved := range []bool{true, false} {
+			value := "release_" + rand.Text()[:10]
+			input := map[string]any{"workflow_id": flow.ID, "request_key": value, "input": map[string]any{"marker": value}}
+			var run, duplicate model.WorkflowRun
+			call("POST", "/workflows/run", input, &run, 202)
+			call("POST", "/workflows/run", input, &duplicate, 202)
+			if duplicate.ID != run.ID {
+				t.Fatal("idempotent submit duplicated")
+			}
+			waiting := waitRun(run.ID, func(s string) bool { return s == "waiting_approval" })
+			path := filepath.Join(files, strconv.FormatInt(owner.ID, 10), "releases", value+".txt")
+			if _, e := os.Stat(path); !os.IsNotExist(e) {
+				t.Fatal("effect before approval")
+			}
+			if approved {
+				stopWorker()
+				stopWorker = nil
+			}
+			var approvals []struct {
+				InterruptID string `json:"interrupt_id"`
+				ArgsHash    string `json:"args_hash"`
+			}
+			_ = json.Unmarshal(waiting["approvals"], &approvals)
+			if len(approvals) != 1 {
+				t.Fatalf("missing approval: %.1200s", mustRealJSON(waiting))
+			}
+			before := len(budget.snapshot())
+			call("POST", fmt.Sprintf("/workflows/runs/%d/approve", run.ID), map[string]any{"interrupt_id": approvals[0].InterruptID, "args_hash": approvals[0].ArgsHash, "approved": approved, "comment": "real model sandbox acceptance"}, nil, 200)
+			if approved {
+				stopWorker = startWorker()
+			}
+			terminal := waitRun(run.ID, func(s string) bool { return s == "succeeded" || s == "canceled" || s == "failed" })
 			var status string
-			_ = json.Unmarshal(value["status"], &status)
-			if accept(status) {
-				return value
+			_ = json.Unmarshal(terminal["status"], &status)
+			if approved {
+				data, e := os.ReadFile(path)
+				if e != nil || string(data) != value || status != "succeeded" {
+					t.Fatal("approved effect/result missing")
+				}
+				if len(budget.snapshot()) != before+1 {
+					t.Fatal("checkpoint reran earlier paid model node")
+				}
+			} else {
+				if _, e := os.Stat(path); !os.IsNotExist(e) || status == "succeeded" {
+					t.Fatal("rejected effect ran")
+				}
+				if len(budget.snapshot()) != before {
+					t.Fatal("rejected branch used model budget")
+				}
 			}
-			if status == "failed" || status == "needs_attention" {
-				t.Fatalf("workflow failed: %.1600s", mustRealJSON(value))
-			}
-			time.Sleep(40 * time.Millisecond)
+			var operations []execution.Operation
+			call("GET", fmt.Sprintf("/workflows/runs/%d/operations", run.ID), nil, &operations, 200)
+			checks[fmt.Sprintf("approval_%t", approved)] = map[string]any{"run_id": run.ID, "status": status, "operations": operations, "effect_verified": true}
 		}
-		t.Fatal("workflow wait exceeded")
-		return nil
 	}
-	for _, approved := range []bool{true, false} {
-		value := "release_" + rand.Text()[:10]
-		input := map[string]any{"workflow_id": flow.ID, "request_key": value, "input": map[string]any{"marker": value}}
-		var run, duplicate model.WorkflowRun
-		call("POST", "/workflows/run", input, &run, 202)
-		call("POST", "/workflows/run", input, &duplicate, 202)
-		if duplicate.ID != run.ID {
-			t.Fatal("idempotent submit duplicated")
-		}
-		waiting := waitRun(run.ID, func(s string) bool { return s == "waiting_approval" })
-		path := filepath.Join(files, strconv.FormatInt(owner.ID, 10), "releases", value+".txt")
-		if _, e := os.Stat(path); !os.IsNotExist(e) {
-			t.Fatal("effect before approval")
-		}
-		if approved {
-			stopWorker()
-			stopWorker = nil
-		}
-		var approvals []struct {
-			InterruptID string `json:"interrupt_id"`
-			ArgsHash    string `json:"args_hash"`
-		}
-		_ = json.Unmarshal(waiting["approvals"], &approvals)
-		if len(approvals) != 1 {
-			t.Fatalf("missing approval: %.1200s", mustRealJSON(waiting))
-		}
-		before := len(budget.snapshot())
-		call("POST", fmt.Sprintf("/workflows/runs/%d/approve", run.ID), map[string]any{"interrupt_id": approvals[0].InterruptID, "args_hash": approvals[0].ArgsHash, "approved": approved, "comment": "real model sandbox acceptance"}, nil, 200)
-		if approved {
-			stopWorker = startWorker()
-		}
-		terminal := waitRun(run.ID, func(s string) bool { return s == "succeeded" || s == "canceled" || s == "failed" })
-		var status string
-		_ = json.Unmarshal(terminal["status"], &status)
-		if approved {
-			data, e := os.ReadFile(path)
-			if e != nil || string(data) != value || status != "succeeded" {
-				t.Fatal("approved effect/result missing")
-			}
-			if len(budget.snapshot()) != before+1 {
-				t.Fatal("checkpoint reran earlier paid model node")
-			}
-		} else {
-			if _, e := os.Stat(path); !os.IsNotExist(e) || status == "succeeded" {
-				t.Fatal("rejected effect ran")
-			}
-			if len(budget.snapshot()) != before {
-				t.Fatal("rejected branch used model budget")
-			}
-		}
-		var operations []execution.Operation
-		call("GET", fmt.Sprintf("/workflows/runs/%d/operations", run.ID), nil, &operations, 200)
-		checks[fmt.Sprintf("approval_%t", approved)] = map[string]any{"run_id": run.ID, "status": status, "operations": operations, "effect_verified": true}
-	}
-	// Real source upload/ETL/PG/MinIO/Milvus, controlled embeddings, real chat.
-	rag := engine.New(svcs.Gateway, vectors, repos.KB, &cfg.RAG, 32)
+	// Real source upload/ETL/PG/MinIO/Milvus and chat; embedding mode is explicit.
+	rag := engine.New(svcs.Gateway, vectors, repos.KB, &cfg.RAG, embeddingDimension)
 	rag.SetEmbeddingResolver(svcs.ResolveKBEmbedding)
 	svcs.SetRAGEngine(rag)
 	var schema string
@@ -530,13 +583,17 @@ func runRealModelEndToEnd(t *testing.T, extended bool) {
 	}
 	kbs, _ := json.Marshal([]int64{kb.ID})
 	qa := newAgent("LANTERN evidence QA", "Answer only from the supplied knowledge context. Cite the source using [1]. If the requested fact is absent, answer NOT_PROVIDED and invent no numbers. Keep answers under 40 words.", "expert", datatypes.JSON(`[]`), kbs)
-	if answer = chat("grounded_answer", qa.ID, "According to the LANTERN handbook, what is the rollback window? Cite the source."); !strings.Contains(answer, "17") {
+	caseTag := ""
+	if localEmbeddingURL != "" {
+		caseTag = "Local Qwen embedding acceptance. "
+	}
+	if answer = chat("grounded_answer", qa.ID, caseTag+"According to the LANTERN handbook, what is the rollback window? Cite the source."); !strings.Contains(answer, "17") {
 		t.Fatal("grounded answer incorrect")
 	}
-	if answer = chat("unanswerable", qa.ID, "What is the annual GPU budget in dollars for LANTERN? Use only the supplied handbook."); !strings.Contains(answer, "NOT_PROVIDED") {
+	if answer = chat("unanswerable", qa.ID, caseTag+"What is the annual GPU budget in dollars for LANTERN? Use only the supplied handbook."); !strings.Contains(answer, "NOT_PROVIDED") {
 		t.Fatal("unanswerable fact was invented")
 	}
-	if extended {
+	if extended && os.Getenv("NX_REAL_FOCUS") != "rag" {
 		runRealExtendedMatrix(t, checks, chat, newAgent, &nextSession, &expectBudgetError, qa.ID, tools, extendedTools, budget)
 	}
 	before := len(budget.snapshot())
