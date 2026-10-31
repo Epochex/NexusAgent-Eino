@@ -88,7 +88,8 @@ func (r *EinoRunner) Run(ctx context.Context, in *RunInput) (<-chan agent.Event,
 		}
 		infos = append(infos, info)
 	}
-	if err = validateInputBudget(messages, infos, r.cfg.InputTokenBudget); err != nil {
+	messages, initialCompaction, err := compactInputHistory(messages, infos, r.cfg.InputTokenBudget)
+	if err != nil {
 		return nil, err
 	}
 	if input.RunID == "" {
@@ -99,7 +100,7 @@ func (r *EinoRunner) Run(ctx context.Context, in *RunInput) (<-chan agent.Event,
 	}
 	runCtx, cancel := context.WithTimeout(ctx, r.cfg.RunTimeout)
 	sink := newEventSink(r.cfg.EventBuffer, r.cfg.SendTimeout, input.RunID, cancel)
-	middleware := &runMiddleware{sink: sink, budget: r.cfg.InputTokenBudget, slots: make(chan struct{}, r.cfg.MaxConcurrentTools), trace: input.Trace, agentName: input.AgentName}
+	middleware := &runMiddleware{sink: sink, budget: r.cfg.InputTokenBudget, slots: make(chan struct{}, r.cfg.MaxConcurrentTools), trace: input.Trace, agentName: input.AgentName, pendingCompaction: initialCompaction}
 	a, err := adk.NewChatModelAgent(runCtx, &adk.ChatModelAgentConfig{Name: input.AgentName, Model: model, MaxIterations: input.MaxIterations, ToolsConfig: adk.ToolsConfig{ToolsNodeConfig: compose.ToolsNodeConfig{Tools: tools}}, Handlers: []adk.ChatModelAgentMiddleware{middleware}})
 	if err != nil {
 		cancel()
@@ -248,20 +249,36 @@ func (r *EinoRunner) loopEino(ctx context.Context, cancel context.CancelFunc, in
 
 type runMiddleware struct {
 	adk.BaseChatModelAgentMiddleware
-	sink      *eventSink
-	budget    int
-	slots     chan struct{}
-	steps     atomic.Int64
-	trace     *observability.AgentTraceCollector
-	agentName string
+	sink              *eventSink
+	budget            int
+	slots             chan struct{}
+	steps             atomic.Int64
+	trace             *observability.AgentTraceCollector
+	agentName         string
+	pendingCompaction contextCompaction
 }
 
 func (m *runMiddleware) BeforeModelRewriteState(ctx context.Context, state *adk.ChatModelAgentState, _ *adk.ModelContext) (context.Context, *adk.ChatModelAgentState, error) {
-	if err := validateInputBudget(state.Messages, state.ToolInfos, m.budget); err != nil {
+	messages, stats, err := compactInputHistory(state.Messages, state.ToolInfos, m.budget)
+	if err != nil {
 		return ctx, state, err
 	}
+	if m.pendingCompaction.RemovedTurns > 0 {
+		stats.RemovedTurns += m.pendingCompaction.RemovedTurns
+		stats.RemovedMessages += m.pendingCompaction.RemovedMessages
+		stats.EstimatedBefore = m.pendingCompaction.EstimatedBefore
+		m.pendingCompaction = contextCompaction{}
+	}
+	if stats.RemovedTurns > 0 {
+		detail := fmt.Sprintf("Context history: evicted %d complete turns (%d messages); estimated input %d -> %d tokens. System instructions and current task retained.", stats.RemovedTurns, stats.RemovedMessages, stats.EstimatedBefore, stats.EstimatedAfter)
+		if err := m.sink.Send(ctx, agent.EvtAgentEvent("progress", m.agentName, detail)); err != nil {
+			return ctx, state, err
+		}
+	}
+	next := *state
+	next.Messages = messages
 	m.steps.Add(1)
-	return ctx, state, nil
+	return ctx, &next, nil
 }
 func (m *runMiddleware) AfterModelRewriteState(ctx context.Context, state *adk.ChatModelAgentState, _ *adk.ModelContext) (context.Context, *adk.ChatModelAgentState, error) {
 	if len(state.Messages) == 0 {
