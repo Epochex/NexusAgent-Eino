@@ -13,6 +13,7 @@ Go + Eino 的 Agent 应用平台，面向需要接入企业知识、业务工具
 | 能力 | 实现与边界 | 验证证据 |
 |---|---|---|
 | Agent 对话与 Host/Expert | Eino ADK v0.9.22；实际 Function Calling、工具执行和最终答案 SSE；模型、工具绑定与上下文预算 | [执行内核](docs/research/2026-10-20-p1-validation.md)、[产品权限](docs/research/2026-10-20-p3-validation.md) |
+| Harness 上下文与任务评测 | 完整用户轮次裁剪、系统消息与工具回执保护；独立预期核验答案及工具轨迹、失败分母、Token 与版本退化对比 | [实现与验证索引](docs/research/agent-harness-evidence.md)、[评测工具](docs/research/2026-10-31-agent-evaluation.md) |
 | 持久工作流 | YAML 编译为 Eino Graph；发布快照、PG checkpoint、租约与 generation fencing、请求幂等、审批、取消、事件重放 | [故障实验](docs/research/2026-10-20-p2-validation.md)、[操作手册](docs/research/workflow-runtime-runbook.md) |
 | 文档知识库 | MinIO 文档版本、异步 ETL、有界分块、Milvus 版本索引；PDF 使用独立容器解析服务 | [文档验证](docs/research/2026-10-20-p3-documents-validation.md)、[解析隔离](docs/research/2026-10-20-p4-runtime-hardening.md) |
 | 混合检索 | 在 ANN 查询前限制所有者/知识库/版本；PG 文本召回、稠密召回、RRF、可选 rerank、显式降级 | [固定 100 条评测](docs/research/2026-10-20-p3-retrieval-validation.md) |

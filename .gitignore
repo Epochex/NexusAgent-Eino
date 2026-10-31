@@ -25,3 +25,6 @@ __pycache__/
 /backend/data/
 /backend/configs/config.*.yaml
 /backend/configs/config.*.yml
+
+# Local task evaluation traces can contain prompts and tool outputs.
+/tmp/agenteval/
