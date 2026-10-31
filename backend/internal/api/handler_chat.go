@@ -59,7 +59,7 @@ func (h *Handler) Chat(ctx context.Context, c *app.RequestContext) {
 	pr, pw := io.Pipe()
 	// The response body owns cancellation through the last network flush.
 	// Refresh the socket deadline per chunk; an idle model is not a slow reader.
-	body := &sseBody{PipeReader: pr, conn: c.GetConn(), cancel: cancel, timeout: 2 * time.Second}
+	body := &sseBody{PipeReader: pr, ctx: streamCtx, conn: c.GetConn(), cancel: cancel, timeout: 2 * time.Second}
 	body.stop = context.AfterFunc(streamCtx, body.abort)
 	c.Response.Header.Set("Content-Type", "text/event-stream")
 	c.Response.Header.Set("Cache-Control", "no-cache")
@@ -124,6 +124,7 @@ func (h *Handler) Chat(ctx context.Context, c *app.RequestContext) {
 // pooled RequestContext. Close is called after the final flush or a write error.
 type sseBody struct {
 	*io.PipeReader
+	ctx     context.Context
 	conn    network.Conn
 	cancel  context.CancelFunc
 	timeout time.Duration
@@ -138,6 +139,15 @@ func (b *sseBody) Read(p []byte) (int, error) {
 	n, err := b.PipeReader.Read(p)
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	// The producer can close its pipe before AfterFunc schedules abort. Never
+	// turn cancellation into a normal chunked EOF and an idle keep-alive socket.
+	if b.ctx != nil && b.ctx.Err() != nil {
+		b.aborted = true
+		// Hertz converts reader errors into a final chunk. Expire the write
+		// deadline too, so that flush fails and Hertz releases this connection.
+		_ = b.conn.SetWriteDeadline(time.Now())
+		return 0, b.ctx.Err()
+	}
 	if b.aborted {
 		return 0, context.Canceled
 	}
