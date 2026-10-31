@@ -99,7 +99,7 @@ func (h *Handler) RunEvents(ctx context.Context, c *app.RequestContext) {
 	streamCtx, cancelRoot := h.streamContext(deadlineCtx)
 	cancel := func() { cancelRoot(); cancelDeadline() }
 	pr, pw := io.Pipe()
-	body := &sseBody{PipeReader: pr, conn: c.GetConn(), cancel: cancel, timeout: 2 * time.Second}
+	body := &sseBody{PipeReader: pr, ctx: streamCtx, conn: c.GetConn(), cancel: cancel, timeout: 2 * time.Second}
 	body.stop = context.AfterFunc(streamCtx, body.abort)
 	if span := TakeRootSpan(c); span != nil {
 		body.endSpan = func() { span.End() }
