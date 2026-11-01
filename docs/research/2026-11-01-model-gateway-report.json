@@ -1,0 +1,213 @@
+{
+  "scope": "real pinned New-API; deterministic local providers; not model-quality or production SLA",
+  "gateway_image": "calciumion/new-api@sha256:938fa2713d4946723c9e9ce3076351c33f7770699fec92d23f3a26fd95791026",
+  "cases": [
+    {
+      "case": "json-tool-image-roundtrip",
+      "model": "probe-openai",
+      "passed": true,
+      "channel": "oai",
+      "upstream_attempts": 2,
+      "ttft_ms": null,
+      "usage_known": true,
+      "elapsed_ms": 10.043
+    },
+    {
+      "case": "stream-tool-image-roundtrip",
+      "model": "probe-openai",
+      "passed": true,
+      "channel": "oai",
+      "upstream_attempts": 2,
+      "ttft_ms": 28.786365997802932,
+      "usage_known": true,
+      "elapsed_ms": 60.893
+    },
+    {
+      "case": "json-tool-image-roundtrip",
+      "model": "probe-claude",
+      "passed": true,
+      "channel": "claude",
+      "upstream_attempts": 2,
+      "ttft_ms": null,
+      "usage_known": true,
+      "elapsed_ms": 9.025
+    },
+    {
+      "case": "stream-tool-image-roundtrip",
+      "model": "probe-claude",
+      "passed": true,
+      "channel": "claude",
+      "upstream_attempts": 2,
+      "ttft_ms": 28.2328419998521,
+      "usage_known": true,
+      "elapsed_ms": 59.169
+    },
+    {
+      "case": "json-tool-image-roundtrip",
+      "model": "probe-gemini",
+      "passed": true,
+      "channel": "gemini",
+      "upstream_attempts": 2,
+      "ttft_ms": null,
+      "usage_known": true,
+      "elapsed_ms": 9.773
+    },
+    {
+      "case": "stream-tool-image-roundtrip",
+      "model": "probe-gemini",
+      "passed": true,
+      "channel": "gemini",
+      "upstream_attempts": 2,
+      "ttft_ms": 29.475397001078818,
+      "usage_known": true,
+      "elapsed_ms": 61.462
+    },
+    {
+      "case": "model-acl-before-dispatch",
+      "model": "probe-claude",
+      "passed": true,
+      "status": 403,
+      "upstream_attempts": 0,
+      "elapsed_ms": 6.13
+    },
+    {
+      "case": "empty-quota-before-dispatch",
+      "model": "probe-openai",
+      "passed": true,
+      "status": 401,
+      "upstream_attempts": 0,
+      "elapsed_ms": 6.086
+    },
+    {
+      "case": "503-priority-failover",
+      "model": "probe-failover",
+      "passed": true,
+      "upstream_attempts": 2,
+      "channel": "fail->oai",
+      "ttft_ms": 30.287731999123935,
+      "gateway_quota_delta": 16,
+      "elapsed_ms": 36.087
+    },
+    {
+      "case": "partial-stream-no-replay",
+      "model": "probe-half",
+      "passed": true,
+      "upstream_attempts": 1,
+      "channel": "half",
+      "stream_interrupted": true,
+      "ttft_ms": 28.4527519979747,
+      "usage_source": "gateway-estimate",
+      "provider_usage_known": false,
+      "elapsed_ms": 30.569
+    },
+    {
+      "case": "bounded-relay-timeout",
+      "model": "probe-timeout",
+      "passed": true,
+      "baseline_upstream_attempts": 2,
+      "upstream_attempts": 1,
+      "channel": "slow",
+      "status": 500,
+      "gateway_quota_delta": 0,
+      "elapsed_ms": 6024.985
+    },
+    {
+      "case": "bounded-concurrency",
+      "model": "probe-openai",
+      "passed": true,
+      "channel": "oai",
+      "logical_requests": 120,
+      "successes": 120,
+      "upstream_attempts": 120,
+      "concurrency": 12,
+      "ttft_p95_ms": 63.85,
+      "elapsed_ms": 405.287
+    },
+    {
+      "case": "rate-limit-before-dispatch",
+      "model": "probe-openai",
+      "passed": true,
+      "status": 429,
+      "logical_requests": 2,
+      "upstream_attempts": 1,
+      "channel": "oai",
+      "elapsed_ms": 40.044
+    }
+  ],
+  "metrics": [
+    {
+      "model": "probe-openai",
+      "configured_channel": "oai",
+      "channel_scope": "single fixture channel",
+      "logical_requests": 127,
+      "successes": 125,
+      "stream_requests": 125,
+      "stream_interruptions": 0,
+      "stream_failures_unknown_stage": 0,
+      "ttft_samples": 123,
+      "ttft_p95_ms": 63.85
+    },
+    {
+      "model": "probe-claude",
+      "configured_channel": "claude",
+      "channel_scope": "single fixture channel",
+      "logical_requests": 5,
+      "successes": 4,
+      "stream_requests": 3,
+      "stream_interruptions": 0,
+      "stream_failures_unknown_stage": 0,
+      "ttft_samples": 2,
+      "ttft_p95_ms": 28.233
+    },
+    {
+      "model": "probe-gemini",
+      "configured_channel": "gemini",
+      "channel_scope": "single fixture channel",
+      "logical_requests": 4,
+      "successes": 4,
+      "stream_requests": 2,
+      "stream_interruptions": 0,
+      "stream_failures_unknown_stage": 0,
+      "ttft_samples": 2,
+      "ttft_p95_ms": 29.475
+    },
+    {
+      "model": "probe-failover",
+      "configured_channel": "fail",
+      "channel_scope": "priority fallback oai after explicit 503",
+      "logical_requests": 1,
+      "successes": 1,
+      "stream_requests": 1,
+      "stream_interruptions": 0,
+      "stream_failures_unknown_stage": 0,
+      "ttft_samples": 1,
+      "ttft_p95_ms": 30.288
+    },
+    {
+      "model": "probe-half",
+      "configured_channel": "half",
+      "channel_scope": "single fixture channel",
+      "logical_requests": 1,
+      "successes": 0,
+      "stream_requests": 1,
+      "stream_interruptions": 1,
+      "stream_failures_unknown_stage": 0,
+      "ttft_samples": 1,
+      "ttft_p95_ms": 28.453
+    },
+    {
+      "model": "probe-timeout",
+      "configured_channel": "slow",
+      "channel_scope": "single fixture channel",
+      "logical_requests": 2,
+      "successes": 0,
+      "stream_requests": 0,
+      "stream_interruptions": 0,
+      "stream_failures_unknown_stage": 0,
+      "ttft_samples": 0,
+      "ttft_p95_ms": null
+    }
+  ],
+  "passed": 13,
+  "total": 13
+}
