@@ -30,7 +30,7 @@ PNG='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9s
 
 class Lab:
     def __init__(self):
-        self.opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        self.opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),probe.NoRedirect(),urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         self.headers={}
         self.rows=[]
         self.observations=[]

@@ -13,6 +13,11 @@ class ProtocolError(ValueError):
         self.stream_started=stream_started
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        return None
+
+
 def sse_events(stream,limit=262144):
     """Parse UTF-8 SSE, bounding line, event AND total body, including comments."""
     parts=[]
@@ -91,7 +96,7 @@ def read_openai_stream(stream,start=None,clock=None):
 def request(base,path,body=None,headers=None,timeout=10,opener=None):
     req=urllib.request.Request(base+path,data=None if body is None else json.dumps(body).encode(),
                                headers={'Content-Type':'application/json',**(headers or {})})
-    open_request=opener.open if opener else urllib.request.build_opener(urllib.request.ProxyHandler({})).open
+    open_request=opener.open if opener else urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect()).open
     try: return open_request(req,timeout=timeout)
     except urllib.error.HTTPError as response: return response
 
@@ -105,9 +110,10 @@ def read_json(response):
 def chat(base,key,body,timeout=10):
     started=time.perf_counter()
     with request(base,'/v1/chat/completions',body,{'Authorization':'Bearer '+key},timeout) as response:
+        request_id=response.headers.get('X-Oneapi-Request-Id')
         if response.status!=200:
             # Do not export provider errors: they can contain prompts/keys.
-            return {'status':response.status,'complete':False,'ttft_ms':None,'usage':None,'elapsed_ms':(time.perf_counter()-started)*1000}
+            return {'status':response.status,'request_id':request_id,'complete':False,'ttft_ms':None,'usage':None,'elapsed_ms':(time.perf_counter()-started)*1000}
         if body.get('stream'):
             try:
                 if 'text/event-stream' not in response.headers.get('Content-Type',''): raise ProtocolError('expected SSE')
@@ -121,4 +127,4 @@ def chat(base,key,body,timeout=10):
             tools=[{'id':t['id'],'name':t['function']['name'],'arguments':json.loads(t['function']['arguments'])} for t in message.get('tool_calls',[])]
             result={'complete':choice.get('finish_reason') in ('stop','tool_calls'),'text':message.get('content') or '',
                     'tools':tools,'usage':obj.get('usage'),'ttft_ms':None,'finish':choice.get('finish_reason')}
-        return {'status':200,**result,'elapsed_ms':(time.perf_counter()-started)*1000}
+        return {'status':200,'request_id':request_id,**result,'elapsed_ms':(time.perf_counter()-started)*1000}

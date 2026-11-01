@@ -73,6 +73,27 @@ class FixtureOracle(unittest.TestCase):
 
 
 class FailureAccounting(unittest.TestCase):
+    def test_redirect_does_not_forward_credentials_or_replay_requests(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+        seen=[]
+        class Redirect(BaseHTTPRequestHandler):
+            def log_message(self,*args): pass
+            def do_GET(self):
+                seen.append(self.path)
+                self.send_response(302 if self.path=='/source' else 200)
+                self.send_header('Location','/sink')
+                self.end_headers()
+        server=ThreadingHTTPServer(('127.0.0.1',0),Redirect)
+        thread=threading.Thread(target=server.serve_forever,daemon=True)
+        thread.start()
+        try:
+            with probe.request('http://127.0.0.1:'+str(server.server_port),'/source',headers={'Authorization':'Bearer fixture'}) as response:
+                self.assertEqual(response.status,302)
+            self.assertEqual(seen,['/source'])
+        finally:
+            server.shutdown();server.server_close();thread.join()
+
     def test_half_case_rejects_http_error_without_partial_output(self):
         import acceptance
         lab=acceptance.Lab()
