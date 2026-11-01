@@ -1,0 +1,216 @@
+{
+  "scope": "local fixed-response providers, 25ms first-content delay and 500ms hold; no live-model performance claim",
+  "baseline_proxy_connection_errors": 208,
+  "baseline": {
+    "phase": "baseline",
+    "scope": "local fixed-response providers, 25ms first-content delay and 500ms hold; no live-model performance claim",
+    "measurements": [
+      {
+        "model": "probe-hold",
+        "logical_requests": 400,
+        "successes": 127,
+        "elapsed_seconds": 1.282,
+        "concurrency_limit": 200,
+        "target_rps": null,
+        "observed_rps": 312.02,
+        "ttft_samples": 127,
+        "content_ttft_p95_ms": 1087.649,
+        "statuses": {
+          "0": 273,
+          "200": 127
+        },
+        "upstream": {
+          "dispatches": 127,
+          "by_path": {
+            "/hold/v1/chat/completions": 127
+          },
+          "active": 0,
+          "peak_active": 125
+        },
+        "gateway_quota_delta": 2032
+      }
+    ],
+    "operations": {
+      "window_start": 1793533373,
+      "window_end": 1793533378,
+      "complete": true,
+      "collected_at": 1793533378,
+      "last_success": 1793533378,
+      "logical_requests": 127,
+      "uncorrelated_events": 0,
+      "log_records": 127,
+      "channels": [
+        {
+          "model": "probe-hold",
+          "channel_id": 8,
+          "log_events": 127,
+          "error_events": 0,
+          "consume_events": 127,
+          "completed_streams": 127,
+          "gateway_ok_streams": 127,
+          "stream_errors": 0,
+          "unknown_stream_outcomes": 0,
+          "gateway_quota_units": 2032,
+          "gateway_frt_samples": 127,
+          "gateway_frt_p95_ms": 332.0
+        }
+      ]
+    },
+    "validation_complete": true
+  },
+  "optimized": {
+    "phase": "optimized",
+    "scope": "local fixed-response providers, 25ms first-content delay and 500ms hold; no live-model performance claim",
+    "measurements": [
+      {
+        "model": "probe-hold",
+        "logical_requests": 400,
+        "successes": 400,
+        "elapsed_seconds": 3.395,
+        "concurrency_limit": 200,
+        "target_rps": null,
+        "observed_rps": 117.824,
+        "ttft_samples": 400,
+        "content_ttft_p95_ms": 2002.33,
+        "statuses": {
+          "200": 400
+        },
+        "upstream": {
+          "dispatches": 400,
+          "by_path": {
+            "/hold/v1/chat/completions": 400
+          },
+          "active": 0,
+          "peak_active": 200
+        },
+        "gateway_quota_delta": 6400
+      },
+      {
+        "model": "probe-flaky",
+        "logical_requests": 1000,
+        "successes": 800,
+        "elapsed_seconds": 4.83,
+        "concurrency_limit": 64,
+        "target_rps": null,
+        "observed_rps": 207.044,
+        "ttft_samples": 800,
+        "content_ttft_p95_ms": 1222.151,
+        "statuses": {
+          "200": 800,
+          "503": 200
+        },
+        "upstream": {
+          "dispatches": 1000,
+          "by_path": {
+            "/flaky/v1/chat/completions": 1000
+          },
+          "active": 0,
+          "peak_active": 13
+        },
+        "gateway_quota_delta": 12786
+      },
+      {
+        "model": "probe-flaky",
+        "logical_requests": 1000,
+        "successes": 1000,
+        "elapsed_seconds": 5.722,
+        "concurrency_limit": 64,
+        "target_rps": null,
+        "observed_rps": 174.771,
+        "ttft_samples": 1000,
+        "content_ttft_p95_ms": 1327.02,
+        "statuses": {
+          "200": 1000
+        },
+        "upstream": {
+          "dispatches": 1200,
+          "by_path": {
+            "/flaky/v1/chat/completions": 1000,
+            "/oai/v1/chat/completions": 200
+          },
+          "active": 0,
+          "peak_active": 13
+        },
+        "gateway_quota_delta": 15993
+      },
+      {
+        "model": "probe-hold",
+        "logical_requests": 18001,
+        "successes": 18001,
+        "elapsed_seconds": 180.541,
+        "concurrency_limit": 200,
+        "target_rps": 100,
+        "observed_rps": 99.706,
+        "ttft_samples": 18001,
+        "content_ttft_p95_ms": 534.552,
+        "statuses": {
+          "200": 18001
+        },
+        "upstream": {
+          "dispatches": 18001,
+          "by_path": {
+            "/hold/v1/chat/completions": 18001
+          },
+          "active": 0,
+          "peak_active": 55
+        },
+        "gateway_quota_delta": 288023
+      }
+    ],
+    "operations": {
+      "window_start": 1793533373,
+      "window_end": 1793533577,
+      "complete": true,
+      "collected_at": 1793533579,
+      "last_success": 1793533579,
+      "logical_requests": 20528,
+      "uncorrelated_events": 0,
+      "log_records": 20728,
+      "channels": [
+        {
+          "model": "probe-flaky",
+          "channel_id": 9,
+          "log_events": 2000,
+          "error_events": 400,
+          "consume_events": 1600,
+          "completed_streams": 1600,
+          "gateway_ok_streams": 1600,
+          "stream_errors": 0,
+          "unknown_stream_outcomes": 0,
+          "gateway_quota_units": 25600,
+          "gateway_frt_samples": 1600,
+          "gateway_frt_p95_ms": 1135.0
+        },
+        {
+          "model": "probe-flaky",
+          "channel_id": 10,
+          "log_events": 200,
+          "error_events": 0,
+          "consume_events": 200,
+          "completed_streams": 200,
+          "gateway_ok_streams": 200,
+          "stream_errors": 0,
+          "unknown_stream_outcomes": 0,
+          "gateway_quota_units": 3200,
+          "gateway_frt_samples": 200,
+          "gateway_frt_p95_ms": 1374.0
+        },
+        {
+          "model": "probe-hold",
+          "channel_id": 8,
+          "log_events": 18528,
+          "error_events": 0,
+          "consume_events": 18528,
+          "completed_streams": 18528,
+          "gateway_ok_streams": 18528,
+          "stream_errors": 0,
+          "unknown_stream_outcomes": 0,
+          "gateway_quota_units": 296448,
+          "gateway_frt_samples": 18528,
+          "gateway_frt_p95_ms": 6.0
+        }
+      ]
+    },
+    "validation_complete": true
+  }
+}

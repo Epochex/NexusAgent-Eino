@@ -23,6 +23,8 @@ jobs:
           python-version: '3.11'
       # Isolated local fixtures only; no provider credentials or public API calls.
       - run: python tools/modelgateway/run.py
+      # Short controlled load/failure profile; the 180s sustained run is opt-in.
+      - run: python tools/modelgateway/capacity_run.py --duration 3 --rps 10
   backend:
     runs-on: ubuntu-latest
     services:

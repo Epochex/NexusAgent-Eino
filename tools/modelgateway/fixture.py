@@ -7,6 +7,9 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 
 LOCK=threading.Lock()
 RECORDS=[]
+COUNTS={}
+ACTIVE=0
+PEAK_ACTIVE=0
 TOOL={'name':'inspect','arguments':{'host':'上海'}}
 
 
@@ -62,17 +65,24 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_GET(self):
-        if self.path=='/records':
+        if self.path=='/stats':
+            with LOCK: stats={'dispatches':sum(COUNTS.values()),'by_path':dict(COUNTS),'active':ACTIVE,'peak_active':PEAK_ACTIVE}
+            self.send_json(stats)
+        elif self.path=='/records':
             with LOCK: records=list(RECORDS)
             self.send_json(records)
         else: self.send_json({'ok':True})
 
     def do_POST(self):
+        global ACTIVE,PEAK_ACTIVE
         size=int(self.headers.get('Content-Length','0'))
         if size>1048576: return self.send_json({'error':'body too big'},413)
         obj=json.loads(self.rfile.read(size))
         if self.path=='/reset':
-            with LOCK: RECORDS.clear()
+            with LOCK:
+                RECORDS.clear()
+                COUNTS.clear()
+                PEAK_ACTIVE=ACTIVE
             return self.send_json({'ok':True})
         # Export only synthetic assertions; never record credentials.
         raw=json.dumps(obj,ensure_ascii=False)
@@ -85,22 +95,28 @@ class Handler(BaseHTTPRequestHandler):
         for content in obj.get('contents',[]):
             refs.extend(p['functionResponse'].get('name') for p in content.get('parts',[]) if 'functionResponse' in p)
         with LOCK:
+            COUNTS[self.path]=COUNTS.get(self.path,0)+1
+            ordinal=COUNTS[self.path]
+            ACTIVE+=1
+            PEAK_ACTIVE=max(PEAK_ACTIVE,ACTIVE)
             RECORDS.append({'path':self.path,'model':model,'has_tool_result':('tool_result' in raw or 'tool_call_id' in raw or 'functionResponse' in raw),
                             'has_image':('image_url' in raw or '"image"' in raw or 'inlineData' in raw or 'inline_data' in raw),
                             'has_system':'system' in raw,'has_tool_schema':'inspect' in raw,
                             'tool_result_references':refs,**audit(obj)})
-        if self.path.startswith('/fail/'):
-            return self.send_json({'error':{'message':'fixture overload','type':'server_error','code':'overloaded'}},503)
-        if self.path.startswith('/slow/'):
-            time.sleep(4)
-        wants_tool='TOOL' in raw and not ('tool_result' in raw or 'tool_call_id' in raw or 'functionResponse' in raw)
-        stream=obj.get('stream',False) or ':streamGenerateContent' in self.path
-        half=self.path.startswith('/half/')
+            if len(RECORDS)>1000: del RECORDS[0]
         try:
+            if self.path.startswith('/fail/') or (self.path.startswith('/flaky/') and ordinal%5==0):
+                return self.send_json({'error':{'message':'fixture overload','type':'server_error','code':'overloaded'}},503)
+            if self.path.startswith('/slow/'): time.sleep(4)
+            wants_tool='TOOL' in raw and not ('tool_result' in raw or 'tool_call_id' in raw or 'functionResponse' in raw)
+            stream=obj.get('stream',False) or ':streamGenerateContent' in self.path
+            half=self.path.startswith('/half/')
             if '/claude/' in self.path: return self.claude(model,wants_tool,stream)
             if '/gemini/' in self.path: return self.gemini(model,wants_tool,stream)
             return self.openai(model,wants_tool,stream,half)
         except (BrokenPipeError,ConnectionResetError): pass
+        finally:
+            with LOCK: ACTIVE-=1
 
     def start_stream(self):
         self.send_response(200)
@@ -131,6 +147,7 @@ class Handler(BaseHTTPRequestHandler):
             self.event(chunk({'tool_calls':[{'index':0,'id':'call_probe','type':'function','function':{'name':'inspect','arguments':'{"host":'}}]}))
             self.event(chunk({'tool_calls':[{'index':0,'function':{'arguments':'"上海"}'}}]}))
         else: self.event(chunk({'content':'verified 上海'}))
+        if self.path.startswith('/hold/'): time.sleep(.5)
         if half: return
         self.event(chunk({},finish))
         self.event({'id':'chatcmpl-probe','object':'chat.completion.chunk','created':1,'model':model,'choices':[],'usage':usage})
@@ -162,4 +179,10 @@ class Handler(BaseHTTPRequestHandler):
         self.event(obj)
 
 
-if __name__=='__main__': ThreadingHTTPServer(('0.0.0.0',8080),Handler).serve_forever()
+class FixtureServer(ThreadingHTTPServer):
+    # Avoid measuring the stdlib fixture's default accept backlog of five as
+    # gateway capacity. This fixture setting is identical in both profiles.
+    request_queue_size=512
+
+
+if __name__=='__main__': FixtureServer(('0.0.0.0',8080),Handler).serve_forever()

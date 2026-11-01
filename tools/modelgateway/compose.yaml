@@ -23,6 +23,7 @@ services:
       GLOBAL_API_RATE_LIMIT: '10000'
       GLOBAL_WEB_RATE_LIMIT: '10000'
       BATCH_UPDATE_ENABLED: 'false'
+      ERROR_LOG_ENABLED: 'true'
       TRUSTED_PROXIES: none
     tmpfs: [/data]
     networks: [fixture]
